@@ -13,6 +13,7 @@ const PORT = process.env.PORT || 7000;
 const GQL = 'https://gql.twitch.tv/gql';
 const GQL_CLIENT_ID = 'kimne78kx3ncx6brgo4mv6wki5h1ko'; // identifiant public du lecteur web de Twitch
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
+const FAST_BREAD = process.env.FAST_BREAD === '1'; // faible latence : plus réactif mais moins stable sur certains lecteurs (PC)
 const LOGIN_RE = /^[a-z0-9_]{3,25}$/;
 
 const send = (res, code, type, body, h = {}) => { res.writeHead(code, { 'Content-Type': type, ...h }); res.end(body); };
@@ -33,7 +34,7 @@ async function accessToken(login) {
   return t;
 }
 function usherUrl(login, t) {
-  const q = new URLSearchParams({ sig: t.signature, token: t.value, allow_source: 'true', allow_audio_only: 'true', fast_bread: 'true', player: 'twitchweb', type: 'any', supported_codecs: 'avc1', p: String(Math.floor(Math.random() * 1e7)) });
+  const q = new URLSearchParams({ sig: t.signature, token: t.value, allow_source: 'true', allow_audio_only: 'true', ...(FAST_BREAD ? { fast_bread: 'true' } : {}), player: 'twitchweb', type: 'any', supported_codecs: 'avc1', p: String(Math.floor(Math.random() * 1e7)) });
   return 'https://usher.ttvnw.net/api/channel/hls/' + login + '.m3u8?' + q;
 }
 // qualités individuelles d'une liste de lecture principale : [{ name, url }]
@@ -68,7 +69,7 @@ async function liveStream(login) {
 /* ------------------------------------------------------------------ relais « sans pub » (variable PROXIES pour changer la liste) */
 // Un relais renvoie la liste de lecture d'une chaîne depuis une autre région, où Twitch n'insère pas de publicité.
 // Format de PROXIES : une adresse par ligne, avec {channel} (nom optionnel : « Nom | adresse »).
-const Q = '?allow_source=true&allow_audio_only=true&fast_bread=true';
+const Q = '?allow_source=true&allow_audio_only=true' + (FAST_BREAD ? '&fast_bread=true' : '');
 const DEFAULT_PROXIES = [
   ['Luminous EU', 'https://eu.luminous.dev/live/{channel}'], ['Luminous EU 2', 'https://eu2.luminous.dev/live/{channel}'], ['Luminous EU 3', 'https://eu3.luminous.dev/live/{channel}'],
   ['Luminous AS', 'https://as.luminous.dev/live/{channel}'], ['Nadeko', 'https://twitch-al.nadeko.net/live/{channel}'],
@@ -183,8 +184,18 @@ async function handler(req, res) {
     if (seg[0] === 'relais' && seg[1]) { // diagnostic : quels relais répondent depuis Vercel ?
       const login = seg[1].toLowerCase();
       if (!LOGIN_RE.test(login)) return json(res, { erreur: 'nom de chaîne invalide' });
-      const rows = await Promise.all(proxyList().map(px => askProxy(px, login).then(r => ({ relais: px.name, ok: true, ms: r.ms, qualites: [...r.text.matchAll(/NAME="([^"]+)"/g)].map(m => m[1]).slice(0, 3) }), e => ({ relais: px.name, ok: false, ms: e.ms, erreur: e.message }))));
-      return json(res, { chaine: login, relais_valides: rows.filter(r => r.ok).length, sur: rows.length, detail: rows });
+      const inspect = async r => { // où sont les segments, et y a-t-il des pubs dans la liste de lecture ?
+        const v = variantsOf(absolutize(r.text, r.url)).filter(x => !/audio/i.test(x.name)).pop();
+        if (!v) return {};
+        try {
+          const pr = await fetch(v.url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(3000) }), t = await pr.text();
+          const seg = t.split(/\r?\n/).find(l => /^https?:\/\//.test(l));
+          return { qualite_testee: v.name, liste_http: pr.status, hote_liste: new URL(v.url).hostname, hote_segments: seg ? new URL(seg).hostname : null, pubs_detectees: /stitched|X-TV-TWITCH-AD|SCTE35|CUE-OUT/i.test(t) };
+        } catch (e) { return { qualite_testee: v.name, liste_erreur: e.message }; }
+      };
+      const rows = await Promise.all(proxyList().map(px => askProxy(px, login).then(async r => ({ relais: px.name, ok: true, ms: r.ms, ...(await inspect(r)) }), e => ({ relais: px.name, ok: false, ms: e.ms, erreur: e.message }))));
+      const direct = await liveStream(login).then(async d => d.offline ? { hors_ligne: true } : { officiel: await inspect({ text: await fetch(d.url, { headers: { 'User-Agent': UA } }).then(x => x.text()), url: d.url }) }, e => ({ officiel_erreur: e.message }));
+      return json(res, { chaine: login, relais_valides: rows.filter(r => r.ok).length, sur: rows.length, flux_officiel: direct, detail: rows.filter(r => r.ok).concat(rows.filter(r => !r.ok).map(r => ({ relais: r.relais, ok: false, erreur: r.erreur }))) });
     }
     if (seg[0] === 'catalog' && seg[1] === 'tv') {
       const search = seg[3] ? (new URLSearchParams(strip(seg[3])).get('search') || '').trim().toLowerCase().replace(/^@/, '') : '';
