@@ -8,6 +8,8 @@
  *   /test/<nom>               diagnostic : Vercel obtient-il bien le flux de cette chaîne ?
  */
 const http = require('http');
+const store = require('./lib/store');
+const makeAdmin = require('./lib/admin');
 
 const PORT = process.env.PORT || 7000;
 const GQL = 'https://gql.twitch.tv/gql';
@@ -93,9 +95,25 @@ async function askProxy(px, login, signal) {
     const text = await r.text();
     if (!r.ok) throw new Error('HTTP ' + r.status);
     if (!isMaster(text)) throw new Error('réponse inattendue');
+    store.incr('r|' + px.name + '|ok'); store.incr('r|' + px.name + '|ms', Date.now() - t0);
     return { name: px.name, url, text, ms: Date.now() - t0 };
-  } catch (e) { throw Object.assign(new Error(e.name === 'AbortError' ? 'délai dépassé' : e.message), { ms: Date.now() - t0, proxy: px.name }); }
+  } catch (e) { if (!(signal && signal.aborted)) store.incr('r|' + px.name + '|fail'); throw Object.assign(new Error(e.name === 'AbortError' ? 'délai dépassé' : e.message), { ms: Date.now() - t0, proxy: px.name }); }
   finally { clearTimeout(timer); }
+}
+async function relayReport(login) {
+  if (!LOGIN_RE.test(login)) return { erreur: 'nom de chaîne invalide' };
+  const inspect = async r => { // où sont les segments, et y a-t-il des pubs dans la liste de lecture ?
+    const v = variantsOf(absolutize(r.text, r.url)).filter(x => !/audio/i.test(x.name)).pop();
+    if (!v) return {};
+    try {
+  const pr = await fetch(v.url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(3000) }), t = await pr.text();
+  const seg = t.split(/\r?\n/).find(l => /^https?:\/\//.test(l));
+  return { qualite_testee: v.name, liste_http: pr.status, hote_liste: new URL(v.url).hostname, hote_segments: seg ? new URL(seg).hostname : null, pubs_detectees: /stitched|X-TV-TWITCH-AD|SCTE35|CUE-OUT/i.test(t) };
+    } catch (e) { return { qualite_testee: v.name, liste_erreur: e.message }; }
+  };
+  const rows = await Promise.all(proxyList().map(px => askProxy(px, login).then(async r => ({ relais: px.name, ok: true, ms: r.ms, ...(await inspect(r)) }), e => ({ relais: px.name, ok: false, ms: e.ms, erreur: e.message }))));
+  const direct = await liveStream(login).then(async d => d.offline ? { hors_ligne: true } : { officiel: await inspect({ text: await fetch(d.url, { headers: { 'User-Agent': UA } }).then(x => x.text()), url: d.url }) }, e => ({ officiel_erreur: e.message }));
+  return { chaine: login, relais_valides: rows.filter(r => r.ok).length, sur: rows.length, flux_officiel: direct, detail: rows.filter(r => r.ok).concat(rows.filter(r => !r.ok).map(r => ({ relais: r.relais, ok: false, erreur: r.erreur }))) };
 }
 const proxyCache = new Map();
 async function bestProxy(login) { // le relais valide le plus rapide (les autres requêtes sont annulées)
@@ -105,6 +123,7 @@ async function bestProxy(login) { // le relais valide le plus rapide (les autres
   let v = null;
   try { v = await Promise.any(proxyList().map(px => askProxy(px, login, all.signal))); } catch { v = null; }
   all.abort();
+  if (v) store.incr('r|' + v.name + '|win');
   if (proxyCache.size > 200) proxyCache.clear();
   proxyCache.set(login, { v, exp: Date.now() + (v ? 15000 : 5000) });
   return v;
@@ -151,15 +170,49 @@ const MANIFEST = {
   catalogs: [{ type: 'tv', id: 'twitch-top', name: 'Twitch · Lives populaires', extra: [{ name: 'search', isRequired: false }] }],
 };
 
+async function probe(login) { // diagnostic d'une chaîne pour le dashboard
+  if (!LOGIN_RE.test(login)) return { erreur: 'nom de chaîne invalide' };
+  const out = { chaine: login }, t0 = Date.now();
+  try {
+    const s = await liveStream(login);
+    out.twitch = s.offline ? 'hors ligne' : 'en direct';
+    if (!s.offline) out.qualites = s.qualities;
+    out.twitch_ms = Date.now() - t0;
+    const b = await bestProxy(login);
+    out.relais = b ? { nom: b.name, ms: b.ms } : 'aucun relais ne répond (repli sur le flux officiel)';
+  } catch (e) { out.erreur = e.message; }
+  return out;
+}
+const mask = v => v ? 'défini' : 'absent';
+const adminRoute = makeAdmin({ send, json, relayReport, probe, config: () => ({
+  relais: proxyList(),
+  rows: [
+    ['Version', require('./package.json').version, null],
+    ['Stockage persistant (Upstash)', store.persistent ? 'actif' : 'mémoire temporaire', store.persistent],
+    ['TWITCH_CLIENT_ID', mask(process.env.TWITCH_CLIENT_ID), !!process.env.TWITCH_CLIENT_ID],
+    ['TWITCH_CLIENT_SECRET', mask(process.env.TWITCH_CLIENT_SECRET), !!process.env.TWITCH_CLIENT_SECRET],
+    ['Catalogue « Lives populaires »', process.env.TWITCH_CLIENT_ID && process.env.TWITCH_CLIENT_SECRET ? 'disponible' : 'vide (clés Twitch manquantes)', !!(process.env.TWITCH_CLIENT_ID && process.env.TWITCH_CLIENT_SECRET)],
+    ['Relais configurés', String(proxyList().length) + (process.env.PROXIES ? ' (variable PROXIES)' : ' (liste par défaut)'), null],
+    ['Faible latence (FAST_BREAD)', FAST_BREAD ? 'activée' : 'désactivée', null],
+    ['Délai relais', PROXY_TIMEOUT + ' ms', null],
+  ] }) });
+
 async function handler(req, res) {
   try {
     const seg = new URL(req.url, 'http://x').pathname.split('/').filter(Boolean).map(decodeURIComponent);
     const strip = s => String(s || '').replace(/\.json$/, '');
     res.setHeader('Access-Control-Allow-Origin', '*');
     if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
+    if (await adminRoute(req, res, seg)) return;
+    // statistiques : on attend leur enregistrement avant de répondre (Vercel coupe le travail après la réponse)
+    const end = res.end.bind(res);
+    res.end = (...a) => { store.flush().finally(() => end(...a)); return res; };
+    const t0 = Date.now(), dev = store.deviceId(req);
+    store.incr('req'); store.incr('d:' + store.day() + ':req');
+    if (['stream', 'catalog', 'p', 'manifest.json'].includes(seg[0])) store.uniq(dev);
 
     if (!seg.length) return send(res, 200, 'text/plain; charset=utf-8', 'Addon Twitch pour Stremio. Manifeste : /manifest.json — test : /test/<nom d\'un streamer en live>');
-    if (seg[0] === 'manifest.json') return json(res, MANIFEST);
+    if (seg[0] === 'manifest.json') { store.log({ k: 'install', dev }); return json(res, MANIFEST); }
 
     if (seg[0] === 'test' && seg[1]) { // diagnostic lisible
       const login = seg[1].toLowerCase(), out = { chaine: login, vercel_peut_lire_twitch: false };
@@ -176,6 +229,7 @@ async function handler(req, res) {
       const login = strip(seg[1]).replace(/\.m3u8$/, '').toLowerCase();
       if (!LOGIN_RE.test(login)) return send(res, 400, 'text/plain; charset=utf-8', 'Nom de chaîne invalide');
       const b = await bestProxy(login);
+      store.incr('play'); store.top(login); store.log({ k: 'play', ch: login, relais: b ? b.name : 'officiel (repli)', ms: Date.now() - t0, dev });
       if (b) return send(res, 200, 'application/vnd.apple.mpegurl', absolutize(b.text, b.url), { 'Cache-Control': 'no-store', 'X-Relais': b.name });
       const s = await liveStream(login); // aucun relais n'a répondu : repli sur le flux officiel
       if (s.offline) return send(res, 404, 'text/plain; charset=utf-8', 'Chaîne hors ligne');
@@ -184,18 +238,7 @@ async function handler(req, res) {
     if (seg[0] === 'relais' && seg[1]) { // diagnostic : quels relais répondent depuis Vercel ?
       const login = seg[1].toLowerCase();
       if (!LOGIN_RE.test(login)) return json(res, { erreur: 'nom de chaîne invalide' });
-      const inspect = async r => { // où sont les segments, et y a-t-il des pubs dans la liste de lecture ?
-        const v = variantsOf(absolutize(r.text, r.url)).filter(x => !/audio/i.test(x.name)).pop();
-        if (!v) return {};
-        try {
-          const pr = await fetch(v.url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(3000) }), t = await pr.text();
-          const seg = t.split(/\r?\n/).find(l => /^https?:\/\//.test(l));
-          return { qualite_testee: v.name, liste_http: pr.status, hote_liste: new URL(v.url).hostname, hote_segments: seg ? new URL(seg).hostname : null, pubs_detectees: /stitched|X-TV-TWITCH-AD|SCTE35|CUE-OUT/i.test(t) };
-        } catch (e) { return { qualite_testee: v.name, liste_erreur: e.message }; }
-      };
-      const rows = await Promise.all(proxyList().map(px => askProxy(px, login).then(async r => ({ relais: px.name, ok: true, ms: r.ms, ...(await inspect(r)) }), e => ({ relais: px.name, ok: false, ms: e.ms, erreur: e.message }))));
-      const direct = await liveStream(login).then(async d => d.offline ? { hors_ligne: true } : { officiel: await inspect({ text: await fetch(d.url, { headers: { 'User-Agent': UA } }).then(x => x.text()), url: d.url }) }, e => ({ officiel_erreur: e.message }));
-      return json(res, { chaine: login, relais_valides: rows.filter(r => r.ok).length, sur: rows.length, flux_officiel: direct, detail: rows.filter(r => r.ok).concat(rows.filter(r => !r.ok).map(r => ({ relais: r.relais, ok: false, erreur: r.erreur }))) });
+      return json(res, await relayReport(login));
     }
     if (seg[0] === 'catalog' && seg[1] === 'tv') {
       const search = seg[3] ? (new URLSearchParams(strip(seg[3])).get('search') || '').trim().toLowerCase().replace(/^@/, '') : '';
@@ -206,7 +249,7 @@ async function handler(req, res) {
         return json(res, { metas: [meta] });
       }
       let list = [];
-      try { list = await helix('/streams', { first: 50 }); } catch (e) { console.error('catalogue :', e.message); } // sans identifiants : catalogue vide
+      try { list = await helix('/streams', { first: 50 }); store.log({ k: 'catalog', n: list.length, dev }); } catch (e) { console.error('catalogue :', e.message); store.incr('err'); store.log({ k: 'erreur', ou: 'catalogue', msg: e.message }); } // sans identifiants : catalogue vide
       return json(res, { metas: list.map(metaOf) }, { 'Cache-Control': 'public, s-maxage=30' });
     }
     if (seg[0] === 'meta' && seg[1] === 'tv') {
@@ -220,7 +263,10 @@ async function handler(req, res) {
       const login = strip(seg[2]).replace(/^twitch:/, '').toLowerCase();
       if (!LOGIN_RE.test(login)) return json(res, { streams: [] });
       const [s, b] = await Promise.all([liveStream(login), bestProxy(login)]);
-      if (s.offline) return json(res, { streams: [] });
+      store.incr('stream'); store.incr('d:' + store.day() + ':stream');
+      if (s.offline) { store.incr('stream_offline'); store.log({ k: 'stream', ch: login, etat: 'hors ligne', ms: Date.now() - t0, dev }); return json(res, { streams: [] }); }
+      store.incr(b ? 'stream_relay' : 'stream_official'); store.top(login);
+      store.log({ k: 'stream', ch: login, relais: b ? b.name : 'aucun (officiel)', relais_ms: b ? b.ms : undefined, ms: Date.now() - t0, dev });
       // Un relais répond : tous les flux passent par lui (sans pub). Sinon : flux officiel.
       const vars = b ? variantsOf(absolutize(b.text, b.url)) : s.variants;
       const fixed = vars.filter(v => !/audio/i.test(v.name)).slice(0, 4).map(v => ({ name: 'Twitch ' + v.name.replace(/ \(source\)/, ''), title: 'En direct · qualité fixe' + (b ? ' · sans pub' : ''), url: v.url }));
@@ -230,6 +276,7 @@ async function handler(req, res) {
     send(res, 404, 'text/plain; charset=utf-8', 'Introuvable');
   } catch (e) {
     console.error('requête :', e.message);
+    store.incr('err'); store.incr('d:' + store.day() + ':err'); store.log({ k: 'erreur', ou: String(req.url).split('?')[0].slice(0, 60), msg: e.message });
     if (!res.headersSent) json(res, { error: e.message });
   }
 }
