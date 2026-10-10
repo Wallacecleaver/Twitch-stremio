@@ -45,7 +45,16 @@ async function liveStream(login) {
   const txt = await r.text();
   if (!txt.startsWith('#EXTM3U')) throw new Error('Réponse de Twitch inattendue (pas une liste de lecture)');
   const qualities = [...txt.matchAll(/NAME="([^"]+)"/g)].map(m => m[1]);
-  return { url, qualities, status: r.status };
+  const names = {}, variants = [], lines = txt.split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) { // qualités individuelles : liste de lecture de chaque définition
+    const m = lines[i].match(/^#EXT-X-MEDIA:.*GROUP-ID="([^"]+)".*NAME="([^"]+)"/) || lines[i].match(/^#EXT-X-MEDIA:.*NAME="([^"]+)".*GROUP-ID="([^"]+)"/);
+    if (m) { if (lines[i].indexOf('GROUP-ID="' + m[1] + '"') >= 0 && lines[i].indexOf('NAME="' + m[2] + '"') >= 0) names[m[1]] = m[2]; else names[m[2]] = m[1]; }
+    if (lines[i].startsWith('#EXT-X-STREAM-INF') && /^https?:\/\//.test(lines[i + 1] || '')) {
+      const g = (lines[i].match(/VIDEO="([^"]+)"/) || [])[1];
+      variants.push({ name: (g && names[g]) || g || 'qualité', url: lines[i + 1].trim() });
+    }
+  }
+  return { url, qualities, variants, status: r.status };
 }
 
 /* ------------------------------------------------------------------ API officielle (catalogues) */
@@ -128,7 +137,8 @@ async function handler(req, res) {
       if (!LOGIN_RE.test(login)) return json(res, { streams: [] });
       const s = await liveStream(login);
       if (s.offline) return json(res, { streams: [] });
-      return json(res, { streams: [{ name: 'Twitch', title: 'En direct · qualité automatique' + (s.qualities.length ? '\n' + s.qualities.slice(0, 4).join(' · ') : ''), url: s.url, behaviorHints: { notWebReady: true } }] });
+      const fixed = s.variants.filter(v => !/audio/i.test(v.name)).slice(0, 4).map(v => ({ name: 'Twitch ' + v.name.replace(/ \(source\)/, ''), title: 'En direct · qualité fixe', url: v.url }));
+      return json(res, { streams: [{ name: 'Twitch', title: 'En direct · qualité automatique' + (s.qualities.length ? '\n' + s.qualities.slice(0, 4).join(' · ') : ''), url: s.url }, ...fixed] });
     }
     send(res, 404, 'text/plain; charset=utf-8', 'Introuvable');
   } catch (e) {
