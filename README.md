@@ -14,7 +14,7 @@ Connexion par compte Twitch (suivis de chacun), catalogue des jeux, streamers pa
 La lecture des lives utilise l'interface interne de Twitch : méthode non officielle, qui peut cesser de fonctionner.
 
 ## Flux « sans pub » (relais)
-Le flux « Twitch · sans pub » récupère la liste de lecture auprès de relais tiers (même liste que le script Twitch HLS Proxy),
+Les flux « Twitch » passent par des relais : la liste de lecture est récupérée la liste de lecture auprès de relais tiers (même liste que le script Twitch HLS Proxy),
 côté serveur : le lecteur ne contacte jamais le relais. Si aucun relais ne répond, repli sur le flux officiel.
 - `/relais/<nom d'un streamer en direct>` : indique quels relais répondent depuis Vercel
 - Variable `PROXIES` (facultative) : une adresse par ligne contenant `{channel}`, avec nom optionnel (`Nom | adresse`)

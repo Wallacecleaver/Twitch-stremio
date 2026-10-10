@@ -36,6 +36,21 @@ function usherUrl(login, t) {
   const q = new URLSearchParams({ sig: t.signature, token: t.value, allow_source: 'true', allow_audio_only: 'true', fast_bread: 'true', player: 'twitchweb', type: 'any', supported_codecs: 'avc1', p: String(Math.floor(Math.random() * 1e7)) });
   return 'https://usher.ttvnw.net/api/channel/hls/' + login + '.m3u8?' + q;
 }
+// qualités individuelles d'une liste de lecture principale : [{ name, url }]
+function variantsOf(txt) {
+  const names = {}, variants = [], lines = String(txt).split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].startsWith('#EXT-X-MEDIA')) {
+      const g = (lines[i].match(/GROUP-ID="([^"]+)"/) || [])[1], n = (lines[i].match(/NAME="([^"]+)"/) || [])[1];
+      if (g && n) names[g] = n;
+    }
+    if (lines[i].startsWith('#EXT-X-STREAM-INF') && /^https?:\/\//.test(lines[i + 1] || '')) {
+      const g = (lines[i].match(/VIDEO="([^"]+)"/) || [])[1];
+      variants.push({ name: (g && names[g]) || g || 'qualité', url: lines[i + 1].trim() });
+    }
+  }
+  return variants;
+}
 // Retourne { url, qualities } si la chaîne est en direct, sinon { offline: true }
 async function liveStream(login) {
   const t = await accessToken(login), url = usherUrl(login, t);
@@ -45,15 +60,7 @@ async function liveStream(login) {
   const txt = await r.text();
   if (!txt.startsWith('#EXTM3U')) throw new Error('Réponse de Twitch inattendue (pas une liste de lecture)');
   const qualities = [...txt.matchAll(/NAME="([^"]+)"/g)].map(m => m[1]);
-  const names = {}, variants = [], lines = txt.split(/\r?\n/);
-  for (let i = 0; i < lines.length; i++) { // qualités individuelles : liste de lecture de chaque définition
-    const m = lines[i].match(/^#EXT-X-MEDIA:.*GROUP-ID="([^"]+)".*NAME="([^"]+)"/) || lines[i].match(/^#EXT-X-MEDIA:.*NAME="([^"]+)".*GROUP-ID="([^"]+)"/);
-    if (m) { if (lines[i].indexOf('GROUP-ID="' + m[1] + '"') >= 0 && lines[i].indexOf('NAME="' + m[2] + '"') >= 0) names[m[1]] = m[2]; else names[m[2]] = m[1]; }
-    if (lines[i].startsWith('#EXT-X-STREAM-INF') && /^https?:\/\//.test(lines[i + 1] || '')) {
-      const g = (lines[i].match(/VIDEO="([^"]+)"/) || [])[1];
-      variants.push({ name: (g && names[g]) || g || 'qualité', url: lines[i + 1].trim() });
-    }
-  }
+  const variants = variantsOf(txt);
   return { url, qualities, variants, status: r.status };
 }
 
@@ -201,11 +208,13 @@ async function handler(req, res) {
     if (seg[0] === 'stream' && seg[1] === 'tv') {
       const login = strip(seg[2]).replace(/^twitch:/, '').toLowerCase();
       if (!LOGIN_RE.test(login)) return json(res, { streams: [] });
-      const s = await liveStream(login);
+      const [s, b] = await Promise.all([liveStream(login), bestProxy(login)]);
       if (s.offline) return json(res, { streams: [] });
-      const fixed = s.variants.filter(v => !/audio/i.test(v.name)).slice(0, 4).map(v => ({ name: 'Twitch ' + v.name.replace(/ \(source\)/, ''), title: 'En direct · qualité fixe', url: v.url }));
-      const clean = { name: 'Twitch · sans pub', title: 'En direct · via relais (peut prendre 1 à 3 s)\nbascule sur le flux officiel si aucun relais ne répond', url: originOf(req) + '/p/' + login + '.m3u8' };
-      return json(res, { streams: [clean, { name: 'Twitch', title: 'En direct · qualité automatique' + (s.qualities.length ? '\n' + s.qualities.slice(0, 4).join(' · ') : ''), url: s.url }, ...fixed] });
+      // Un relais répond : tous les flux passent par lui (sans pub). Sinon : flux officiel.
+      const vars = b ? variantsOf(absolutize(b.text, b.url)) : s.variants;
+      const fixed = vars.filter(v => !/audio/i.test(v.name)).slice(0, 4).map(v => ({ name: 'Twitch ' + v.name.replace(/ \(source\)/, ''), title: 'En direct · qualité fixe' + (b ? ' · sans pub' : ''), url: v.url }));
+      const auto = { name: 'Twitch', title: 'En direct · qualité automatique' + (b ? ' · sans pub' : ''), url: b ? originOf(req) + '/p/' + login + '.m3u8' : s.url };
+      return json(res, { streams: [auto, ...fixed] });
     }
     send(res, 404, 'text/plain; charset=utf-8', 'Introuvable');
   } catch (e) {
