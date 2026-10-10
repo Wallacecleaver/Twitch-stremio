@@ -57,6 +57,57 @@ async function liveStream(login) {
   return { url, qualities, variants, status: r.status };
 }
 
+
+/* ------------------------------------------------------------------ relais « sans pub » (variable PROXIES pour changer la liste) */
+// Un relais renvoie la liste de lecture d'une chaîne depuis une autre région, où Twitch n'insère pas de publicité.
+// Format de PROXIES : une adresse par ligne, avec {channel} (nom optionnel : « Nom | adresse »).
+const Q = '?allow_source=true&allow_audio_only=true&fast_bread=true';
+const DEFAULT_PROXIES = [
+  ['Luminous EU', 'https://eu.luminous.dev/live/{channel}'], ['Luminous EU 2', 'https://eu2.luminous.dev/live/{channel}'], ['Luminous EU 3', 'https://eu3.luminous.dev/live/{channel}'],
+  ['Luminous AS', 'https://as.luminous.dev/live/{channel}'], ['Nadeko', 'https://twitch-al.nadeko.net/live/{channel}'],
+  ['Perfprod EU', 'https://lb-eu.cdn-perfprod.com/live/{channel}'], ['Perfprod EU 2', 'https://lb-eu2.cdn-perfprod.com/live/{channel}'], ['Perfprod EU 3', 'https://lb-eu3.cdn-perfprod.com/live/{channel}'],
+  ['Perfprod EU 4', 'https://lb-eu4.cdn-perfprod.com/live/{channel}'], ['Perfprod EU 5', 'https://lb-eu5.cdn-perfprod.com/live/{channel}'], ['Perfprod NA', 'https://lb-na.cdn-perfprod.com/live/{channel}'],
+  ['Perfprod AS', 'https://lb-as.cdn-perfprod.com/live/{channel}'], ['Perfprod SA', 'https://lb-sa.cdn-perfprod.com/live/{channel}'],
+].map(([name, url]) => ({ name, url: url + Q }));
+function proxyList() {
+  const env = String(process.env.PROXIES || '').split('\n').map(x => x.trim()).filter(Boolean);
+  if (!env.length) return DEFAULT_PROXIES;
+  return env.map((l, i) => { const [a, b] = l.includes('|') ? l.split('|').map(x => x.trim()) : ['Relais ' + (i + 1), l]; return { name: a, url: b }; }).filter(x => /^https:\/\/.+\{channel\}/.test(x.url));
+}
+const PROXY_TIMEOUT = 2500;
+const isMaster = t => typeof t === 'string' && t.startsWith('#EXTM3U') && /#EXT-X-STREAM-INF/.test(t);
+async function askProxy(px, login, signal) {
+  const t0 = Date.now(), url = px.url.replace('{channel}', login);
+  const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), PROXY_TIMEOUT);
+  if (signal) signal.addEventListener('abort', () => ctl.abort(), { once: true });
+  try {
+    const r = await fetch(url, { headers: { 'User-Agent': UA }, signal: ctl.signal, redirect: 'follow' });
+    const text = await r.text();
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    if (!isMaster(text)) throw new Error('réponse inattendue');
+    return { name: px.name, url, text, ms: Date.now() - t0 };
+  } catch (e) { throw Object.assign(new Error(e.name === 'AbortError' ? 'délai dépassé' : e.message), { ms: Date.now() - t0, proxy: px.name }); }
+  finally { clearTimeout(timer); }
+}
+const proxyCache = new Map();
+async function bestProxy(login) { // le relais valide le plus rapide (les autres requêtes sont annulées)
+  const c = proxyCache.get(login);
+  if (c && c.exp > Date.now()) return c.v;
+  const all = new AbortController();
+  let v = null;
+  try { v = await Promise.any(proxyList().map(px => askProxy(px, login, all.signal))); } catch { v = null; }
+  all.abort();
+  if (proxyCache.size > 200) proxyCache.clear();
+  proxyCache.set(login, { v, exp: Date.now() + (v ? 15000 : 5000) });
+  return v;
+}
+// adresses relatives de la liste de lecture -> absolues (le lecteur ne contacte alors jamais le relais lui-même)
+function absolutize(text, base) {
+  const abs = u => { try { return new URL(u, base).href; } catch { return u; } };
+  return text.split(/\r?\n/).map(l => !l || l.startsWith('#') ? l.replace(/URI="([^"]+)"/g, (_, u) => 'URI="' + abs(u) + '"') : abs(l)).join('\n');
+}
+const originOf = req => 'https://' + String(req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0].trim();
+
 /* ------------------------------------------------------------------ API officielle (catalogues) */
 let app = null;
 async function appToken() {
@@ -113,6 +164,21 @@ async function handler(req, res) {
       return json(res, out);
     }
 
+    if (seg[0] === 'p' && seg[1]) { // liste de lecture « sans pub » : récupérée côté serveur auprès d'un relais, puis servie au lecteur
+      const login = strip(seg[1]).replace(/\.m3u8$/, '').toLowerCase();
+      if (!LOGIN_RE.test(login)) return send(res, 400, 'text/plain; charset=utf-8', 'Nom de chaîne invalide');
+      const b = await bestProxy(login);
+      if (b) return send(res, 200, 'application/vnd.apple.mpegurl', absolutize(b.text, b.url), { 'Cache-Control': 'no-store', 'X-Relais': b.name });
+      const s = await liveStream(login); // aucun relais n'a répondu : repli sur le flux officiel
+      if (s.offline) return send(res, 404, 'text/plain; charset=utf-8', 'Chaîne hors ligne');
+      return send(res, 302, 'text/plain; charset=utf-8', 'Redirection', { Location: s.url, 'Cache-Control': 'no-store' });
+    }
+    if (seg[0] === 'relais' && seg[1]) { // diagnostic : quels relais répondent depuis Vercel ?
+      const login = seg[1].toLowerCase();
+      if (!LOGIN_RE.test(login)) return json(res, { erreur: 'nom de chaîne invalide' });
+      const rows = await Promise.all(proxyList().map(px => askProxy(px, login).then(r => ({ relais: px.name, ok: true, ms: r.ms, qualites: [...r.text.matchAll(/NAME="([^"]+)"/g)].map(m => m[1]).slice(0, 3) }), e => ({ relais: px.name, ok: false, ms: e.ms, erreur: e.message }))));
+      return json(res, { chaine: login, relais_valides: rows.filter(r => r.ok).length, sur: rows.length, detail: rows });
+    }
     if (seg[0] === 'catalog' && seg[1] === 'tv') {
       const search = seg[3] ? (new URLSearchParams(strip(seg[3])).get('search') || '').trim().toLowerCase().replace(/^@/, '') : '';
       if (search) { // recherche d'une chaîne par son nom (sans clés Twitch) : la fiche s'ouvre, puis le live se lance
@@ -138,7 +204,8 @@ async function handler(req, res) {
       const s = await liveStream(login);
       if (s.offline) return json(res, { streams: [] });
       const fixed = s.variants.filter(v => !/audio/i.test(v.name)).slice(0, 4).map(v => ({ name: 'Twitch ' + v.name.replace(/ \(source\)/, ''), title: 'En direct · qualité fixe', url: v.url }));
-      return json(res, { streams: [{ name: 'Twitch', title: 'En direct · qualité automatique' + (s.qualities.length ? '\n' + s.qualities.slice(0, 4).join(' · ') : ''), url: s.url }, ...fixed] });
+      const clean = { name: 'Twitch · sans pub', title: 'En direct · via relais (peut prendre 1 à 3 s)\nbascule sur le flux officiel si aucun relais ne répond', url: originOf(req) + '/p/' + login + '.m3u8' };
+      return json(res, { streams: [clean, { name: 'Twitch', title: 'En direct · qualité automatique' + (s.qualities.length ? '\n' + s.qualities.slice(0, 4).join(' · ') : ''), url: s.url }, ...fixed] });
     }
     send(res, 404, 'text/plain; charset=utf-8', 'Introuvable');
   } catch (e) {
@@ -149,5 +216,5 @@ async function handler(req, res) {
 
 module.exports = handler;
 module.exports.handler = handler;
-module.exports._t = { liveStream, usherUrl, metaOf, MANIFEST };
+module.exports._t = { liveStream, usherUrl, metaOf, MANIFEST, absolutize, proxyList, bestProxy };
 if (require.main === module) http.createServer(handler).listen(PORT, () => console.log('Twitch pour Stremio sur http://localhost:' + PORT));
