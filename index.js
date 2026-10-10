@@ -80,7 +80,7 @@ const metaOf = s => ({
 const MANIFEST = {
   id: 'community.twitch.lives', version: '0.1.0', name: 'Twitch', description: 'Lives Twitch dans Stremio',
   resources: ['catalog', 'meta', 'stream'], types: ['tv'], idPrefixes: ['twitch:'],
-  catalogs: [{ type: 'tv', id: 'twitch-top', name: 'Twitch · Lives populaires' }],
+  catalogs: [{ type: 'tv', id: 'twitch-top', name: 'Twitch · Lives populaires', extra: [{ name: 'search', isRequired: false }] }],
 };
 
 async function handler(req, res) {
@@ -105,6 +105,13 @@ async function handler(req, res) {
     }
 
     if (seg[0] === 'catalog' && seg[1] === 'tv') {
+      const search = seg[3] ? (new URLSearchParams(strip(seg[3])).get('search') || '').trim().toLowerCase().replace(/^@/, '') : '';
+      if (search) { // recherche d'une chaîne par son nom (sans clés Twitch) : la fiche s'ouvre, puis le live se lance
+        if (!LOGIN_RE.test(search)) return json(res, { metas: [] });
+        let meta = { id: 'twitch:' + search, type: 'tv', name: search, poster: 'https://static-cdn.jtvnw.net/previews-ttv/live_user_' + search + '-440x248.jpg', posterShape: 'landscape' };
+        try { const s = (await helix('/streams', { user_login: search }))[0]; if (s) meta = metaOf(s); } catch { /* sans clés : fiche simple */ }
+        return json(res, { metas: [meta] });
+      }
       let list = [];
       try { list = await helix('/streams', { first: 50 }); } catch (e) { console.error('catalogue :', e.message); } // sans identifiants : catalogue vide
       return json(res, { metas: list.map(metaOf) }, { 'Cache-Control': 'public, s-maxage=30' });
@@ -112,7 +119,7 @@ async function handler(req, res) {
     if (seg[0] === 'meta' && seg[1] === 'tv') {
       const login = strip(seg[2]).replace(/^twitch:/, '').toLowerCase();
       if (!LOGIN_RE.test(login)) return json(res, { meta: null });
-      let meta = { id: 'twitch:' + login, type: 'tv', name: login };
+      let meta = { id: 'twitch:' + login, type: 'tv', name: login, poster: 'https://static-cdn.jtvnw.net/previews-ttv/live_user_' + login + '-440x248.jpg', posterShape: 'landscape' };
       try { const s = (await helix('/streams', { user_login: login }))[0]; if (s) meta = metaOf(s); } catch { /* fiche minimale */ }
       return json(res, { meta });
     }
