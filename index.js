@@ -51,8 +51,13 @@ function variantsOf(txt) {
       if (g && n) names[g] = n;
     }
     if (lines[i].startsWith('#EXT-X-STREAM-INF') && /^https?:\/\//.test(lines[i + 1] || '')) {
-      const g = (lines[i].match(/VIDEO="([^"]+)"/) || [])[1];
-      variants.push({ name: (g && names[g]) || g || 'qualité', url: lines[i + 1].trim() });
+      const L = lines[i], g = (L.match(/VIDEO="([^"]+)"/) || [])[1], res = L.match(/RESOLUTION=(\d+)x(\d+)/), fr = L.match(/FRAME-RATE=([\d.]+)/), bw = L.match(/(?:^|[:,])BANDWIDTH=(\d+)/);
+      const h = res ? Number(res[2]) : 0, fps = fr ? Math.round(Number(fr[1])) : 0;
+      let name = (g && names[g]) || '';
+      const audio = /audio_only/i.test(g || '') || /audio/i.test(name) || (!res && /audio/i.test(L));
+      if (audio) name = 'Audio seul';
+      else if (!/\d{3,4}p/.test(name)) name = h ? h + 'p' + (fps > 30 ? fps : '') : (g && g !== 'chunked' ? g : bw ? (Number(bw[1]) / 1e6).toFixed(1) + ' Mb/s' : 'Source');
+      variants.push({ name, url: lines[i + 1].trim(), h, fps, audio });
     }
   }
   return variants;
@@ -106,7 +111,7 @@ async function askProxy(px, login, signal, hevc) {
 async function relayReport(login) {
   if (!LOGIN_RE.test(login)) return { erreur: 'nom de chaîne invalide' };
   const inspect = async r => { // où sont les segments, et y a-t-il des pubs dans la liste de lecture ?
-    const v = variantsOf(absolutize(r.text, r.url)).filter(x => !/audio/i.test(x.name)).pop();
+    const v = variantsOf(absolutize(r.text, r.url)).filter(x => !x.audio).pop();
     if (!v) return {};
     try {
   const pr = await fetch(v.url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(3000) }), t = await pr.text();
@@ -241,7 +246,7 @@ async function checkStream(login, c, u, dev) {
   step('Relais', !!b || !c.relay, b ? b.name + ' (' + b.ms + ' ms)' : c.relay ? 'aucun relais ne répond, flux officiel utilisé' : 'désactivés dans tes réglages');
   let mtxt;
   try { mtxt = b ? absolutize(b.text, b.url) : await fetch(live.url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(8000) }).then(r => r.text()); } catch (e) { step('Liste principale', false, e.message); return finish('bloque', 'Impossible de lire la liste de lecture : ' + e.message); }
-  const vars = variantsOf(cfgLib.filterMaster(mtxt, c)).filter(v => !/audio/i.test(v.name));
+  const vars = variantsOf(cfgLib.filterMaster(mtxt, c)).filter(v => !v.audio);
   const v = vars[0];
   if (!v) { step('Qualité', false, 'aucune qualité disponible avec tes réglages'); return finish('erreur', 'Aucune qualité ne correspond à ton plafond.'); }
   step('Qualité testée', true, v.name);
@@ -364,10 +369,10 @@ async function handler(req, res) {
       store.log({ k: 'stream', ...who, ch: login, relais: b ? b.name : cfg.relay ? 'aucun (officiel)' : 'coupés (officiel)', relais_ms: b ? b.ms : undefined, ms: Date.now() - t0, plafond: cfg.cap || undefined });
       // Un relais répond : tous les flux passent par lui (sans pub). Sinon : flux officiel.
       const vars = b ? variantsOf(absolutize(b.text, b.url)) : s.variants, tag = b ? ' · sans pub' : '';
-      const video = vars.filter(v => !/audio/i.test(v.name) && cfgLib.keepVariant(v, cfg));
+      const video = vars.filter(v => !v.audio && cfgLib.keepVariant(v, cfg));
       const fixed = video.slice(0, cfg.fixed).map(v => ({ name: 'Twitch ' + v.name.replace(/ \(source\)/, ''), title: 'En direct · qualité fixe' + tag, url: v.url }));
       const auto = { name: 'Twitch', title: 'En direct · qualité automatique' + (cfg.cap ? ' (max ' + cfg.cap + 'p)' : '') + tag, url: originOf(req) + base + '/p/' + login + '.m3u8' };
-      const audio = cfg.audio ? vars.filter(v => /audio/i.test(v.name)).slice(0, 1).map(v => ({ name: 'Twitch Audio', title: 'Audio seul' + tag, url: v.url })) : [];
+      const audio = cfg.audio ? vars.filter(v => v.audio).slice(0, 1).map(v => ({ name: 'Twitch Audio', title: 'Audio seul' + tag, url: v.url })) : [];
       return json(res, { streams: [auto, ...fixed, ...audio] });
     }
     send(res, 404, 'text/plain; charset=utf-8', 'Introuvable');
@@ -380,5 +385,5 @@ async function handler(req, res) {
 
 module.exports = handler;
 module.exports.handler = handler;
-module.exports._t = { liveStream, usherUrl, metaOf, MANIFEST, absolutize, proxyList, bestProxy };
+module.exports._t = { variantsOf, liveStream, usherUrl, metaOf, MANIFEST, absolutize, proxyList, bestProxy };
 if (require.main === module) http.createServer(handler).listen(PORT, () => console.log('Twitch pour Stremio sur http://localhost:' + PORT));
