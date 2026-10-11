@@ -70,7 +70,8 @@ footer{text-align:center;color:var(--t3);font-size:.8rem}
   <span class="hint">Twitch ne donne le 1440p qu'à un compte connecté. Sur twitch.tv (connecté), appuie sur F12, onglet « Application » (Chrome) puis Cookies, <b>https://www.twitch.tv</b>, et copie la valeur de <b>auth-token</b>. Elle est vérifiée puis chiffrée : le lien ne la montre pas et elle n'est stockée nulle part. Elle donne accès à ton compte : ne la partage pas, et ne partage pas non plus ton lien d'installation. Pour la révoquer, déconnecte-toi de Twitch partout.</span></div>
  <div class="tg"><div><b>Relais sans publicité</b><span>Récupère le flux depuis une autre région pour éviter les écrans de pub. Coupe-le si tu préfères le flux officiel.</span></div><button class="sw" id="relay" aria-label="Relais sans pub"></button></div>
  <div class="two"><div class="row"><label for="fixed">Qualités fixes proposées</label><select id="fixed"></select><span class="hint">En plus de « Twitch » (automatique), dans la liste des sources.</span></div>
- <div class="tg"><div><b>Proposer « Audio seul »</b><span>Utile en arrière-plan.</span></div><button class="sw" id="audio" aria-label="Audio seul"></button></div></div>
+ <div class="tg"><div><b>Proposer « Audio seul »</b><span>Utile en arrière-plan.</span></div><button class="sw" id="audio" aria-label="Audio seul"></button></div>
+ <div class="tg"><div><b>Mode ordinateur (Stremio PC)</b><span>À activer si le lecteur de Stremio sur PC charge sans fin. Les listes de lecture sont nettoyées avant d'être données au lecteur.</span></div><button class="sw" id="pc" aria-label="Mode ordinateur"></button></div></div>
 </div></section>
 
 <section class="sec"><div class="sh"><span class="n">3</span>Installation dans Stremio</div><div class="sb">
@@ -86,14 +87,14 @@ footer{text-align:center;color:var(--t3);font-size:.8rem}
 <div class="toast" id="toast"></div>
 <script>
 const $=s=>document.querySelector(s),CAPS=[[0,'Maximum'],[1440,'1440p'],[1080,'1080p'],[720,'720p'],[480,'480p'],[360,'360p']];
-const st={pseudo:'',device:'',cap:0,fps60:true,relay:true,hevc:false,tok:'',acct:'',fixed:3,audio:false};
+const st={pseudo:'',device:'',cap:0,fps60:true,relay:true,hevc:false,tok:'',acct:'',fixed:3,audio:false,pc:false};
 try{Object.assign(st,JSON.parse(localStorage.twcfg||'{}'))}catch{}
 const clean=p=>String(p||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9_]/g,'').slice(0,20);
 const b64=o=>btoa(unescape(encodeURIComponent(JSON.stringify(o)))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
 const unb64=s=>JSON.parse(decodeURIComponent(escape(atob(s.replace(/-/g,'+').replace(/_/g,'/')))));
 const toast=m=>{const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.remove('show'),2200)};
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const opts=()=>({cap:st.cap,fps60:st.fps60,relay:st.relay,hevc:st.hevc,tok:st.tok,fixed:st.fixed,audio:st.audio,device:st.device});
+const opts=()=>({cap:st.cap,fps60:st.fps60,relay:st.relay,hevc:st.hevc,tok:st.tok,fixed:st.fixed,audio:st.audio,pc:st.pc,device:st.device});
 const base=()=>st.pseudo.length>=2?'/c/'+st.pseudo+'/'+b64(opts()):'';
 function acct(){
  $('#tokDel').hidden=!st.tok;$('#acctNote').className='note '+(st.tok?'i':'w');
@@ -107,7 +108,7 @@ $('#tokDel').onclick=()=>{st.tok='';st.acct='';draw();toast('Compte retiré')};
 function draw(){
  $('#cap').innerHTML=CAPS.map(([v,l])=>'<button data-v="'+v+'" class="'+(st.cap===v?'on':'')+'">'+l+'</button>').join('');
  $('#fixed').innerHTML=[0,1,2,3,4,5,6].map(n=>'<option value="'+n+'"'+(st.fixed===n?' selected':'')+'>'+(n===0?'Aucune (automatique seul)':n+' qualité'+(n>1?'s':''))+'</option>').join('');
- for(const k of ['fps60','relay','hevc','audio'])$('#'+k).classList.toggle('on',!!st[k]);
+ for(const k of ['fps60','relay','hevc','audio','pc'])$('#'+k).classList.toggle('on',!!st[k]);
  $('#pseudo').value=st.pseudo;$('#device').value=st.device;acct();
  const ok=st.pseudo.length>=2,u=location.origin+base()+'/manifest.json';
  $('#link').value=ok?u:'';
@@ -117,7 +118,7 @@ function draw(){
 }
 $('#cap').onclick=e=>{if(e.target.dataset.v!==undefined){st.cap=+e.target.dataset.v;draw()}};
 $('#fixed').onchange=e=>{st.fixed=+e.target.value;draw()};
-for(const k of ['fps60','relay','hevc','audio'])$('#'+k).onclick=()=>{st[k]=!st[k];draw()};
+for(const k of ['fps60','relay','hevc','audio','pc'])$('#'+k).onclick=()=>{st[k]=!st[k];draw()};
 $('#pseudo').oninput=e=>{const c=clean(e.target.value);st.pseudo=c;if(c!==e.target.value.toLowerCase())e.target.value=c;draw();$('#pseudo').value=c};
 $('#device').oninput=e=>{st.device=e.target.value.replace(/[^\p{L}\p{N} _\-.]/gu,'').slice(0,24);try{localStorage.twcfg=JSON.stringify(st)}catch{};$('#link').value=st.pseudo.length>=2?location.origin+base()+'/manifest.json':''};
 $('#device').onchange=draw;

@@ -211,6 +211,25 @@ function absolutize(text, base) {
   const abs = u => { try { return new URL(u, base).href; } catch { return u; } };
   return text.split(/\r?\n/).map(l => !l || l.startsWith('#') ? l.replace(/URI="([^"]+)"/g, (_, u) => 'URI="' + abs(u) + '"') : abs(l)).join('\n');
 }
+
+// Mode ordinateur : les listes de lecture passent par nous, nettoyées (sans balises Twitch propres) pour le lecteur de Stremio PC.
+const pcOn = cfg => !!(cfg && cfg.pc && sealLib.available());
+const pcUrl = (origin, base, u) => origin + base + '/m/' + sealLib.seal(u) + '.m3u8';
+function pcMaster(text, origin, base) {
+  const L = text.split(/\r?\n/), out = [];
+  for (let i = 0; i < L.length; i++) {
+    if (L[i].startsWith('#EXT-X-MEDIA')) continue;
+    if (L[i].startsWith('#EXT-X-STREAM-INF')) {
+      const u = L[i + 1] || '';
+      if (/audio_only/i.test(L[i] + u) || !/RESOLUTION=/.test(L[i])) { i++; continue; }
+      out.push(L[i].replace(/,?AUDIO="[^"]*"/, '').replace(/,?VIDEO="[^"]*"/, ''), /^https?:/.test(u) ? pcUrl(origin, base, u) : u); i++;
+    } else out.push(L[i]);
+  }
+  return out.join('\n');
+}
+function cleanMedia(text) {
+  return text.split(/\r?\n/).filter(l => !/^#EXT-X-(TWITCH-PREFETCH|DATERANGE|TWITCH-INFO|TWITCH-ELAPSED-SECS|TWITCH-TOTAL-SECS|SCTE35)/.test(l) && !/^#EXT-X-PROGRAM-DATE-TIME/.test(l)).join('\n');
+}
 const originOf = req => 'https://' + String(req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0].trim();
 
 /* ------------------------------------------------------------------ API officielle (catalogues) */
@@ -467,17 +486,27 @@ async function handler(req, res) {
       return json(res, out);
     }
 
+    if (seg[0] === 'm' && seg[1]) { // liste de lecture d'une qualité, nettoyée (mode ordinateur)
+      const u = sealLib.open(strip(seg[1]).replace(/\.m3u8$/, ''));
+      if (!u || !/^https:\/\//.test(u)) return send(res, 400, 'text/plain; charset=utf-8', 'Lien invalide');
+      const r = await fetch(u, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(8000) });
+      const t = await r.text();
+      if (!r.ok || !t.startsWith('#EXTM3U')) return send(res, r.ok ? 502 : r.status, 'text/plain; charset=utf-8', 'Flux indisponible');
+      return send(res, 200, 'application/vnd.apple.mpegurl', cleanMedia(absolutize(t, u)), { 'Cache-Control': 'no-store' });
+    }
+
     if (seg[0] === 'p' && seg[1]) { // liste de lecture « sans pub » : récupérée côté serveur auprès d'un relais, puis servie au lecteur
       const login = strip(seg[1]).replace(/\.m3u8$/, '').toLowerCase();
       if (!LOGIN_RE.test(login)) return send(res, 400, 'text/plain; charset=utf-8', 'Nom de chaîne invalide');
+      const fin = m => pcOn(cfg) ? pcMaster(m, originOf(req), base) : m;
       const [b, lv] = await Promise.all([cfg.relay ? bestProxy(login, cfg.hevc) : null, cfg.hevc && cfg.relay ? liveStream(login, true, auth).catch(() => null) : null]);
       store.incr('play'); store.top(login); store.user(pseudo, { ch: login, dev: cfg.device });
       store.log({ k: 'play', u: pseudo || undefined, ch: login, relais: b ? b.name : cfg.relay ? 'officiel (repli)' : 'officiel (relais coupés)', ms: Date.now() - t0, appareil: cfg.device || undefined, dev });
-      if (b) return send(res, 200, 'application/vnd.apple.mpegurl', cfgLib.filterMaster(mergedMaster(b, lv, cfg), cfg), { 'Cache-Control': 'no-store', 'X-Relais': b.name });
+      if (b) return send(res, 200, 'application/vnd.apple.mpegurl', fin(cfgLib.filterMaster(mergedMaster(b, lv, cfg), cfg)), { 'Cache-Control': 'no-store', 'X-Relais': b.name });
       const s = await liveStream(login, cfg.hevc, auth); // aucun relais : flux officiel, servi par nous pour appliquer le plafond de qualité
       if (s.offline) return send(res, 404, 'text/plain; charset=utf-8', 'Chaîne hors ligne');
       const o = await fetch(s.url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(8000) }).then(r => r.text());
-      return send(res, 200, 'application/vnd.apple.mpegurl', cfgLib.filterMaster(o, cfg), { 'Cache-Control': 'no-store' });
+      return send(res, 200, 'application/vnd.apple.mpegurl', fin(cfgLib.filterMaster(o, cfg)), { 'Cache-Control': 'no-store' });
     }
     if (seg[0] === 'relais' && seg[1]) { // diagnostic : quels relais répondent depuis Vercel ?
       const login = seg[1].toLowerCase();
@@ -516,7 +545,7 @@ async function handler(req, res) {
       const vars = b ? variantsOf(mergedMaster(b, s, cfg)) : s.variants, tag = b ? ' · sans pub' : '';
       const relayUrls = b ? new Set(variantsOf(absolutize(b.text, b.url)).map(v => v.url)) : null;
       const video = vars.filter(v => !v.audio && cfgLib.keepVariant(v, cfg)).sort(byQuality);
-      const fixed = video.slice(0, cfg.fixed).map(v => ({ name: 'Twitch ' + v.name.replace(/ \(source\)/, ''), title: 'En direct · qualité fixe' + (relayUrls && !relayUrls.has(v.url) ? ' · officiel (pubs possibles)' : tag), url: v.url }));
+      const fixed = video.slice(0, cfg.fixed).map(v => ({ name: 'Twitch ' + v.name.replace(/ \(source\)/, ''), title: 'En direct · qualité fixe' + (relayUrls && !relayUrls.has(v.url) ? ' · officiel (pubs possibles)' : tag), url: pcOn(cfg) ? pcUrl(originOf(req), base, v.url) : v.url }));
       const auto = { name: 'Twitch', title: 'En direct · qualité automatique' + (cfg.cap ? ' (max ' + cfg.cap + 'p)' : '') + tag, url: originOf(req) + base + '/p/' + login + '.m3u8' };
       const audio = cfg.audio ? vars.filter(v => v.audio).slice(0, 1).map(v => ({ name: 'Twitch Audio', title: 'Audio seul' + tag, url: v.url })) : [];
       return json(res, { streams: [auto, ...fixed, ...audio] });
