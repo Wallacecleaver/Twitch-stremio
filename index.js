@@ -264,6 +264,7 @@ const metaOf = s => ({
 const MANIFEST = {
   id: 'community.twitch.lives', version: '0.1.0', name: 'Twitch', description: 'Lives Twitch dans Stremio',
   resources: ['catalog', 'meta', 'stream'], types: ['tv'], idPrefixes: ['twitch:'],
+  behaviorHints: { configurable: true, configurationRequired: false },
   catalogs: [{ type: 'tv', id: 'twitch-top', name: 'Twitch · Lives populaires', extra: [{ name: 'search', isRequired: false }] }],
 };
 
@@ -448,6 +449,34 @@ const adminRoute = makeAdmin({ send, json, relayReport, probe, check: async (log
     ['Délai relais', PROXY_TIMEOUT + ' ms', null],
   ] }) });
 
+// Profils enregistrés : /u/<id>/… (l'identifiant est le secret). Les réglages sont modifiables sans réinstaller l'addon.
+const ID_RE = /^[A-Za-z0-9_-]{16,40}$/;
+async function loadProfile(id) {
+  try { const raw = await store.getKey('p:' + id); if (!raw) return null; const p = JSON.parse(raw); return { pseudo: cfgLib.cleanPseudo(p.pseudo), cfg: cfgLib.normalize(p.cfg) }; } catch { return null; }
+}
+async function profileApi(req) {
+  if (tooMany(req)) return { ok: false, error: 'trop de demandes, réessaie dans une minute' };
+  if (req.method === 'GET') {
+    const id = new URL(req.url, 'http://x').searchParams.get('id') || '';
+    if (!id) return { ok: true, persistent: store.persistent };
+    if (!ID_RE.test(id)) return { ok: false, error: 'Lien inconnu' };
+    const p = await loadProfile(id);
+    return p ? { ok: true, persistent: store.persistent, pseudo: p.pseudo, cfg: p.cfg } : { ok: false, error: 'Profil introuvable' };
+  }
+  if (!store.persistent) return { ok: false, persistent: false, error: 'La base de données n\'est pas configurée : utilise le lien classique.' };
+  let b = {}; try { b = JSON.parse(await readBody(req)); } catch { return { ok: false, error: 'requête invalide' }; }
+  const pseudo = cfgLib.cleanPseudo(b.pseudo);
+  if (pseudo.length < 2) return { ok: false, error: 'Pseudo trop court (2 caractères minimum)' };
+  const cfg = cfgLib.normalize(b.cfg);
+  if (cfg.tok && !sealLib.open(cfg.tok)) cfg.tok = '';
+  let id = String(b.id || '');
+  if (id) { if (!ID_RE.test(id) || !(await loadProfile(id))) return { ok: false, error: 'Profil introuvable' }; }
+  else id = crypto.randomBytes(16).toString('base64url');
+  await store.setKey('p:' + id, JSON.stringify({ pseudo, cfg, maj: Date.now() }));
+  store.log({ k: 'config', u: pseudo, niveau: 'INFO', reglages: summary(cfg), action: b.id ? 'modifiée' : 'créée' });
+  return { ok: true, id, pseudo };
+}
+
 async function handler(req, res) {
   let pseudo = '';
   try {
@@ -455,6 +484,15 @@ async function handler(req, res) {
     // adresse personnelle : /c/<pseudo>/<réglages>/... (le pseudo et les réglages voyagent dans l'adresse)
     let cfg = cfgLib.DEFAULTS, base = '', auth = null;
     if (seg[0] === 'c' && seg.length >= 3) { pseudo = cfgLib.cleanPseudo(seg[1]); cfg = cfgLib.decode(seg[2]) || cfgLib.DEFAULTS; auth = cfg.hevc && cfg.tok ? sealLib.open(cfg.tok) : null; base = '/c/' + encodeURIComponent(seg[1]) + '/' + seg[2]; seg = seg.slice(3); }
+    if (seg[0] === 'u' && ID_RE.test(seg[1] || '')) {
+      if (!seg[2]) return send(res, 302, 'text/plain', '', { Location: '/u/' + seg[1] + '/configure' });
+      if (seg[2] !== 'configure') {
+        const p = await loadProfile(seg[1]);
+        if (!p) return send(res, 404, 'text/plain; charset=utf-8', 'Profil introuvable : crée un nouveau lien sur /config');
+        pseudo = p.pseudo; cfg = p.cfg; auth = cfg.hevc && cfg.tok ? sealLib.open(cfg.tok) : null; base = '/u/' + seg[1];
+      }
+      seg = seg.slice(2);
+    }
     const strip = s => String(s || '').replace(/\.json$/, '');
     res.setHeader('Access-Control-Allow-Origin', '*');
     if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
@@ -467,7 +505,8 @@ async function handler(req, res) {
     if (['stream', 'catalog', 'p', 'manifest.json'].includes(seg[0])) store.uniq(dev);
 
     if (!seg.length) return send(res, 302, 'text/plain', '', { Location: '/config' });
-    if (seg[0] === 'config') return send(res, 200, 'text/html; charset=utf-8', page('config.html'), { 'Cache-Control': 'no-cache' });
+    if (seg[0] === 'config' || seg[0] === 'configure') return send(res, 200, 'text/html; charset=utf-8', page('config.html'), { 'Cache-Control': 'no-cache' });
+    if (seg[0] === 'api' && seg[1] === 'profile') return json(res, await profileApi(req));
     if (seg[0] === 'api' && seg[1] === 'seal' && req.method === 'POST') return json(res, await sealToken(req));
     if (seg[0] === 'api' && seg[1] === 'report' && req.method === 'POST') return json(res, await report(req, dev));
     if (seg[0] === 'manifest.json') {
