@@ -167,7 +167,7 @@ function render(){
  // utilisateurs
  const q=$('#usq').value.toLowerCase().trim(),us=S.users.slice().sort((a,b)=>(b.last||0)-(a.last||0)).filter(u=>!q||u.pseudo.includes(q)||(u.dev||'').toLowerCase().includes(q));
  $('#usN').textContent=us.length;
- const sm=c=>c?[c.cap?'max '+c.cap+'p':'qualité max',c.fps60?'60 i/s':'30 i/s',c.relay?'relais':'sans relais',c.fixed+' fixes',c.audio?'audio':''].filter(Boolean).join(' · '):'<span class="dim">défaut</span>';
+ const sm=c=>c?[c.cap?'max '+c.cap+'p':'qualité max',c.fps60?'60 i/s':'30 i/s',c.relay?'relais':'sans relais',c.hevc?'1440p':'',c.fixed+' fixes',c.audio?'audio':''].filter(Boolean).join(' · '):'<span class="dim">défaut</span>';
  $('#users').innerHTML=us.length?'<table><thead><tr><th>Pseudo</th><th>Appareil</th><th class="r">Lectures</th><th class="r">Incidents</th><th>Dernière chaîne</th><th>Dernière activité</th><th>Réglages</th><th></th></tr></thead><tbody>'+us.map(u=>'<tr><td><span class="user" data-u="'+esc(u.pseudo)+'">'+esc(u.pseudo)+'</span></td><td>'+esc(u.dev||'–')+'</td><td class="r">'+n(u.n)+'</td><td class="r">'+(u.inc?'<span class="pill wa">'+u.inc+'</span>':'<span class="dim">0</span>')+'</td><td>'+esc(u.ch||'–')+'</td><td class="dim">'+ago(u.last)+'</td><td class="dim" style="font-size:.8rem">'+(typeof sm(u.cfg)==='string'?sm(u.cfg):'')+'</td><td><button class="btn" data-log="'+esc(u.pseudo)+'">Journal</button></td></tr>').join('')+'</tbody></table>':'<div class="empty">Aucun utilisateur pour le moment. Les pseudos apparaissent dès qu\'une personne installe son lien depuis <a href="/config" style="color:var(--a)">/config</a>.</div>';
  // relais
  const names=S.config.relais.map(r=>r.name);
