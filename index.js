@@ -310,15 +310,32 @@ const account = {
     await store.setKey('acct', sealLib.seal(tok)); acctCache = { v: null, exp: 0 };
     const j = await r.json(); return { ok: true, login: j.login };
   },
+  async sealed() { const t = await ownerToken(); return t && sealLib.available() ? sealLib.seal(t) : null; },
   async unlink() { await store.delKey('acct'); acctCache = { v: null, exp: 0 }; return { ok: true }; },
 };
 const pageCache = {};
 const page = name => pageCache[name] ||= fs.readFileSync(path.join(__dirname, 'lib', 'pages', name), 'utf8');
-const summary = c => [c.cap ? 'max ' + c.cap + 'p' : 'qualité max', c.fps60 ? '60 i/s' : '30 i/s', c.relay ? 'relais' : 'sans relais', c.fixed + ' fixes', c.hevc ? '1440p' : '', c.audio ? 'audio' : ''].filter(Boolean).join(' · ');
+const summary = c => [c.cap ? 'max ' + c.cap + 'p' : 'qualité max', c.fps60 ? '60 i/s' : '30 i/s', c.relay ? 'relais' : 'sans relais', c.fixed + ' fixes', c.hevc ? '1440p' : '', c.tok ? 'compte lié' : '', c.audio ? 'audio' : ''].filter(Boolean).join(' · ');
 const readBody = req => new Promise(r => { let b = ''; req.on('data', c => { b += c; if (b.length > 8000) req.destroy(); }); req.on('end', () => r(b)); req.on('error', () => r(b)); });
 const text = (v, n) => String(v ?? '').replace(/[\u0000-\u001f]/g, ' ').slice(0, n);
 const hits = new Map(); // limite : 40 signalements / test par minute et par adresse
 const tooMany = req => { const ip = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || 'x', n = (hits.get(ip) || 0) + 1; hits.set(ip, n); if (hits.size > 500) hits.clear(); setTimeout(() => hits.delete(ip), 60000).unref?.(); return n > 40; };
+
+// lie le compte Twitch d'une personne : vérifie le jeton, le chiffre, renvoie la version chiffrée (qui ira dans SON lien ; rien n'est stocké)
+async function sealToken(req) {
+  if (tooMany(req)) return { ok: false, error: 'trop de demandes, réessaie dans une minute' };
+  if (!sealLib.available()) return { ok: false, error: 'Chiffrement non configuré : l\'administrateur doit ajouter la variable SECRET.' };
+  let b = {}; try { b = JSON.parse(await readBody(req)); } catch { return { ok: false, error: 'requête invalide' }; }
+  const tok = String(b.token || '').trim().replace(/^oauth:?\s*/i, '');
+  if (!/^[A-Za-z0-9]{20,64}$/.test(tok)) return { ok: false, error: 'Jeton non reconnu : colle la valeur du cookie auth-token, sans guillemets.' };
+  try {
+    const r = await fetch('https://id.twitch.tv/oauth2/validate', { headers: { Authorization: 'OAuth ' + tok, 'User-Agent': UA }, signal: AbortSignal.timeout(8000) });
+    if (r.status === 401) return { ok: false, error: 'Twitch refuse ce jeton (expiré ou incorrect). Reconnecte-toi sur twitch.tv et recopie-le.' };
+    if (!r.ok) return { ok: false, error: 'Twitch ne répond pas (HTTP ' + r.status + ')' };
+    const j = await r.json();
+    return { ok: true, sealed: sealLib.seal(tok), login: j.login || '' };
+  } catch (e) { return { ok: false, error: e.message }; }
+}
 
 // signalement envoyé par le lecteur de test (blocage, erreur…) ou à la main : il apparaît dans le journal
 async function report(req, dev) {
@@ -349,8 +366,8 @@ async function checkStream(login, c, u, dev, auth) {
   try { live = await liveStream(login, c.hevc, auth); } catch (e) { step('Twitch', false, e.message); return finish('erreur', 'Twitch ne répond pas : ' + e.message); }
   if (live.offline) { step('Twitch', true, 'chaîne hors ligne'); return finish('hors ligne', 'La chaîne n\'est pas en direct, rien à tester.'); }
   step('Twitch', true, live.variants.length + ' qualités');
-  if (auth) step('Compte Twitch', !!(live.compte && live.compte.connecte), live.compte && live.compte.connecte ? 'lié · qualité maximale accordée : ' + live.compte.resolution : 'jeton refusé ou expiré : relie ton compte dans le dashboard (onglet Compte Twitch)');
-  else if (c.hevc) step('Compte Twitch', false, 'aucun compte lié : lie ton compte dans le dashboard (onglet Compte Twitch)');
+  if (auth) step('Compte Twitch', !!(live.compte && live.compte.connecte), live.compte && live.compte.connecte ? 'lié · qualité maximale accordée : ' + live.compte.resolution : 'jeton refusé ou expiré : relie ton compte');
+  else if (c.hevc) step('Compte Twitch', false, 'aucun compte lié : lie ton compte sur /config pour obtenir le 1440p');
   const b = c.relay ? await bestProxy(login, c.hevc) : null;
   step('Relais', !!b || !c.relay, b ? b.name + ' (' + b.ms + ' ms)' : c.relay ? 'aucun relais ne répond, flux officiel utilisé' : 'désactivés dans tes réglages');
   step('Qualités (officiel)', true, live.variants.filter(v => !v.audio).sort(byQuality).map(v => v.name).join(', ') || 'aucune');
@@ -418,7 +435,7 @@ async function handler(req, res) {
     let seg = new URL(req.url, 'http://x').pathname.split('/').filter(Boolean).map(decodeURIComponent);
     // adresse personnelle : /c/<pseudo>/<réglages>/... (le pseudo et les réglages voyagent dans l'adresse)
     let cfg = cfgLib.DEFAULTS, base = '', auth = null;
-    if (seg[0] === 'c' && seg.length >= 3) { pseudo = cfgLib.cleanPseudo(seg[1]); cfg = cfgLib.decode(seg[2]) || cfgLib.DEFAULTS; auth = cfg.hevc ? await ownerToken() : null; base = '/c/' + encodeURIComponent(seg[1]) + '/' + seg[2]; seg = seg.slice(3); }
+    if (seg[0] === 'c' && seg.length >= 3) { pseudo = cfgLib.cleanPseudo(seg[1]); cfg = cfgLib.decode(seg[2]) || cfgLib.DEFAULTS; auth = cfg.hevc && cfg.tok ? sealLib.open(cfg.tok) : null; base = '/c/' + encodeURIComponent(seg[1]) + '/' + seg[2]; seg = seg.slice(3); }
     const strip = s => String(s || '').replace(/\.json$/, '');
     res.setHeader('Access-Control-Allow-Origin', '*');
     if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
@@ -432,9 +449,10 @@ async function handler(req, res) {
 
     if (!seg.length) return send(res, 302, 'text/plain', '', { Location: '/config' });
     if (seg[0] === 'config') return send(res, 200, 'text/html; charset=utf-8', page('config.html'), { 'Cache-Control': 'no-cache' });
+    if (seg[0] === 'api' && seg[1] === 'seal' && req.method === 'POST') return json(res, await sealToken(req));
     if (seg[0] === 'api' && seg[1] === 'report' && req.method === 'POST') return json(res, await report(req, dev));
     if (seg[0] === 'manifest.json') {
-      store.log({ k: 'install', u: pseudo || undefined, appareil: cfg.device || undefined, reglages: pseudo ? summary(cfg) : 'défaut', dev }); store.user(pseudo, { cfg, dev: cfg.device });
+      store.log({ k: 'install', u: pseudo || undefined, appareil: cfg.device || undefined, reglages: pseudo ? summary(cfg) : 'défaut', dev }); store.user(pseudo, { cfg: { ...cfg, tok: undefined, compte: !!cfg.tok }, dev: cfg.device });
       return json(res, pseudo ? { ...MANIFEST, name: 'Twitch · ' + pseudo, description: MANIFEST.description + ' — profil de ' + pseudo } : MANIFEST);
     }
 
