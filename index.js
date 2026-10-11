@@ -27,9 +27,9 @@ const json = (res, o, h) => send(res, 200, 'application/json; charset=utf-8', JS
 /* ------------------------------------------------------------------ lecture d'un live (méthode non officielle) */
 const TOKEN_QUERY = 'query PlaybackAccessToken($login: String!, $isLive: Boolean!, $vodID: ID!, $isVod: Boolean!, $playerType: String!) { streamPlaybackAccessToken(channelName: $login, params: {platform: "web", playerBackend: "mediaplayer", playerType: $playerType}) @include(if: $isLive) { value signature __typename } videoPlaybackAccessToken(id: $vodID, params: {platform: "web", playerBackend: "mediaplayer", playerType: $playerType}) @include(if: $isVod) { value signature __typename } }';
 
-async function accessToken(login, playerType = 'site') {
+async function accessToken(login, playerType = 'site', clientId = GQL_CLIENT_ID) {
   const r = await fetch(GQL, {
-    method: 'POST', headers: { 'Client-ID': GQL_CLIENT_ID, 'Content-Type': 'application/json', 'User-Agent': UA }, signal: AbortSignal.timeout(10000),
+    method: 'POST', headers: { 'Client-ID': clientId, 'Content-Type': 'application/json', 'User-Agent': UA }, signal: AbortSignal.timeout(10000),
     body: JSON.stringify({ operationName: 'PlaybackAccessToken', variables: { isLive: true, login, isVod: false, vodID: '', playerType }, query: TOKEN_QUERY }),
   });
   if (!r.ok) throw new Error('Twitch (GQL) : HTTP ' + r.status);
@@ -40,6 +40,7 @@ async function accessToken(login, playerType = 'site') {
 }
 // Variantes de demande à Twitch pour obtenir les qualités HEVC / AV1 (1440p et plus) : on les essaie toutes et on garde la meilleure.
 const WEB = { platform: 'web', player_backend: 'mediaplayer', playlist_include_framerate: 'true', reassignments_supported: 'true', transcode_mode: 'cbr_v1' };
+const TV_ID = 'ue6666qo983tsx6so1t0vnawi233wa', ANDROID_ID = 'kd1unb4b3q4t58fwlpcbzcbnm76a8fp'; // identifiants publics des applications Twitch TV et Android
 const HEVC_TRIES = [
   { tok: 'site', q: { supported_codecs: 'av1,h265,h264', ...WEB } },
   { tok: 'site', q: { supported_codecs: 'h265,h264', ...WEB } },
@@ -49,6 +50,10 @@ const HEVC_TRIES = [
   { tok: 'site', q: { supported_codecs: 'hev1,avc1' } },
   { tok: 'embed', q: { supported_codecs: 'av1,h265,h264', ...WEB } },
   { tok: 'popout', q: { supported_codecs: 'av1,h265,h264', ...WEB } },
+  { tok: 'site', cid: TV_ID, q: { supported_codecs: 'av1,h265,h264', ...WEB } },
+  { tok: 'site', cid: TV_ID, q: { supported_codecs: 'h265,h264' } },
+  { tok: 'site', cid: ANDROID_ID, q: { supported_codecs: 'av1,h265,h264', ...WEB } },
+  { tok: 'site', cid: ANDROID_ID, q: { supported_codecs: 'h265,h264' } },
 ];
 function usherUrl(login, t, extra) {
   const q = new URLSearchParams({ sig: t.signature, token: t.value, allow_source: 'true', allow_audio_only: 'true', ...(FAST_BREAD ? { fast_bread: 'true' } : {}), player: 'twitchweb', type: 'any', supported_codecs: 'avc1', p: String(Math.floor(Math.random() * 1e7)), ...(extra || {}) });
@@ -82,7 +87,7 @@ async function liveStream(login, hevc) {
   if (c && c.exp > Date.now()) return c.v;
   const tokens = {};
   const res = await Promise.allSettled(HEVC_TRIES.map(async (t, i) => {
-    const tk = await (tokens[t.tok] ||= accessToken(login, t.tok));
+    const key = t.tok + (t.cid || ''), tk = await (tokens[key] ||= accessToken(login, t.tok, t.cid));
     const r = await liveOnce(login, t.tok, t.q, tk);
     return { i, r };
   }));
@@ -296,7 +301,7 @@ async function checkStream(login, c, u, dev) {
   if (b) step('Qualités (relais)', true, variantsOf(absolutize(b.text, b.url)).filter(v => !v.audio).sort(byQuality).map(v => v.name).join(', '));
   let mtxt;
   try { mtxt = b ? mergedMaster(b, live, c) : await fetch(live.url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(8000) }).then(r => r.text()); } catch (e) { step('Liste principale', false, e.message); return finish('bloque', 'Impossible de lire la liste de lecture : ' + e.message); }
-  const vars = variantsOf(cfgLib.filterMaster(mtxt, c)).filter(v => !v.audio);
+  const vars = variantsOf(cfgLib.filterMaster(mtxt, c)).filter(v => !v.audio).sort(byQuality);
   const v = vars[0];
   if (!v) { step('Qualité', false, 'aucune qualité disponible avec tes réglages'); return finish('erreur', 'Aucune qualité ne correspond à ton plafond.'); }
   step('Qualité testée', true, v.name);
