@@ -11,6 +11,8 @@ const http = require('http');
 const store = require('./lib/store');
 const makeAdmin = require('./lib/admin');
 const cfgLib = require('./lib/settings');
+const sealLib = require('./lib/seal');
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 
@@ -27,11 +29,14 @@ const json = (res, o, h) => send(res, 200, 'application/json; charset=utf-8', JS
 /* ------------------------------------------------------------------ lecture d'un live (méthode non officielle) */
 const TOKEN_QUERY = 'query PlaybackAccessToken($login: String!, $isLive: Boolean!, $vodID: ID!, $isVod: Boolean!, $playerType: String!) { streamPlaybackAccessToken(channelName: $login, params: {platform: "web", playerBackend: "mediaplayer", playerType: $playerType}) @include(if: $isLive) { value signature __typename } videoPlaybackAccessToken(id: $vodID, params: {platform: "web", playerBackend: "mediaplayer", playerType: $playerType}) @include(if: $isVod) { value signature __typename } }';
 
-async function accessToken(login, playerType = 'site', clientId = GQL_CLIENT_ID) {
-  const r = await fetch(GQL, {
-    method: 'POST', headers: { 'Client-ID': clientId, 'Content-Type': 'application/json', 'User-Agent': UA }, signal: AbortSignal.timeout(10000),
-    body: JSON.stringify({ operationName: 'PlaybackAccessToken', variables: { isLive: true, login, isVod: false, vodID: '', playerType }, query: TOKEN_QUERY }),
-  });
+const PERSISTED_HASH = 'ed230aa1e33e07eebb8928504583da78a5173989fadfb1ac94be06a04f3cdbe9'; // requête enregistrée utilisée par le lecteur web
+async function accessToken(login, playerType = 'site', clientId = GQL_CLIENT_ID, o = {}) {
+  const headers = { 'Client-ID': clientId, 'Content-Type': 'application/json', 'User-Agent': UA };
+  if (o.oauth) { headers.Authorization = 'OAuth ' + o.oauth; headers['X-Device-Id'] = crypto.randomBytes(16).toString('hex'); }
+  const body = o.persisted
+    ? { operationName: 'PlaybackAccessToken', variables: { isLive: true, login, isVod: false, vodID: '', playerType, platform: 'web' }, extensions: { persistedQuery: { version: 1, sha256Hash: PERSISTED_HASH } } }
+    : { operationName: 'PlaybackAccessToken', variables: { isLive: true, login, isVod: false, vodID: '', playerType }, query: TOKEN_QUERY };
+  const r = await fetch(GQL, { method: 'POST', headers, signal: AbortSignal.timeout(10000), body: JSON.stringify(body) });
   if (!r.ok) throw new Error('Twitch (GQL) : HTTP ' + r.status);
   const j = await r.json().catch(() => ({}));
   const t = j && j.data && j.data.streamPlaybackAccessToken;
@@ -48,6 +53,13 @@ const WEBV2 = (codecs, unavailable = true) => login => ({
   browser_family: 'chrome', browser_version: '155.0', cdm: 'wv', enable_score: 'true', ...(unavailable ? { include_unavailable: 'true' } : {}), lang: 'fr', os_name: 'Windows', os_version: 'NT 10.0',
   platform: 'web', play_session_id: hex(32), player_backend: 'mediaplayer', player_version: '1.57.0-rc.2', playlist_include_framerate: 'true', reassignments_supported: 'true', supported_codecs: codecs, transcode_mode: 'cbr_v1',
 });
+const EXACT = { _exact: 1, allow_source: 'true', allow_audio_only: 'true', include_unavailable: 'true', multigroup_video: 'false', platform: 'web', playlist_include_framerate: 'true', supported_codecs: 'av1,h265,h264' }; // demande de l'application Xtra
+const AUTH_TRIES = [
+  { auth: 1, tok: 'site', v2: true, q: WEBV2('av1,h265,h264') },
+  { auth: 1, tok: 'site', v2: true, persisted: true, q: EXACT },
+  { auth: 1, tok: 'site', v2: true, q: EXACT },
+  { auth: 1, tok: 'site', v2: true, persisted: true, q: WEBV2('h265,h264') },
+];
 const HEVC_TRIES = [
   { tok: 'site', v2: true, q: WEBV2('av1,h265,h264') },
   { tok: 'site', v2: true, q: WEBV2('h265,h264') },
@@ -66,7 +78,8 @@ const HEVC_TRIES = [
   { tok: 'site', cid: ANDROID_ID, q: { supported_codecs: 'h265,h264' } },
 ];
 function usherUrl(login, t, extra, v2) {
-  const q = new URLSearchParams({ sig: t.signature, token: t.value, allow_source: 'true', allow_audio_only: 'true', ...(FAST_BREAD ? { fast_bread: 'true' } : {}), player: 'twitchweb', type: 'any', supported_codecs: 'avc1', p: String(Math.floor(Math.random() * 1e7)), ...(extra || {}) });
+  const exact = extra && extra._exact; if (exact) { extra = { ...extra }; delete extra._exact; }
+  const q = new URLSearchParams(exact ? { sig: t.signature, token: t.value, p: String(Math.floor(Math.random() * 1e7)), ...extra } : { sig: t.signature, token: t.value, allow_source: 'true', allow_audio_only: 'true', ...(FAST_BREAD ? { fast_bread: 'true' } : {}), player: 'twitchweb', type: 'any', supported_codecs: 'avc1', p: String(Math.floor(Math.random() * 1e7)), ...(extra || {}) });
   return 'https://usher.ttvnw.net/api/' + (v2 ? 'v2/' : '') + 'channel/hls/' + login + '.m3u8?' + q;
 }
 // qualités individuelles d'une liste de lecture principale : [{ name, url }]
@@ -91,24 +104,33 @@ function variantsOf(txt) {
 }
 // Retourne { url, qualities } si la chaîne est en direct, sinon { offline: true }
 const hevcCache = new Map();
-async function liveStream(login, hevc) {
-  if (!hevc) return liveOnce(login, 'site', null);
-  const c = hevcCache.get(login);
+async function liveStream(login, hevc, oauth) {
+  if (!hevc && !oauth) return liveOnce(login, 'site', null);
+  const ck = login + '|' + (oauth ? crypto.createHash('sha1').update(oauth).digest('hex').slice(0, 8) : ''), c = hevcCache.get(ck);
   if (c && c.exp > Date.now()) return c.v;
-  const tokens = {};
-  const res = await Promise.allSettled(HEVC_TRIES.map(async (t, i) => {
-    const key = t.tok + (t.cid || ''), tk = await (tokens[key] ||= accessToken(login, t.tok, t.cid));
+  const list = (oauth ? AUTH_TRIES : []).concat(HEVC_TRIES), tokens = {};
+  const res = await Promise.allSettled(list.map(async t => {
+    const key = t.tok + (t.cid || '') + (t.auth ? 'A' : '') + (t.persisted ? 'P' : ''), tk = await (tokens[key] ||= accessToken(login, t.tok, t.cid, { oauth: t.auth ? oauth : null, persisted: t.persisted }));
     const r = await liveOnce(login, t.tok, typeof t.q === 'function' ? t.q(login) : t.q, tk, t.v2);
-    return { i, r };
+    r.tk = tk;
+    return r;
   }));
-  const ok = res.filter(x => x.status === 'fulfilled').map(x => x.value);
-  const tries = res.map((x, i) => x.status === 'fulfilled' ? (x.value.r.offline ? 'hors ligne' : Math.max(0, ...x.value.r.variants.map(v => v.h)) + 'p') : 'échec (' + String(x.reason && x.reason.message).slice(0, 40) + ')');
+  const hOf = r => Math.max(0, ...r.variants.map(v => v.h));
+  const ok = res.map((x, i) => ({ i, x })).filter(o => o.x.status === 'fulfilled').map(o => ({ i: o.i, r: o.x.value }));
+  const tries = res.map((x, i) => (list[i].auth ? 'compte:' : '') + (x.status === 'fulfilled' ? (x.value.offline ? 'hors ligne' : hOf(x.value) + 'p') : 'échec (' + String(x.reason && x.reason.message).slice(0, 40) + ')'));
   if (!ok.length) throw res[0].reason;
-  let best = ok.find(x => x.r.offline) && ok.every(x => x.r.offline) ? ok[0].r : null;
-  if (!best) { const live = ok.filter(x => !x.r.offline).sort((a, b) => Math.max(0, ...b.r.variants.map(v => v.h)) - Math.max(0, ...a.r.variants.map(v => v.h)) || a.i - b.i); best = live[0] ? { ...live[0].r, essai: live[0].i + 1 } : ok[0].r; }
+  let best;
+  const live = ok.filter(o => !o.r.offline);
+  if (!live.length) best = ok[0].r;
+  else { live.sort((a, b) => hOf(b.r) - hOf(a.r) || a.i - b.i); best = { ...live[0].r, essai: live[0].i + 1 }; }
   best.essais = tries;
+  if (oauth) { // ce que Twitch accorde à ce compte
+    const a = ok.find(o => list[o.i].auth && o.r.tk), j = (() => { try { return a ? JSON.parse(a.r.tk.value) : null; } catch { return null; } })();
+    best.compte = j ? { resolution: j.maximum_resolution || '?', connecte: !!j.user_id } : { resolution: null, connecte: false };
+  }
+  delete best.tk;
   if (hevcCache.size > 100) hevcCache.clear();
-  hevcCache.set(login, { v: best, exp: Date.now() + 20000 });
+  hevcCache.set(ck, { v: best, exp: Date.now() + 20000 });
   return best;
 }
 async function liveOnce(login, tokType, extra, tok, v2) {
@@ -248,6 +270,7 @@ const adminRoute = makeAdmin({ send, json, relayReport, probe, check: (login, c,
     ['TWITCH_CLIENT_ID', mask(process.env.TWITCH_CLIENT_ID), !!process.env.TWITCH_CLIENT_ID],
     ['TWITCH_CLIENT_SECRET', mask(process.env.TWITCH_CLIENT_SECRET), !!process.env.TWITCH_CLIENT_SECRET],
     ['Catalogue « Lives populaires »', process.env.TWITCH_CLIENT_ID && process.env.TWITCH_CLIENT_SECRET ? 'disponible' : 'vide (clés Twitch manquantes)', !!(process.env.TWITCH_CLIENT_ID && process.env.TWITCH_CLIENT_SECRET)],
+    ['Chiffrement des jetons (SECRET)', sealLib.available() ? 'actif' : 'absent (liaison de compte impossible)', sealLib.available()],
     ['Relais configurés', String(proxyList().length) + (process.env.PROXIES ? ' (variable PROXIES)' : ' (liste par défaut)'), null],
     ['Faible latence (FAST_BREAD)', FAST_BREAD ? 'activée' : 'désactivée', null],
     ['Délai relais', PROXY_TIMEOUT + ' ms', null],
@@ -269,11 +292,27 @@ const byQuality = (a, b) => (b.h - a.h) || (b.fps - a.fps);
 
 const pageCache = {};
 const page = name => pageCache[name] ||= fs.readFileSync(path.join(__dirname, 'lib', 'pages', name), 'utf8');
-const summary = c => [c.cap ? 'max ' + c.cap + 'p' : 'qualité max', c.fps60 ? '60 i/s' : '30 i/s', c.relay ? 'relais' : 'sans relais', c.fixed + ' fixes', c.hevc ? '1440p' : '', c.audio ? 'audio' : ''].filter(Boolean).join(' · ');
+const summary = c => [c.cap ? 'max ' + c.cap + 'p' : 'qualité max', c.fps60 ? '60 i/s' : '30 i/s', c.relay ? 'relais' : 'sans relais', c.fixed + ' fixes', c.hevc ? '1440p' : '', c.tok ? 'compte lié' : '', c.audio ? 'audio' : ''].filter(Boolean).join(' · ');
 const readBody = req => new Promise(r => { let b = ''; req.on('data', c => { b += c; if (b.length > 8000) req.destroy(); }); req.on('end', () => r(b)); req.on('error', () => r(b)); });
 const text = (v, n) => String(v ?? '').replace(/[\u0000-\u001f]/g, ' ').slice(0, n);
 const hits = new Map(); // limite : 40 signalements / test par minute et par adresse
 const tooMany = req => { const ip = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || 'x', n = (hits.get(ip) || 0) + 1; hits.set(ip, n); if (hits.size > 500) hits.clear(); setTimeout(() => hits.delete(ip), 60000).unref?.(); return n > 40; };
+
+// lie un compte Twitch : vérifie le jeton, le chiffre, et renvoie la version chiffrée (le jeton lui-même n'est jamais stocké)
+async function sealToken(req) {
+  if (tooMany(req)) return { ok: false, error: 'trop de demandes, réessaie dans une minute' };
+  if (!sealLib.available()) return { ok: false, error: 'Chiffrement non configuré : ajoute la variable SECRET dans Vercel.' };
+  let b = {}; try { b = JSON.parse(await readBody(req)); } catch { return { ok: false, error: 'requête invalide' }; }
+  const tok = String(b.token || '').trim().replace(/^oauth:?\s*/i, '');
+  if (!/^[A-Za-z0-9]{20,64}$/.test(tok)) return { ok: false, error: 'Jeton non reconnu : colle la valeur du cookie auth-token, sans guillemets.' };
+  try {
+    const r = await fetch('https://id.twitch.tv/oauth2/validate', { headers: { Authorization: 'OAuth ' + tok, 'User-Agent': UA }, signal: AbortSignal.timeout(8000) });
+    if (r.status === 401) return { ok: false, error: 'Twitch refuse ce jeton (expiré ou incorrect). Reconnecte-toi sur twitch.tv et recopie-le.' };
+    if (!r.ok) return { ok: false, error: 'Twitch ne répond pas (HTTP ' + r.status + ')' };
+    const j = await r.json();
+    return { ok: true, sealed: sealLib.seal(tok), login: j.login || '' };
+  } catch (e) { return { ok: false, error: e.message }; }
+}
 
 // signalement envoyé par le lecteur de test (blocage, erreur…) ou à la main : il apparaît dans le journal
 async function report(req, dev) {
@@ -289,7 +328,7 @@ async function report(req, dev) {
 }
 
 // vérification côté serveur : la liste de lecture avance-t-elle ? les segments se téléchargent-ils assez vite ? des pubs ?
-async function checkStream(login, c, u, dev) {
+async function checkStream(login, c, u, dev, auth) {
   if (!LOGIN_RE.test(login)) return { verdict: 'erreur', erreur: 'nom de chaîne invalide' };
   const out = { chaine: login, verdict: 'ok', etapes: [], pseudo: u || undefined }, t0 = Date.now();
   const step = (nom, ok, detail) => out.etapes.push({ nom, ok, detail, ms: Date.now() - t0 });
@@ -301,9 +340,11 @@ async function checkStream(login, c, u, dev) {
     return out;
   };
   let live;
-  try { live = await liveStream(login, c.hevc); } catch (e) { step('Twitch', false, e.message); return finish('erreur', 'Twitch ne répond pas : ' + e.message); }
+  try { live = await liveStream(login, c.hevc, auth); } catch (e) { step('Twitch', false, e.message); return finish('erreur', 'Twitch ne répond pas : ' + e.message); }
   if (live.offline) { step('Twitch', true, 'chaîne hors ligne'); return finish('hors ligne', 'La chaîne n\'est pas en direct, rien à tester.'); }
   step('Twitch', true, live.variants.length + ' qualités');
+  if (auth) step('Compte Twitch', !!(live.compte && live.compte.connecte), live.compte && live.compte.connecte ? 'lié · qualité maximale accordée : ' + live.compte.resolution : 'jeton refusé ou expiré, reconnecte ton compte sur /config');
+  else if (c.tok && c.hevc) step('Compte Twitch', false, 'lien illisible : le chiffrement a changé, relie ton compte sur /config');
   const b = c.relay ? await bestProxy(login, c.hevc) : null;
   step('Relais', !!b || !c.relay, b ? b.name + ' (' + b.ms + ' ms)' : c.relay ? 'aucun relais ne répond, flux officiel utilisé' : 'désactivés dans tes réglages');
   step('Qualités (officiel)', true, live.variants.filter(v => !v.audio).sort(byQuality).map(v => v.name).join(', ') || 'aucune');
@@ -354,8 +395,8 @@ async function handler(req, res) {
   try {
     let seg = new URL(req.url, 'http://x').pathname.split('/').filter(Boolean).map(decodeURIComponent);
     // adresse personnelle : /c/<pseudo>/<réglages>/... (le pseudo et les réglages voyagent dans l'adresse)
-    let cfg = cfgLib.DEFAULTS, base = '';
-    if (seg[0] === 'c' && seg.length >= 3) { pseudo = cfgLib.cleanPseudo(seg[1]); cfg = cfgLib.decode(seg[2]) || cfgLib.DEFAULTS; base = '/c/' + encodeURIComponent(seg[1]) + '/' + seg[2]; seg = seg.slice(3); }
+    let cfg = cfgLib.DEFAULTS, base = '', auth = null;
+    if (seg[0] === 'c' && seg.length >= 3) { pseudo = cfgLib.cleanPseudo(seg[1]); cfg = cfgLib.decode(seg[2]) || cfgLib.DEFAULTS; auth = cfg.tok && cfg.hevc ? sealLib.open(cfg.tok) : null; base = '/c/' + encodeURIComponent(seg[1]) + '/' + seg[2]; seg = seg.slice(3); }
     const strip = s => String(s || '').replace(/\.json$/, '');
     res.setHeader('Access-Control-Allow-Origin', '*');
     if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
@@ -370,7 +411,8 @@ async function handler(req, res) {
     if (!seg.length) return send(res, 302, 'text/plain', '', { Location: '/config' });
     if (seg[0] === 'config') return send(res, 200, 'text/html; charset=utf-8', page('config.html'), { 'Cache-Control': 'no-cache' });
     if (seg[0] === 'api' && seg[1] === 'report' && req.method === 'POST') return json(res, await report(req, dev));
-    if (seg[0] === 'api' && seg[1] === 'check') return json(res, await checkStream(String(new URL(req.url, 'http://x').searchParams.get('channel') || '').toLowerCase().replace(/^@/, ''), cfg, pseudo, dev));
+    if (seg[0] === 'api' && seg[1] === 'seal' && req.method === 'POST') return json(res, await sealToken(req));
+    if (seg[0] === 'api' && seg[1] === 'check') return json(res, await checkStream(String(new URL(req.url, 'http://x').searchParams.get('channel') || '').toLowerCase().replace(/^@/, ''), cfg, pseudo, dev, auth));
     if (seg[0] === 'manifest.json') {
       store.log({ k: 'install', u: pseudo || undefined, appareil: cfg.device || undefined, reglages: pseudo ? summary(cfg) : 'défaut', dev }); store.user(pseudo, { cfg, dev: cfg.device });
       return json(res, pseudo ? { ...MANIFEST, name: 'Twitch · ' + pseudo, description: MANIFEST.description + ' — profil de ' + pseudo } : MANIFEST);
@@ -390,11 +432,11 @@ async function handler(req, res) {
     if (seg[0] === 'p' && seg[1]) { // liste de lecture « sans pub » : récupérée côté serveur auprès d'un relais, puis servie au lecteur
       const login = strip(seg[1]).replace(/\.m3u8$/, '').toLowerCase();
       if (!LOGIN_RE.test(login)) return send(res, 400, 'text/plain; charset=utf-8', 'Nom de chaîne invalide');
-      const [b, lv] = await Promise.all([cfg.relay ? bestProxy(login, cfg.hevc) : null, cfg.hevc && cfg.relay ? liveStream(login, true).catch(() => null) : null]);
+      const [b, lv] = await Promise.all([cfg.relay ? bestProxy(login, cfg.hevc) : null, cfg.hevc && cfg.relay ? liveStream(login, true, auth).catch(() => null) : null]);
       store.incr('play'); store.top(login); store.user(pseudo, { ch: login, dev: cfg.device });
       store.log({ k: 'play', u: pseudo || undefined, ch: login, relais: b ? b.name : cfg.relay ? 'officiel (repli)' : 'officiel (relais coupés)', ms: Date.now() - t0, appareil: cfg.device || undefined, dev });
       if (b) return send(res, 200, 'application/vnd.apple.mpegurl', cfgLib.filterMaster(mergedMaster(b, lv, cfg), cfg), { 'Cache-Control': 'no-store', 'X-Relais': b.name });
-      const s = await liveStream(login, cfg.hevc); // aucun relais : flux officiel, servi par nous pour appliquer le plafond de qualité
+      const s = await liveStream(login, cfg.hevc, auth); // aucun relais : flux officiel, servi par nous pour appliquer le plafond de qualité
       if (s.offline) return send(res, 404, 'text/plain; charset=utf-8', 'Chaîne hors ligne');
       const o = await fetch(s.url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(8000) }).then(r => r.text());
       return send(res, 200, 'application/vnd.apple.mpegurl', cfgLib.filterMaster(o, cfg), { 'Cache-Control': 'no-store' });
@@ -426,7 +468,7 @@ async function handler(req, res) {
     if (seg[0] === 'stream' && seg[1] === 'tv') {
       const login = strip(seg[2]).replace(/^twitch:/, '').toLowerCase();
       if (!LOGIN_RE.test(login)) return json(res, { streams: [] });
-      const [s, b] = await Promise.all([liveStream(login, cfg.hevc), cfg.relay ? bestProxy(login, cfg.hevc) : null]);
+      const [s, b] = await Promise.all([liveStream(login, cfg.hevc, auth), cfg.relay ? bestProxy(login, cfg.hevc) : null]);
       store.incr('stream'); store.incr('d:' + store.day() + ':stream'); store.user(pseudo, { ch: login, dev: cfg.device });
       const who = { u: pseudo || undefined, appareil: cfg.device || undefined, dev };
       if (s.offline) { store.incr('stream_offline'); store.log({ k: 'stream', ...who, ch: login, etat: 'hors ligne', ms: Date.now() - t0 }); return json(res, { streams: [] }); }

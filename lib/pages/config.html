@@ -63,7 +63,11 @@ footer{text-align:center;color:var(--t3);font-size:.8rem}
 <section class="sec"><div class="sh"><span class="n">2</span>Lecture</div><div class="sb">
  <div class="row"><span class="lab">Qualité maximale</span><div class="seg" id="cap"></div><span class="hint">Si la lecture saccade, descends à 720p ou 480p. Ce plafond s'applique à la qualité automatique et aux qualités fixes.</span></div>
  <div class="tg"><div><b>Autoriser le 60 images/s</b><span>Désactivé : seules les qualités à 30 images/s sont proposées, plus légères pour un vieux PC.</span></div><button class="sw" id="fps60" aria-label="60 images par seconde"></button></div>
- <div class="tg"><div><b>Autoriser le 1440p (HEVC / AV1)</b><span>Demande à Twitch les qualités au-delà du 1080p. Elles n'existent que sur certaines chaînes et ton lecteur doit savoir lire HEVC ou AV1. En cas de problème, désactive-le.</span></div><button class="sw" id="hevc" aria-label="1440p"></button></div>
+ <div class="tg"><div><b>Autoriser le 1440p (HEVC / AV1)</b><span>Demande à Twitch les qualités au-delà du 1080p. Il faut un compte Twitch lié (ci-dessus), une chaîne qui diffuse en 1440p et un lecteur qui lit HEVC ou AV1. En cas de problème, désactive-le.</span></div><button class="sw" id="hevc" aria-label="1440p"></button></div>
+ <div class="row" id="acctRow"><span class="lab">Compte Twitch <span class="hint">(nécessaire pour le 1440p)</span></span>
+  <div class="note i" id="acctNote"></div>
+  <div class="url"><input type="password" id="tokIn" placeholder="Valeur du cookie auth-token" autocomplete="off" spellcheck="false"><button class="btn pr" id="tokBtn">Lier mon compte</button><button class="btn dg" id="tokDel" hidden>Retirer</button></div>
+  <span class="hint">Twitch ne donne le 1440p qu'à un compte connecté. Sur twitch.tv (connecté), appuie sur F12, onglet « Application » (Chrome) puis Cookies, <b>https://www.twitch.tv</b>, et copie la valeur de <b>auth-token</b>. Elle est vérifiée puis chiffrée : le lien ne la montre pas et elle n'est stockée nulle part. Elle donne accès à ton compte : ne la partage pas, et ne partage pas non plus ton lien d'installation. Pour la révoquer, déconnecte-toi de Twitch partout.</span></div>
  <div class="tg"><div><b>Relais sans publicité</b><span>Récupère le flux depuis une autre région pour éviter les écrans de pub. Coupe-le si tu préfères le flux officiel.</span></div><button class="sw" id="relay" aria-label="Relais sans pub"></button></div>
  <div class="two"><div class="row"><label for="fixed">Qualités fixes proposées</label><select id="fixed"></select><span class="hint">En plus de « Twitch » (automatique), dans la liste des sources.</span></div>
  <div class="tg"><div><b>Proposer « Audio seul »</b><span>Utile en arrière-plan.</span></div><button class="sw" id="audio" aria-label="Audio seul"></button></div></div>
@@ -92,20 +96,29 @@ footer{text-align:center;color:var(--t3);font-size:.8rem}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.13/hls.min.js"></script>
 <script>
 const $=s=>document.querySelector(s),CAPS=[[0,'Maximum'],[1440,'1440p'],[1080,'1080p'],[720,'720p'],[480,'480p'],[360,'360p']];
-const st={pseudo:'',device:'',cap:0,fps60:true,relay:true,hevc:false,fixed:3,audio:false};
+const st={pseudo:'',device:'',cap:0,fps60:true,relay:true,hevc:false,tok:'',acct:'',fixed:3,audio:false};
 try{Object.assign(st,JSON.parse(localStorage.twcfg||'{}'))}catch{}
 const clean=p=>String(p||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9_]/g,'').slice(0,20);
 const b64=o=>btoa(unescape(encodeURIComponent(JSON.stringify(o)))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
 const unb64=s=>JSON.parse(decodeURIComponent(escape(atob(s.replace(/-/g,'+').replace(/_/g,'/')))));
 const toast=m=>{const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.remove('show'),2200)};
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const opts=()=>({cap:st.cap,fps60:st.fps60,relay:st.relay,hevc:st.hevc,fixed:st.fixed,audio:st.audio,device:st.device});
+const opts=()=>({cap:st.cap,fps60:st.fps60,relay:st.relay,hevc:st.hevc,tok:st.tok,fixed:st.fixed,audio:st.audio,device:st.device});
 const base=()=>st.pseudo.length>=2?'/c/'+st.pseudo+'/'+b64(opts()):'';
+function acct(){
+ $('#tokDel').hidden=!st.tok;$('#acctNote').className='note '+(st.tok?'i':'w');
+ $('#acctNote').textContent=st.tok?'Compte lié'+(st.acct?' : '+st.acct:'')+'. Active « Autoriser le 1440p » pour l\'utiliser.':'Aucun compte lié : le 1440p ne sera pas proposé.';
+}
+$('#tokBtn').onclick=async()=>{const v=$('#tokIn').value.trim();if(!v)return toast('Colle d\'abord la valeur du cookie');const b=$('#tokBtn');b.disabled=true;b.textContent='Vérification…';
+ try{const r=await fetch('/api/seal',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:v})}).then(r=>r.json());
+  if(r.ok){st.tok=r.sealed;st.acct=r.login||'';st.hevc=true;$('#tokIn').value='';draw();toast('Compte lié : '+(r.login||'ok'))}else toast(r.error||'Échec')}catch(e){toast('Erreur : '+e.message)}
+ b.disabled=false;b.textContent='Lier mon compte'};
+$('#tokDel').onclick=()=>{st.tok='';st.acct='';draw();toast('Compte retiré')};
 function draw(){
  $('#cap').innerHTML=CAPS.map(([v,l])=>'<button data-v="'+v+'" class="'+(st.cap===v?'on':'')+'">'+l+'</button>').join('');
  $('#fixed').innerHTML=[0,1,2,3,4,5,6].map(n=>'<option value="'+n+'"'+(st.fixed===n?' selected':'')+'>'+(n===0?'Aucune (automatique seul)':n+' qualité'+(n>1?'s':''))+'</option>').join('');
  for(const k of ['fps60','relay','hevc','audio'])$('#'+k).classList.toggle('on',!!st[k]);
- $('#pseudo').value=st.pseudo;$('#device').value=st.device;
+ $('#pseudo').value=st.pseudo;$('#device').value=st.device;acct();
  const ok=st.pseudo.length>=2,u=location.origin+base()+'/manifest.json';
  $('#link').value=ok?u:'';$('#copy').disabled=$('#check').disabled=!ok&&false;
  $('#open').style.opacity=ok?1:.4;$('#open').style.pointerEvents=ok?'auto':'none';$('#open').href=ok?'stremio://'+u.replace(/^https?:\/\//,''):'#';

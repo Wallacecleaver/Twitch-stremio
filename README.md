@@ -36,3 +36,7 @@ Mot de passe dans la variable Vercel `ADMIN_PASSWORD`.
 - Diagnostic : test de flux avec les réglages d'un utilisateur, sonde rapide.
 
 Pour conserver stats, journal et utilisateurs, ajoute une base Upstash Redis (`UPSTASH_REDIS_REST_URL` et `UPSTASH_REDIS_REST_TOKEN`, ou `KV_REST_API_URL` et `KV_REST_API_TOKEN`). Sans elle, tout est gardé en mémoire et se vide régulièrement.
+
+## 1440p (compte Twitch lié)
+
+Twitch ne donne le 1440p qu'au site web avec un compte connecté. Sur `/config`, la personne colle la valeur de son cookie `auth-token` (twitch.tv) : elle est vérifiée auprès de Twitch, chiffrée en AES-256-GCM (clé : variable `SECRET`, sinon `ADMIN_PASSWORD`) et placée dans son lien d'installation. Rien n'est stocké côté serveur. Changer `SECRET` invalide tous les liens. Activer aussi « Autoriser le 1440p ».
