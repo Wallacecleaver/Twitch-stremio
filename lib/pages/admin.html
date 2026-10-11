@@ -116,9 +116,21 @@ pre{background:var(--bg2);border:1px solid var(--bs);border-radius:var(--r);padd
 
 <div class="page" id="p-diag">
  <div class="sec"><div class="sh"><div class="stt"><svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>Test de flux</div>
-  <div class="ctl"><input id="dch" placeholder="chaîne en direct" size="20"><div class="f"><select id="das"><option value="">Réglages par défaut</option></select></div><button class="btn pr" id="dgo">Lancer le test</button></div></div>
+  <div class="ctl"><input id="dch" placeholder="chaîne en direct" size="20"><div class="f"><select id="das"><option value="">Réglages par défaut</option></select></div><label class="dim" style="display:flex;gap:6px;align-items:center;font-size:.82rem"><input type="checkbox" id="dhv" style="min-width:0"> tester le 1440p (compte lié)</label><button class="btn pr" id="dgo">Lancer le test</button></div></div>
   <div class="sb"><div id="dout" class="dim">Le test lit la liste de lecture 3 fois, télécharge un segment et dit si le flux est sain. Le résultat est ajouté au journal (avec le pseudo choisi).</div></div></div>
+ <div class="sec"><div class="sh"><div class="stt"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>Lecteur de test</div><div class="ctl"><input id="lch" placeholder="chaîne en direct" size="18"><div class="f"><select id="las"><option value="">Réglages par défaut</option></select></div><button class="btn pr" id="lgo">Lancer</button><button class="btn" id="lstop">Arrêter</button><button class="btn dg" id="lrep">Signaler un problème</button></div></div>
+ <div class="sb"><div id="lpl" hidden><div style="background:#000;border-radius:10px;overflow:hidden;aspect-ratio:16/9;max-height:56vh;margin-bottom:12px"><video id="lv" controls playsinline muted style="width:100%;height:100%;display:block"></video></div>
+  <div class="cg" id="lst"></div><div class="logs" id="lev" style="margin-top:12px;max-height:180px;font-family:var(--mono);font-size:.76rem;padding:8px 12px;background:var(--bg2);border:1px solid var(--bs);border-radius:10px"></div></div>
+  <div class="dim" id="lhint" style="font-size:.86rem">Joue le flux dans ton navigateur avec les réglages choisis et envoie chaque blocage au journal (contexte « incident »). Le navigateur peut refuser certaines qualités (HEVC/AV1) : le test serveur ci-dessus reste la référence.</div></div></div>
  <div class="sec"><div class="sh"><div class="stt"><svg viewBox="0 0 24 24"><path d="M9.4 16.6 4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0 4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z"/></svg>Sonde rapide</div><div class="ctl"><input id="pch" placeholder="chaîne" size="20"><button class="btn" id="pgo">Analyser</button></div></div><div class="sb"><pre id="pout">Résultat ici.</pre></div></div>
+</div>
+
+<div class="page" id="p-acct">
+ <div class="sec"><div class="sh"><div class="stt"><svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>Compte Twitch lié</div><span class="pill" id="acPill">…</span></div>
+  <div class="sb"><div class="cg" id="acInfo"></div>
+   <p class="dim" style="margin:16px 0 12px;font-size:.86rem">Twitch ne donne le 1440p qu'à un compte connecté. Ton compte est utilisé pour <b>tous</b> les utilisateurs qui activent « Autoriser le 1440p » sur leur page de configuration. Personne d'autre n'a besoin de donner son jeton.</p>
+   <div class="ctl"><input id="acTok" type="password" placeholder="Valeur du cookie auth-token" size="34" autocomplete="off" spellcheck="false"><button class="btn pr" id="acLink">Lier mon compte</button><button class="btn dg" id="acDel" hidden>Délier</button><div class="f"><input id="acCh" placeholder="chaîne pour tester" size="16" value="twitch"></div><button class="btn" id="acTest">Tester</button></div>
+   <p class="dim" style="margin-top:12px;font-size:.82rem">Comment l'obtenir : sur twitch.tv (connecté), F12, onglet « Application » (Chrome) puis Cookies, <b>https://www.twitch.tv</b>, copie la valeur de <b>auth-token</b>. Elle est vérifiée, chiffrée (clé SECRET ou ADMIN_PASSWORD) et stockée dans Upstash. Pour la révoquer : bouton Délier, et déconnecte-toi de Twitch partout. Autre option sans base : variable Vercel <b>TWITCH_AUTH_TOKEN</b>.</p></div></div>
 </div>
 
 <div class="page" id="p-set">
@@ -128,10 +140,11 @@ pre{background:var(--bg2);border:1px solid var(--bs);border-radius:var(--r);padd
 </div>
 </main>
 <div class="toast" id="toast"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.13/hls.min.js"></script>
 <script>
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
-const IC={dash:'M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z',users:'M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5s-3 1.34-3 3 1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z',relays:'M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z',logs:'M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-6 10H6v-2h8v2zm4-4H6v-2h12v2z',diag:'M19.35 10.04A7.49 7.49 0 0 0 12 4C9.11 4 6.6 5.64 5.35 8.04A5.99 5.99 0 0 0 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM10 17l-3.5-3.5 1.41-1.41L10 14.17l4.59-4.59L16 11l-6 6z',set:'M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58a.5.5 0 0 0 .12-.61l-1.92-3.32a.5.5 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.5.5 0 0 0-.48-.41h-3.84a.5.5 0 0 0-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.5.5 0 0 0-.59.22L2.74 8.87a.5.5 0 0 0 .12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.5.5 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.5.5 0 0 0-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z'};
-const TABS=[['dash','Dashboard'],['users','Utilisateurs'],['relays','Relais'],['logs','Journal'],['diag','Diagnostic'],['set','Paramètres']];
+const IC={dash:'M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z',users:'M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5s-3 1.34-3 3 1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z',relays:'M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z',logs:'M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-6 10H6v-2h8v2zm4-4H6v-2h12v2z',acct:'M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z',diag:'M19.35 10.04A7.49 7.49 0 0 0 12 4C9.11 4 6.6 5.64 5.35 8.04A5.99 5.99 0 0 0 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM10 17l-3.5-3.5 1.41-1.41L10 14.17l4.59-4.59L16 11l-6 6z',set:'M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58a.5.5 0 0 0 .12-.61l-1.92-3.32a.5.5 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.5.5 0 0 0-.48-.41h-3.84a.5.5 0 0 0-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.5.5 0 0 0-.59.22L2.74 8.87a.5.5 0 0 0 .12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.5.5 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.5.5 0 0 0-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z'};
+const TABS=[['dash','Dashboard'],['users','Utilisateurs'],['relays','Relais'],['logs','Journal'],['diag','Diagnostic'],['acct','Compte Twitch'],['set','Paramètres']];
 $('#tabs').innerHTML=TABS.map(([k,l])=>'<button class="tab" data-k="'+k+'"><svg viewBox="0 0 24 24"><path d="'+IC[k]+'"/></svg>'+l+(k==='logs'?'<span class="c" id="errN" hidden></span>':'')+'</button>').join('');
 let S=null,paused=false,timer=null,cur='dash';try{cur=localStorage.admtab||'dash'}catch{}
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -180,6 +193,7 @@ function render(){
  const pseudos=[...new Set([...S.users.map(u=>u.pseudo),...S.logs.map(l=>l.u).filter(Boolean)])].sort();
  pick('#fu',pseudos,'Tous');pick('#fk',[...new Set(S.logs.map(l=>l.k))].sort(),'Tous');
  const das=$('#das'),dv=das.value;das.innerHTML='<option value="">Réglages par défaut</option>'+pseudos.map(p=>'<option value="'+esc(p)+'">Comme '+esc(p)+'</option>').join('');das.value=pseudos.includes(dv)?dv:'';
+ const las=$('#las'),lv0=las.value;las.innerHTML=das.innerHTML;las.value=pseudos.includes(lv0)?lv0:'';
  const ne=S.logs.filter(l=>l.lvl==='ERROR'&&Date.now()-l.t<864e5).length;$('#errN').hidden=!ne;$('#errN').textContent=ne;
  renderLogs();
 }
@@ -217,11 +231,49 @@ $('#rgo').onclick=async()=>{const c=$('#rch').value.trim();if(!c)return;const b=
  $('#relout').innerHTML='<div style="padding:14px 20px" class="dim">'+r.relais_valides+' / '+r.sur+' relais valides'+(r.flux_officiel&&r.flux_officiel.hors_ligne?' · <b style="color:var(--ko)">chaîne hors ligne</b>':'')+(o?' · flux officiel : pubs '+(o.pubs_detectees?'<b style="color:var(--ko)">détectées</b>':'non détectées')+' · segments '+esc(o.hote_segments||'?'):'')+'</div><table><thead><tr><th>Relais</th><th>État</th><th class="r">Temps</th><th>Hôte des segments</th><th>Pubs</th></tr></thead><tbody>'+r.detail.map(d=>'<tr><td>'+esc(d.relais)+'</td><td><span class="pill '+(d.ok?'ok':'ko')+'">'+(d.ok?'OK':esc(d.erreur))+'</span></td><td class="r">'+(d.ms?d.ms+' ms':'')+'</td><td class="mono dim">'+esc(d.hote_segments||'')+'</td><td>'+(d.pubs_detectees===undefined?'':d.pubs_detectees?'<span class="pill ko">oui</span>':'<span class="pill ok">non</span>')+'</td></tr>').join('')+'</tbody></table>';load()};
 /* diagnostic */
 $('#dgo').onclick=async()=>{const c=$('#dch').value.trim();if(!c)return;const b=$('#dgo');b.disabled=true;b.innerHTML='<span class="spin"></span>Test en cours (≈10 s)';$('#dout').innerHTML='';
- const r=await api('check?channel='+encodeURIComponent(c)+'&as='+encodeURIComponent($('#das').value));b.disabled=false;b.textContent='Lancer le test';
+ const r=await api('check?channel='+encodeURIComponent(c)+'&as='+encodeURIComponent($('#das').value)+($('#dhv').checked?'&hevc=1':''));b.disabled=false;b.textContent='Lancer le test';
  const cl=r.verdict==='hors ligne'?'hors':r.verdict||'erreur';
  $('#dout').innerHTML='<div class="vd '+cl+'"><span style="font-size:1.4rem">'+({ok:'✅',lent:'⚠️',hors:'💤'}[cl]||'⛔')+'</span><div>'+esc(({ok:'Flux sain',lent:'Flux fragile',bloque:'Flux bloqué',hors:'Chaîne hors ligne'}[cl])||'Erreur')+'<small>'+esc(r.resume||r.erreur||'')+'</small></div></div><div class="steps">'+(r.etapes||[]).map(s=>'<div class="st"><i class="dot '+(s.ok?'ok':'ko')+'" style="margin-top:7px"></i><b>'+esc(s.nom)+'</b><span>'+esc(s.detail)+'</span><em>'+s.ms+' ms</em></div>').join('')+'</div>';load()};
 $('#pgo').onclick=async()=>{const c=$('#pch').value.trim();if(!c)return;$('#pout').textContent='Analyse…';$('#pout').textContent=JSON.stringify(await api('probe?channel='+encodeURIComponent(c)),null,2)};
-load();schedule();
+
+/* compte Twitch */
+async function loadAcct(ch){const r=await api('account'+(ch?'?channel='+encodeURIComponent(ch):''));
+ $('#acPill').className='pill '+(r.lie&&!r.erreur?'ok':r.lie?'ko':'wa');$('#acPill').textContent=r.lie?(r.erreur?'Problème':'Lié'):'Non lié';$('#acDel').hidden=r.source!=='dashboard';
+ const row=(k,v,c)=>'<div class="ci"><div class="cl">'+k+'</div><div class="cv"><i class="dot '+(c||'')+'"></i>'+esc(v)+'</div></div>';
+ $('#acInfo').innerHTML=row('Compte',r.login||(r.lie?'inconnu':'aucun'),r.lie&&!r.erreur?'ok':'')+row('Source',r.source||'–')+(r.resolution_max?row('Qualité accordée par Twitch',r.resolution_max,/ULTRA|QUAD|2K|4K/i.test(r.resolution_max)?'ok':'wa'):'')+row('Stockage Upstash',r.stockage?'actif':'absent',r.stockage?'ok':'ko')+row('Chiffrement',r.chiffrement?'actif':'absent',r.chiffrement?'ok':'ko')+(r.erreur?row('Erreur',r.erreur,'ko'):'');}
+$('#acLink').onclick=async()=>{const v=$('#acTok').value.trim();if(!v)return toast('Colle la valeur du cookie',1);const b=$('#acLink');b.disabled=true;
+ const r=await api('account',{method:'POST',body:JSON.stringify({token:v})});b.disabled=false;if(r.ok){$('#acTok').value='';toast('Compte lié : '+(r.login||'ok'));loadAcct($('#acCh').value)}else toast(r.error||'Échec',1)};
+$('#acDel').onclick=async()=>{if(!confirm('Délier le compte Twitch ?'))return;await api('account/unlink',{method:'POST',body:'{}'});toast('Compte délié');loadAcct()};
+$('#acTest').onclick=()=>loadAcct($('#acCh').value.trim()||'twitch');
+/* lecteur de test */
+const b64=o=>btoa(unescape(encodeURIComponent(JSON.stringify(o)))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+let hls=null,LS=null,ltick=null,lastRep=0;
+const lev=(m,c)=>{const d=document.createElement('div');d.style.color=c==='e'?'#fca5a5':c==='w'?'#fcd34d':'';d.textContent=new Date().toLocaleTimeString('fr-FR')+'  '+m;$('#lev').prepend(d)};
+function lbuf(){const v=$('#lv');for(let i=0;i<v.buffered.length;i++)if(v.currentTime>=v.buffered.start(i)-.1&&v.currentTime<=v.buffered.end(i))return v.buffered.end(i)-v.currentTime;return 0}
+function lstats(){if(!LS)return{};const q=$('#lv').getVideoPlaybackQuality?$('#lv').getVideoPlaybackQuality():{};return{arrets:LS.n,arret_ms:Math.round(LS.ms),images_perdues:q.droppedVideoFrames||0,qualite:LS.level||'',tampon_s:+lbuf().toFixed(1),debit_kbps:hls?Math.round((hls.bandwidthEstimate||0)/1000):0}}
+const lsend=(type,detail)=>fetch('/api/report',{method:'POST',keepalive:true,headers:{'Content-Type':'application/json'},body:JSON.stringify({pseudo:LS?LS.u:'admin',ch:LS?LS.ch:'',type,detail,source:'dashboard',stats:lstats()})}).catch(()=>{});
+function lshow(){if(!LS)return;const s=lstats(),t=(LS.ms+(LS.since?performance.now()-LS.since:0))/1000;
+ $('#lst').innerHTML=[['État',LS.state],['Qualité',LS.level||'–'],['Tampon',s.tampon_s+' s'],['Blocages',LS.n],['Temps bloqué',t.toFixed(1)+' s'],['Images perdues',s.images_perdues],['Débit estimé',s.debit_kbps?(s.debit_kbps/1000).toFixed(1)+' Mb/s':'–']].map(([k,v])=>'<div class="ci"><div class="cl">'+k+'</div><div class="cv">'+esc(v)+'</div></div>').join('')}
+function lstop(send=true){if(!LS)return;if(LS.since){LS.ms+=performance.now()-LS.since;LS.since=0}if(send&&LS.started)lsend('info','Fin du test : '+LS.n+' blocage(s), '+(LS.ms/1000).toFixed(1)+' s bloqué en tout');
+ clearInterval(ltick);if(hls){hls.destroy();hls=null}const v=$('#lv');v.pause();v.removeAttribute('src');v.load();LS=null;$('#lpl').hidden=true;$('#lhint').hidden=false}
+$('#lstop').onclick=()=>{lstop();toast('Test arrêté')};
+$('#lrep').onclick=async()=>{const n=prompt('Décris le problème (facultatif) :','');if(n===null)return;await lsend('note','Signalement manuel : '+(n||'blocage'));toast('Signalement envoyé au journal');load()};
+$('#lgo').onclick=()=>{const c=$('#lch').value.trim().toLowerCase().replace(/^@/,'').replace(/[^a-z0-9_]/g,'');if(!c)return toast('Entre une chaîne en direct',1);
+ lstop(false);const u=$('#las').value,usr=S&&S.users.find(x=>x.pseudo===u),src=location.origin+(u&&usr&&usr.cfg?'/c/'+u+'/'+b64(usr.cfg):'')+'/p/'+c+'.m3u8';
+ LS={ch:c,u:u||'admin',n:0,ms:0,since:0,level:'',started:false,state:'Connexion…'};$('#lpl').hidden=false;$('#lhint').hidden=true;$('#lev').innerHTML='';
+ const v=$('#lv'),stall=w=>{if(!LS||LS.since)return;LS.since=performance.now();LS.n++;LS.state='Bloqué';lev('Blocage : '+w,'e')},
+  resume=()=>{if(!LS||!LS.since)return;const d=performance.now()-LS.since;LS.ms+=d;LS.since=0;LS.state='En lecture';lev('Reprise après '+(d/1000).toFixed(1)+' s','w');if(d>1500&&Date.now()-lastRep>8000){lastRep=Date.now();lsend('blocage','Blocage de '+(d/1000).toFixed(1)+' s ('+(LS.level||'?')+')').then(load)}};
+ v.onwaiting=()=>{if(LS&&LS.started)stall('lecture en attente de données')};v.onplaying=()=>{if(!LS)return;if(!LS.started){LS.started=true;lev('Lecture démarrée');lsend('info','Lecture de test démarrée')}LS.state='En lecture';resume()};v.onstalled=()=>lev('Données en retard (stalled)','w');
+ if(window.Hls&&Hls.isSupported()){hls=new Hls({lowLatencyMode:false,liveSyncDurationCount:3,maxBufferLength:20});
+  hls.on(Hls.Events.LEVEL_SWITCHED,(e,d)=>{const l=hls.levels[d.level];LS.level=l?(l.height?l.height+'p':'')+(l.frameRate>50?'60':''):'';lev('Qualité : '+(LS.level||'?'))});
+  hls.on(Hls.Events.MANIFEST_PARSED,(e,d)=>{lev('Liste de lecture reçue ('+d.levels.length+' qualités)');v.play().catch(()=>{})});
+  hls.on(Hls.Events.ERROR,(e,d)=>{const m=d.type+' / '+d.details+(d.response&&d.response.code?' (HTTP '+d.response.code+')':'');if(d.details==='bufferStalledError'){stall('tampon vide');return}
+   lev((d.fatal?'ERREUR FATALE : ':'Erreur : ')+m,d.fatal?'e':'w');
+   if(d.fatal){lsend('fatal',m).then(load);if(d.type==='mediaError')hls.recoverMediaError();else if(d.type==='networkError')hls.startLoad()}else if(/fragLoad|fragParsing|levelLoad/.test(d.details)&&Date.now()-lastRep>15000){lastRep=Date.now();lsend('erreur',m).then(load)}});
+  hls.loadSource(src);hls.attachMedia(v)}else if(v.canPlayType('application/vnd.apple.mpegurl')){v.src=src;v.play().catch(()=>{})}else lev('Ce navigateur ne sait pas lire le HLS','e');
+ ltick=setInterval(lshow,1000)};
+addEventListener('pagehide',()=>lstop());
+load();schedule();loadAcct();
 </script>
 </body>
 </html>

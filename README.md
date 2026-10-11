@@ -40,3 +40,5 @@ Pour conserver stats, journal et utilisateurs, ajoute une base Upstash Redis (`U
 ## 1440p (compte Twitch lié)
 
 Twitch ne donne le 1440p qu'au site web avec un compte connecté. Sur `/config`, la personne colle la valeur de son cookie `auth-token` (twitch.tv) : elle est vérifiée auprès de Twitch, chiffrée en AES-256-GCM (clé : variable `SECRET`, sinon `ADMIN_PASSWORD`) et placée dans son lien d'installation. Rien n'est stocké côté serveur. Changer `SECRET` invalide tous les liens. Activer aussi « Autoriser le 1440p ».
+
+**Mise à jour :** le compte Twitch se lie désormais dans le dashboard (onglet « Compte Twitch »), une seule fois pour tous les utilisateurs (jeton chiffré dans Upstash, ou variable `TWITCH_AUTH_TOKEN` sans base). Les tests (test serveur, lecteur de test, signalement) sont dans l'onglet Diagnostic du dashboard ; `/config` ne garde que le profil et les réglages.
