@@ -41,7 +41,17 @@ async function accessToken(login, playerType = 'site', clientId = GQL_CLIENT_ID)
 // Variantes de demande à Twitch pour obtenir les qualités HEVC / AV1 (1440p et plus) : on les essaie toutes et on garde la meilleure.
 const WEB = { platform: 'web', player_backend: 'mediaplayer', playlist_include_framerate: 'true', reassignments_supported: 'true', transcode_mode: 'cbr_v1' };
 const TV_ID = 'ue6666qo983tsx6so1t0vnawi233wa', ANDROID_ID = 'kd1unb4b3q4t58fwlpcbzcbnm76a8fp'; // identifiants publics des applications Twitch TV et Android
+// copie de la demande du lecteur web de Twitch (relevée dans Chrome) : adresse /api/v2/, include_unavailable, acmb, etc.
+const hex = n => [...Array(n)].map(() => Math.floor(Math.random() * 16).toString(16)).join('');
+const WEBV2 = (codecs, unavailable = true) => login => ({
+  acmb: Buffer.from(JSON.stringify({ AppVersion: '76ac281a-9974-467d-bf30-ba2ea81eec47', ClientApp: 'twilight', URL: 'https://www.twitch.tv/' + login })).toString('base64'),
+  browser_family: 'chrome', browser_version: '155.0', cdm: 'wv', enable_score: 'true', ...(unavailable ? { include_unavailable: 'true' } : {}), lang: 'fr', os_name: 'Windows', os_version: 'NT 10.0',
+  platform: 'web', play_session_id: hex(32), player_backend: 'mediaplayer', player_version: '1.57.0-rc.2', playlist_include_framerate: 'true', reassignments_supported: 'true', supported_codecs: codecs, transcode_mode: 'cbr_v1',
+});
 const HEVC_TRIES = [
+  { tok: 'site', v2: true, q: WEBV2('av1,h265,h264') },
+  { tok: 'site', v2: true, q: WEBV2('h265,h264') },
+  { tok: 'site', v2: true, q: WEBV2('av1,h265,h264', false) },
   { tok: 'site', q: { supported_codecs: 'av1,h265,h264', ...WEB } },
   { tok: 'site', q: { supported_codecs: 'h265,h264', ...WEB } },
   { tok: 'site', q: { supported_codecs: 'av1,h264', ...WEB } },
@@ -55,9 +65,9 @@ const HEVC_TRIES = [
   { tok: 'site', cid: ANDROID_ID, q: { supported_codecs: 'av1,h265,h264', ...WEB } },
   { tok: 'site', cid: ANDROID_ID, q: { supported_codecs: 'h265,h264' } },
 ];
-function usherUrl(login, t, extra) {
+function usherUrl(login, t, extra, v2) {
   const q = new URLSearchParams({ sig: t.signature, token: t.value, allow_source: 'true', allow_audio_only: 'true', ...(FAST_BREAD ? { fast_bread: 'true' } : {}), player: 'twitchweb', type: 'any', supported_codecs: 'avc1', p: String(Math.floor(Math.random() * 1e7)), ...(extra || {}) });
-  return 'https://usher.ttvnw.net/api/channel/hls/' + login + '.m3u8?' + q;
+  return 'https://usher.ttvnw.net/api/' + (v2 ? 'v2/' : '') + 'channel/hls/' + login + '.m3u8?' + q;
 }
 // qualités individuelles d'une liste de lecture principale : [{ name, url }]
 function variantsOf(txt) {
@@ -88,7 +98,7 @@ async function liveStream(login, hevc) {
   const tokens = {};
   const res = await Promise.allSettled(HEVC_TRIES.map(async (t, i) => {
     const key = t.tok + (t.cid || ''), tk = await (tokens[key] ||= accessToken(login, t.tok, t.cid));
-    const r = await liveOnce(login, t.tok, t.q, tk);
+    const r = await liveOnce(login, t.tok, typeof t.q === 'function' ? t.q(login) : t.q, tk, t.v2);
     return { i, r };
   }));
   const ok = res.filter(x => x.status === 'fulfilled').map(x => x.value);
@@ -101,8 +111,8 @@ async function liveStream(login, hevc) {
   hevcCache.set(login, { v: best, exp: Date.now() + 20000 });
   return best;
 }
-async function liveOnce(login, tokType, extra, tok) {
-  const t = tok || await accessToken(login, tokType), url = usherUrl(login, t, extra);
+async function liveOnce(login, tokType, extra, tok, v2) {
+  const t = tok || await accessToken(login, tokType), url = usherUrl(login, t, extra, v2);
   const r = await fetch(url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(10000) });
   if (r.status === 404) return { offline: true, status: 404 };
   if (!r.ok) throw new Error('Twitch (usher) : HTTP ' + r.status);
