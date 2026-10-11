@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Twitch pour Stremio · Configuration</title>
+<meta name="theme-color" content="#9147ff">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%239147ff' d='M4 2 2 6v14h5v3h3l3-3h4l5-5V2H4zm16 11-3 3h-5l-3 3v-3H6V4h14v9zm-3-6h-2v5h2V7zm-5 0h-2v5h2V7z'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#09090b;--bg2:#0f0f12;--bg3:#18181b;--el:#1f1f23;--hv:#27272a;--bs:rgba(255,255,255,.06);--bd:rgba(255,255,255,.1);--bx:rgba(255,255,255,.18);--t:#fafafa;--t2:#a1a1aa;--t3:#71717a;--a:#9147ff;--ah:#772ce8;--as:rgba(145,71,255,.12);--ok:#10b981;--oks:rgba(16,185,129,.1);--wa:#f59e0b;--was:rgba(245,158,11,.1);--ko:#ef4444;--kos:rgba(239,68,68,.1);--r:10px;--rl:14px;--mono:'JetBrains Mono','Fira Code',Consolas,monospace}
+html{font-size:15px;-webkit-font-smoothing:antialiased;color-scheme:dark}
+body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--t);min-height:100vh;line-height:1.6}
+::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-thumb{background:rgba(255,255,255,.15);border-radius:3px}
+header{position:sticky;top:0;z-index:50;background:rgba(9,9,11,.95);backdrop-filter:blur(12px);border-bottom:1px solid var(--bs)}
+.top{max-width:980px;margin:0 auto;padding:14px 20px;display:flex;align-items:center;gap:12px}
+.logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:1.05rem}.logo svg{width:26px;height:26px;fill:var(--a)}
+.badge{font-size:.68rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--a);background:var(--as);padding:2px 8px;border-radius:99px}
+main{max-width:980px;margin:0 auto;padding:24px 20px 64px;display:grid;gap:18px}
+.hero h1{font-size:1.6rem;letter-spacing:-.02em}.hero p{color:var(--t2);margin-top:6px;max-width:62ch}
+.sec{background:var(--bg3);border:1px solid var(--bs);border-radius:var(--rl);overflow:hidden}
+.sh{display:flex;align-items:center;gap:10px;padding:14px 20px;border-bottom:1px solid var(--bs);font-weight:600}
+.sh .n{width:24px;height:24px;border-radius:50%;background:var(--as);color:var(--a);display:grid;place-items:center;font-size:.8rem}
+.sb{padding:20px;display:grid;gap:18px}
+.row{display:grid;gap:6px}.row>label,.lab{font-size:.82rem;font-weight:600;color:var(--t)}.hint{font-size:.8rem;color:var(--t3);font-weight:400}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:16px}@media(max-width:640px){.two{grid-template-columns:1fr}}
+input[type=text],select,textarea{width:100%;font:inherit;color:var(--t);background:var(--el);border:1px solid var(--bd);border-radius:var(--r);padding:10px 12px;outline:0;transition:border-color .15s,box-shadow .15s}
+input:focus,select:focus,textarea:focus{border-color:var(--a);box-shadow:0 0 0 3px var(--as)}
+.seg{display:flex;flex-wrap:wrap;gap:6px}.seg button{font:inherit;font-size:.88rem;color:var(--t2);background:var(--el);border:1px solid var(--bd);border-radius:var(--r);padding:8px 14px;cursor:pointer;transition:.15s}
+.seg button:hover{border-color:var(--bx);color:var(--t)}.seg button.on{background:var(--as);border-color:var(--a);color:var(--t)}
+.tg{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 14px;background:var(--el);border:1px solid var(--bs);border-radius:var(--r)}
+.tg b{display:block;font-size:.9rem}.tg span{font-size:.8rem;color:var(--t3)}
+.sw{position:relative;flex:none;width:42px;height:24px;background:var(--hv);border-radius:99px;cursor:pointer;border:0;transition:.2s}.sw::after{content:'';position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:.2s}.sw.on{background:var(--a)}.sw.on::after{left:21px}
+.btn{font:inherit;font-weight:600;font-size:.9rem;border:1px solid var(--bd);background:var(--el);color:var(--t);border-radius:var(--r);padding:10px 16px;cursor:pointer;transition:.15s;display:inline-flex;align-items:center;gap:8px;text-decoration:none}
+.btn:hover{border-color:var(--bx);background:var(--hv)}.btn.pr{background:var(--a);border-color:var(--a)}.btn.pr:hover{background:var(--ah)}.btn:disabled{opacity:.5;cursor:not-allowed}.btn.dg{color:var(--ko)}
+.acts{display:flex;gap:10px;flex-wrap:wrap}
+.url{display:flex;gap:8px}.url input{font-family:var(--mono);font-size:.78rem}
+.note{padding:12px 14px;border-radius:var(--r);font-size:.85rem;border:1px solid}.note.i{background:var(--as);border-color:rgba(145,71,255,.25);color:#d8c2ff}.note.w{background:var(--was);border-color:rgba(245,158,11,.25);color:#fcd34d}
+.res{display:grid;gap:8px}.verdict{display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:var(--r);border:1px solid;font-weight:600}
+.verdict.ok{background:var(--oks);border-color:rgba(16,185,129,.3);color:#6ee7b7}.verdict.lent,.verdict.warn{background:var(--was);border-color:rgba(245,158,11,.3);color:#fcd34d}.verdict.bloque,.verdict.erreur{background:var(--kos);border-color:rgba(239,68,68,.3);color:#fca5a5}.verdict.neutre{background:var(--el);border-color:var(--bd);color:var(--t2)}
+.verdict small{display:block;font-weight:400;opacity:.85}
+.st{display:flex;gap:10px;align-items:flex-start;font-size:.85rem;padding:8px 0;border-bottom:1px solid var(--bs)}.st:last-child{border:0}.dot{flex:none;width:8px;height:8px;border-radius:50%;margin-top:7px;background:var(--ok)}.dot.k{background:var(--ko)}.st b{min-width:130px;font-weight:600}.st span{color:var(--t2);word-break:break-word}.st em{margin-left:auto;font-style:normal;color:var(--t3);font-family:var(--mono);font-size:.75rem}
+.player{background:#000;border-radius:var(--r);overflow:hidden;position:relative;aspect-ratio:16/9;border:1px solid var(--bs)}.player video{width:100%;height:100%;display:block;background:#000}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}.stat{background:var(--el);border:1px solid var(--bs);border-radius:var(--r);padding:10px 12px}.stat div{font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--t3)}.stat b{font-size:1.15rem;font-variant-numeric:tabular-nums}
+.ev{max-height:180px;overflow:auto;font-family:var(--mono);font-size:.76rem;background:var(--bg2);border:1px solid var(--bs);border-radius:var(--r);padding:8px 12px;color:var(--t2)}.ev div{padding:2px 0}.ev .e{color:#fca5a5}.ev .w{color:#fcd34d}
+.toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,20px);background:var(--el);border:1px solid var(--bx);border-radius:var(--r);padding:10px 18px;opacity:0;pointer-events:none;transition:.25s;z-index:99;font-size:.9rem}.toast.show{opacity:1;transform:translate(-50%,0)}
+.spin{width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:s .7s linear infinite}@keyframes s{to{transform:rotate(360deg)}}
+footer{text-align:center;color:var(--t3);font-size:.8rem}
+</style>
+</head>
+<body>
+<header><div class="top"><div class="logo"><svg viewBox="0 0 24 24"><path d="M4 2 2 6v14h5v3h3l3-3h4l5-5V2H4zm16 11-3 3h-5l-3 3v-3H6V4h14v9zm-3-6h-2v5h2V7zm-5 0h-2v5h2V7z"/></svg>Twitch pour Stremio</div><span class="badge">Configuration</span></div></header>
+<main>
+<div class="hero"><h1>Ta configuration personnelle</h1><p>Choisis un pseudo et tes réglages : tout est enregistré dans ton lien d'installation. Pas de compte, pas de mot de passe. Le pseudo permet de retrouver tes lectures et tes problèmes dans le journal.</p></div>
+
+<section class="sec"><div class="sh"><span class="n">1</span>Profil</div><div class="sb"><div class="two">
+ <div class="row"><label for="pseudo">Pseudo</label><input type="text" id="pseudo" maxlength="20" placeholder="ex : christophe" autocomplete="off" spellcheck="false"><span class="hint" id="pseudoHint">2 à 20 caractères : lettres, chiffres, _</span></div>
+ <div class="row"><label for="device">Appareil <span class="hint">(facultatif)</span></label><input type="text" id="device" maxlength="24" list="devs" placeholder="ex : PC salon, TV chambre"><datalist id="devs"><option value="PC"><option value="TV"><option value="Téléphone"><option value="Tablette"></datalist><span class="hint">Pratique si tu as un lien par appareil.</span></div>
+</div></div></section>
+
+<section class="sec"><div class="sh"><span class="n">2</span>Lecture</div><div class="sb">
+ <div class="row"><span class="lab">Qualité maximale</span><div class="seg" id="cap"></div><span class="hint">Si la lecture saccade, descends à 720p ou 480p. Ce plafond s'applique à la qualité automatique et aux qualités fixes.</span></div>
+ <div class="tg"><div><b>Autoriser le 60 images/s</b><span>Désactivé : seules les qualités à 30 images/s sont proposées, plus légères pour un vieux PC.</span></div><button class="sw" id="fps60" aria-label="60 images par seconde"></button></div>
+ <div class="tg"><div><b>Relais sans publicité</b><span>Récupère le flux depuis une autre région pour éviter les écrans de pub. Coupe-le si tu préfères le flux officiel.</span></div><button class="sw" id="relay" aria-label="Relais sans pub"></button></div>
+ <div class="two"><div class="row"><label for="fixed">Qualités fixes proposées</label><select id="fixed"></select><span class="hint">En plus de « Twitch » (automatique), dans la liste des sources.</span></div>
+ <div class="tg"><div><b>Proposer « Audio seul »</b><span>Utile en arrière-plan.</span></div><button class="sw" id="audio" aria-label="Audio seul"></button></div></div>
+</div></section>
+
+<section class="sec"><div class="sh"><span class="n">3</span>Installation dans Stremio</div><div class="sb">
+ <div class="url"><input type="text" id="link" readonly><button class="btn" id="copy">Copier</button></div>
+ <div class="acts"><a class="btn pr" id="open" href="#">Installer dans Stremio</a><button class="btn" id="saveBtn">Retrouver mes réglages</button></div>
+ <div class="note i" id="note">Renseigne un pseudo pour obtenir ton lien personnel.</div>
+ <div class="row" id="loadRow" hidden><label for="paste">Colle ici ton ancien lien d'installation</label><input type="text" id="paste" placeholder="https://…/c/ton-pseudo/…/manifest.json"></div>
+ <span class="hint">Si tu changes un réglage, réinstalle le nouveau lien (Stremio remplace l'ancien). Le pseudo n'est pas protégé : n'importe qui peut utiliser le même, ne mets rien de secret.</span>
+</div></section>
+
+<section class="sec"><div class="sh"><span class="n">4</span>Tester mon flux</div><div class="sb">
+ <div class="row"><label for="ch">Chaîne en direct</label><div class="url"><input type="text" id="ch" placeholder="nom d'un streamer en live, ex : gotaga" autocomplete="off" spellcheck="false"><button class="btn pr" id="check">Test serveur</button><button class="btn" id="play">Lecteur de test</button></div>
+ <span class="hint">Le test serveur vérifie que le flux avance et que les segments arrivent assez vite. Le lecteur de test joue le flux ici et envoie automatiquement les blocages au journal.</span></div>
+ <div class="res" id="res"></div>
+ <div id="pl" hidden class="res"><div class="player"><video id="v" controls playsinline muted></video></div>
+  <div class="stats"><div class="stat"><div>État</div><b id="s-st">–</b></div><div class="stat"><div>Qualité</div><b id="s-q">–</b></div><div class="stat"><div>Tampon</div><b id="s-b">–</b></div><div class="stat"><div>Blocages</div><b id="s-n">0</b></div><div class="stat"><div>Temps bloqué</div><b id="s-t">0 s</b></div><div class="stat"><div>Images perdues</div><b id="s-d">0</b></div><div class="stat"><div>Débit estimé</div><b id="s-k">–</b></div></div>
+  <div class="ev" id="ev"></div>
+  <div class="acts"><button class="btn" id="stop">Arrêter le test</button><button class="btn dg" id="rep">Signaler un problème</button></div></div>
+</div></section>
+<footer>Les blocages détectés et tes signalements apparaissent dans le journal, sous ton pseudo.</footer>
+</main>
+<div class="toast" id="toast"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.13/hls.min.js"></script>
+<script>
+const $=s=>document.querySelector(s),CAPS=[[0,'Maximum'],[1080,'1080p'],[720,'720p'],[480,'480p'],[360,'360p']];
+const st={pseudo:'',device:'',cap:0,fps60:true,relay:true,fixed:3,audio:false};
+try{Object.assign(st,JSON.parse(localStorage.twcfg||'{}'))}catch{}
+const clean=p=>String(p||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9_]/g,'').slice(0,20);
+const b64=o=>btoa(unescape(encodeURIComponent(JSON.stringify(o)))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+const unb64=s=>JSON.parse(decodeURIComponent(escape(atob(s.replace(/-/g,'+').replace(/_/g,'/')))));
+const toast=m=>{const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.remove('show'),2200)};
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const opts=()=>({cap:st.cap,fps60:st.fps60,relay:st.relay,fixed:st.fixed,audio:st.audio,device:st.device});
+const base=()=>st.pseudo.length>=2?'/c/'+st.pseudo+'/'+b64(opts()):'';
+function draw(){
+ $('#cap').innerHTML=CAPS.map(([v,l])=>'<button data-v="'+v+'" class="'+(st.cap===v?'on':'')+'">'+l+'</button>').join('');
+ $('#fixed').innerHTML=[0,1,2,3,4,5,6].map(n=>'<option value="'+n+'"'+(st.fixed===n?' selected':'')+'>'+(n===0?'Aucune (automatique seul)':n+' qualité'+(n>1?'s':''))+'</option>').join('');
+ for(const k of ['fps60','relay','audio'])$('#'+k).classList.toggle('on',!!st[k]);
+ $('#pseudo').value=st.pseudo;$('#device').value=st.device;
+ const ok=st.pseudo.length>=2,u=location.origin+base()+'/manifest.json';
+ $('#link').value=ok?u:'';$('#copy').disabled=$('#check').disabled=!ok&&false;
+ $('#open').style.opacity=ok?1:.4;$('#open').style.pointerEvents=ok?'auto':'none';$('#open').href=ok?'stremio://'+u.replace(/^https?:\/\//,''):'#';
+ $('#note').className='note '+(ok?'i':'w');$('#note').textContent=ok?'Ce lien contient ton pseudo « '+st.pseudo+' » et tes réglages. Garde-le : c\'est ton profil.':'Renseigne un pseudo (2 caractères minimum) pour obtenir ton lien personnel.';
+ try{localStorage.twcfg=JSON.stringify(st)}catch{}
+}
+$('#cap').onclick=e=>{if(e.target.dataset.v!==undefined){st.cap=+e.target.dataset.v;draw()}};
+$('#fixed').onchange=e=>{st.fixed=+e.target.value;draw()};
+for(const k of ['fps60','relay','audio'])$('#'+k).onclick=()=>{st[k]=!st[k];draw()};
+$('#pseudo').oninput=e=>{const c=clean(e.target.value);st.pseudo=c;if(c!==e.target.value.toLowerCase())e.target.value=c;draw();$('#pseudo').value=c};
+$('#device').oninput=e=>{st.device=e.target.value.replace(/[^\p{L}\p{N} _\-.]/gu,'').slice(0,24);try{localStorage.twcfg=JSON.stringify(st)}catch{};$('#link').value=st.pseudo.length>=2?location.origin+base()+'/manifest.json':''};
+$('#device').onchange=draw;
+$('#copy').onclick=async()=>{if(!$('#link').value)return toast('Renseigne d\'abord un pseudo');try{await navigator.clipboard.writeText($('#link').value)}catch{$('#link').select();document.execCommand('copy')}toast('Lien copié')};
+$('#saveBtn').onclick=()=>{$('#loadRow').hidden=!$('#loadRow').hidden;$('#paste').focus()};
+$('#paste').oninput=e=>{try{const m=e.target.value.match(/\/c\/([^/]+)\/([^/]+)\//);if(!m)return;Object.assign(st,unb64(m[2]),{pseudo:clean(decodeURIComponent(m[1]))});draw();toast('Réglages retrouvés');$('#loadRow').hidden=true;e.target.value=''}catch{toast('Lien non reconnu')}};
+
+/* ---- test serveur ---- */
+const chan=()=>$('#ch').value.trim().toLowerCase().replace(/^@/,'').replace(/^https?:\/\/(www\.)?twitch\.tv\//,'').replace(/[^a-z0-9_]/g,'');
+$('#check').onclick=async()=>{const c=chan();if(!c)return toast('Entre le nom d\'une chaîne en direct');
+ const b=$('#check');b.disabled=true;b.innerHTML='<span class="spin"></span>Test en cours (≈10 s)';$('#res').innerHTML='';
+ try{const r=await fetch(base()+'/api/check?channel='+encodeURIComponent(c)).then(r=>r.json());
+  const cls=r.verdict==='hors ligne'?'neutre':r.verdict,ic={ok:'✅',lent:'⚠️',bloque:'⛔',erreur:'⛔','hors ligne':'💤'}[r.verdict]||'ℹ️';
+  $('#res').innerHTML='<div class="verdict '+cls+'"><span style="font-size:1.4rem">'+ic+'</span><div>'+esc(r.verdict==='ok'?'Flux sain':r.verdict==='lent'?'Flux fragile':r.verdict==='bloque'?'Flux bloqué':r.verdict==='hors ligne'?'Chaîne hors ligne':'Erreur')+'<small>'+esc(r.resume||r.erreur||'')+'</small></div></div>'+(r.etapes||[]).map(s=>'<div class="st"><i class="dot '+(s.ok?'':'k')+'"></i><b>'+esc(s.nom)+'</b><span>'+esc(s.detail)+'</span><em>'+s.ms+' ms</em></div>').join('')+(r.verdict!=='ok'&&r.verdict!=='hors ligne'?'<div class="note w">Ce résultat a été enregistré dans le journal'+(st.pseudo?' sous « '+esc(st.pseudo)+' »':'')+'.</div>':'');
+ }catch(e){$('#res').innerHTML='<div class="verdict erreur"><span>⛔</span><div>Le serveur ne répond pas<small>'+esc(e.message)+'</small></div></div>'}
+ b.disabled=false;b.textContent='Test serveur'};
+
+/* ---- lecteur de test ---- */
+let hls=null,S=null,tick=null,lastRep=0;
+const ev=(m,c='')=>{const d=document.createElement('div');d.className=c;d.textContent=new Date().toLocaleTimeString('fr-FR')+'  '+m;$('#ev').prepend(d);while($('#ev').children.length>60)$('#ev').lastChild.remove()};
+function send(type,detail,extra={}){return fetch(base()+'/api/report',{method:'POST',keepalive:true,headers:{'Content-Type':'application/json'},body:JSON.stringify({pseudo:st.pseudo,device:st.device,ch:S?S.ch:chan(),type,detail,source:'navigateur',stats:stats(),...extra})}).catch(()=>{})}
+function stats(){if(!S)return{};const v=$('#v'),q=v.getVideoPlaybackQuality?v.getVideoPlaybackQuality():{};return{arrets:S.n,arret_ms:Math.round(S.ms),images_perdues:q.droppedVideoFrames||0,qualite:S.level||'',tampon_s:+bufAhead().toFixed(1),debit_kbps:hls?Math.round((hls.bandwidthEstimate||0)/1000):0}}
+function bufAhead(){const v=$('#v');for(let i=0;i<v.buffered.length;i++)if(v.currentTime>=v.buffered.start(i)-.1&&v.currentTime<=v.buffered.end(i))return v.buffered.end(i)-v.currentTime;return 0}
+function refresh(){if(!S)return;const s=stats();if(S.since){S.ms+=0}$('#s-n').textContent=S.n;$('#s-t').textContent=(S.ms/1000+(S.since?(performance.now()-S.since)/1000:0)).toFixed(1)+' s';$('#s-d').textContent=s.images_perdues;$('#s-b').textContent=s.tampon_s+' s';$('#s-q').textContent=S.level||'–';$('#s-k').textContent=s.debit_kbps?(s.debit_kbps/1000).toFixed(1)+' Mb/s':'–'}
+function stop(sendSummary=true){if(!S)return;if(S.since){S.ms+=performance.now()-S.since;S.since=0}
+ if(sendSummary&&S.started)send('info','Fin du test : '+S.n+' blocage(s), '+(S.ms/1000).toFixed(1)+' s bloqué en tout',{});
+ clearInterval(tick);if(hls){hls.destroy();hls=null}const v=$('#v');v.pause();v.removeAttribute('src');v.load();S=null;$('#pl').hidden=true}
+$('#stop').onclick=()=>{stop();toast('Test arrêté')};
+$('#rep').onclick=async()=>{const n=prompt('Décris le problème (facultatif) :','');if(n===null)return;await send('note','Signalement manuel : '+(n||'blocage'));toast('Signalement envoyé au journal')};
+addEventListener('pagehide',()=>stop());
+$('#play').onclick=()=>{const c=chan();if(!c)return toast('Entre le nom d\'une chaîne en direct');
+ stop(false);S={ch:c,n:0,ms:0,since:0,level:'',started:false};$('#pl').hidden=false;$('#ev').innerHTML='';$('#s-st').textContent='Connexion…';
+ const v=$('#v'),src=location.origin+base()+'/p/'+c+'.m3u8';
+ const stall=why=>{if(!S||S.since)return;S.since=performance.now();S.n++;$('#s-st').textContent='Bloqué';ev('Blocage : '+why,'e')};
+ const resume=()=>{if(!S||!S.since)return;const d=performance.now()-S.since;S.ms+=d;S.since=0;$('#s-st').textContent='En lecture';ev('Reprise après '+(d/1000).toFixed(1)+' s','w');
+  if(d>1500&&Date.now()-lastRep>8000){lastRep=Date.now();send('blocage','Blocage de '+(d/1000).toFixed(1)+' s ('+(S.level||'?')+')')}};
+ v.onwaiting=()=>{if(S&&S.started)stall('lecture en attente de données')};v.onplaying=()=>{if(!S)return;if(!S.started){S.started=true;ev('Lecture démarrée');send('info','Lecture de test démarrée')}$('#s-st').textContent='En lecture';resume()};
+ v.onstalled=()=>ev('Données en retard (stalled)','w');
+ if(window.Hls&&Hls.isSupported()){
+  hls=new Hls({lowLatencyMode:false,liveSyncDurationCount:3,maxBufferLength:20});
+  hls.on(Hls.Events.LEVEL_SWITCHED,(e,d)=>{const l=hls.levels[d.level];S.level=l?(l.height?l.height+'p':'')+(l.frameRate>50?'60':''):'';ev('Qualité : '+(S.level||'?'))});
+  hls.on(Hls.Events.MANIFEST_PARSED,(e,d)=>{ev('Liste de lecture reçue ('+d.levels.length+' qualités)');v.play().catch(()=>{})});
+  hls.on(Hls.Events.ERROR,(e,d)=>{const m=d.type+' / '+d.details+(d.response&&d.response.code?' (HTTP '+d.response.code+')':'');
+   if(d.details==='bufferStalledError'){stall('tampon vide');return}
+   ev((d.fatal?'ERREUR FATALE : ':'Erreur : ')+m,d.fatal?'e':'w');
+   if(d.fatal){send('fatal',m);if(d.type==='networkError'&&d.details==='manifestLoadError')ev('Si le navigateur bloque la requête (CORS), le test serveur reste fiable.','w');if(d.type==='mediaError')hls.recoverMediaError();else if(d.type==='networkError')hls.startLoad()}
+   else if(/fragLoad|fragParsing|levelLoad/.test(d.details)&&Date.now()-lastRep>15000){lastRep=Date.now();send('erreur',m)}});
+  hls.loadSource(src);hls.attachMedia(v);
+ }else if(v.canPlayType('application/vnd.apple.mpegurl')){v.src=src;v.play().catch(()=>{})}else{ev('Ce navigateur ne sait pas lire le HLS','e')}
+ tick=setInterval(refresh,1000);
+};
+draw();
+</script>
+</body>
+</html>

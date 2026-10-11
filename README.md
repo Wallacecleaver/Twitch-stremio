@@ -19,13 +19,20 @@ côté serveur : le lecteur ne contacte jamais le relais. Si aucun relais ne ré
 - `/relais/<nom d'un streamer en direct>` : indique quels relais répondent depuis Vercel
 - Variable `PROXIES` (facultative) : une adresse par ligne contenant `{channel}`, avec nom optionnel (`Nom | adresse`)
 
-## Dashboard d'administration
+## Page de configuration (`/config`)
 
-Adresse : `/admin`. Il demande un mot de passe, à définir dans la variable Vercel `ADMIN_PASSWORD`.
+Chaque personne choisit un pseudo et ses réglages (qualité maximale, 60 i/s, relais sans pub, nombre de qualités fixes, audio seul, nom d'appareil). Elle obtient un lien d'installation personnel `/c/<pseudo>/<réglages>/manifest.json` : pas de compte, la configuration est dans l'adresse. Le pseudo apparaît dans le journal.
 
-- Vue d'ensemble : lectures, part « sans pub », appareils uniques par jour, erreurs, chaînes les plus lancées.
-- Relais : taux de réussite et latence de chacun, plus un test en direct (segments, pubs détectées).
-- Journal : lectures, installations, erreurs, avec filtres.
-- Diagnostic d'une chaîne, état de la configuration, remise à zéro.
+La page propose aussi un **test serveur** (la liste de lecture avance-t-elle, les segments arrivent-ils assez vite, y a-t-il des pubs) et un **lecteur de test** dans le navigateur qui envoie les blocages au journal.
 
-Pour conserver stats et journal, ajoute une base Upstash Redis (variables `UPSTASH_REDIS_REST_URL` et `UPSTASH_REDIS_REST_TOKEN`, ou `KV_REST_API_URL` et `KV_REST_API_TOKEN` si elle vient de l'intégration Vercel). Sans elle, tout est gardé en mémoire et se vide régulièrement.
+## Dashboard d'administration (`/admin`)
+
+Mot de passe dans la variable Vercel `ADMIN_PASSWORD`.
+
+- Dashboard : lectures, part sans pub, appareils, incidents, graphique 7 jours, chaînes populaires, derniers incidents, système.
+- Utilisateurs : pseudos, appareil, lectures, incidents, réglages, accès direct à leur journal.
+- Relais : santé de chacun et test en direct.
+- Journal : niveaux, contextes, filtre par utilisateur, recherche, pause, export CSV.
+- Diagnostic : test de flux avec les réglages d'un utilisateur, sonde rapide.
+
+Pour conserver stats, journal et utilisateurs, ajoute une base Upstash Redis (`UPSTASH_REDIS_REST_URL` et `UPSTASH_REDIS_REST_TOKEN`, ou `KV_REST_API_URL` et `KV_REST_API_TOKEN`). Sans elle, tout est gardé en mémoire et se vide régulièrement.

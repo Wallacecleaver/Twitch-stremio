@@ -10,6 +10,9 @@
 const http = require('http');
 const store = require('./lib/store');
 const makeAdmin = require('./lib/admin');
+const cfgLib = require('./lib/settings');
+const fs = require('fs');
+const path = require('path');
 
 const PORT = process.env.PORT || 7000;
 const GQL = 'https://gql.twitch.tv/gql';
@@ -184,7 +187,7 @@ async function probe(login) { // diagnostic d'une chaîne pour le dashboard
   return out;
 }
 const mask = v => v ? 'défini' : 'absent';
-const adminRoute = makeAdmin({ send, json, relayReport, probe, config: () => ({
+const adminRoute = makeAdmin({ send, json, relayReport, probe, check: (login, c, u) => checkStream(login, cfgLib.normalize(c || {}), u || 'admin', 'admin'), config: () => ({
   relais: proxyList(),
   rows: [
     ['Version', require('./package.json').version, null],
@@ -197,9 +200,92 @@ const adminRoute = makeAdmin({ send, json, relayReport, probe, config: () => ({
     ['Délai relais', PROXY_TIMEOUT + ' ms', null],
   ] }) });
 
-async function handler(req, res) {
+const pageCache = {};
+const page = name => pageCache[name] ||= fs.readFileSync(path.join(__dirname, 'lib', 'pages', name), 'utf8');
+const summary = c => [c.cap ? 'max ' + c.cap + 'p' : 'qualité max', c.fps60 ? '60 i/s' : '30 i/s', c.relay ? 'relais' : 'sans relais', c.fixed + ' fixes', c.audio ? 'audio' : ''].filter(Boolean).join(' · ');
+const readBody = req => new Promise(r => { let b = ''; req.on('data', c => { b += c; if (b.length > 8000) req.destroy(); }); req.on('end', () => r(b)); req.on('error', () => r(b)); });
+const text = (v, n) => String(v ?? '').replace(/[\u0000-\u001f]/g, ' ').slice(0, n);
+const hits = new Map(); // limite : 40 signalements / test par minute et par adresse
+const tooMany = req => { const ip = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || 'x', n = (hits.get(ip) || 0) + 1; hits.set(ip, n); if (hits.size > 500) hits.clear(); setTimeout(() => hits.delete(ip), 60000).unref?.(); return n > 40; };
+
+// signalement envoyé par le lecteur de test (blocage, erreur…) ou à la main : il apparaît dans le journal
+async function report(req, dev) {
+  if (tooMany(req)) return { ok: false, error: 'trop de demandes' };
+  let b = {}; try { b = JSON.parse(await readBody(req)); } catch { return { ok: false, error: 'requête invalide' }; }
+  const u = cfgLib.cleanPseudo(b.pseudo), ch = text(b.ch, 25).toLowerCase(), type = ['blocage', 'erreur', 'fatal', 'lenteur', 'note', 'info'].includes(b.type) ? b.type : 'note';
+  const lvl = type === 'info' ? 'INFO' : type === 'fatal' || type === 'erreur' ? 'ERROR' : 'WARN';
+  const row = { k: 'incident', lvl, u: u || undefined, ch: ch || undefined, type, detail: text(b.detail, 300), appareil: text(b.device, 24) || undefined, source: text(b.source, 12) || 'navigateur', dev };
+  if (b.stats && typeof b.stats === 'object') for (const k of ['arrets', 'arret_ms', 'images_perdues', 'qualite', 'tampon_s', 'debit_kbps']) if (b.stats[k] !== undefined) row[k] = text(b.stats[k], 20);
+  if (type !== 'info') { store.incr('incident'); store.incr('d:' + store.day() + ':incident'); store.user(u, { incident: true }); }
+  store.log(row);
+  return { ok: true };
+}
+
+// vérification côté serveur : la liste de lecture avance-t-elle ? les segments se téléchargent-ils assez vite ? des pubs ?
+async function checkStream(login, c, u, dev) {
+  if (!LOGIN_RE.test(login)) return { verdict: 'erreur', erreur: 'nom de chaîne invalide' };
+  const out = { chaine: login, verdict: 'ok', etapes: [], pseudo: u || undefined }, t0 = Date.now();
+  const step = (nom, ok, detail) => out.etapes.push({ nom, ok, detail, ms: Date.now() - t0 });
+  const finish = (verdict, resume, extra = {}) => {
+    out.verdict = verdict; out.resume = resume;
+    const lvl = verdict === 'ok' ? 'INFO' : verdict === 'lent' || verdict === 'hors ligne' ? 'WARN' : 'ERROR';
+    if (verdict !== 'ok' && verdict !== 'hors ligne') { store.incr('incident'); store.incr('d:' + store.day() + ':incident'); store.user(u, { incident: true }); }
+    store.log({ k: 'test', lvl, u: u || undefined, ch: login, verdict, resume, ...extra, appareil: c.device || undefined, dev });
+    return out;
+  };
+  let live;
+  try { live = await liveStream(login); } catch (e) { step('Twitch', false, e.message); return finish('erreur', 'Twitch ne répond pas : ' + e.message); }
+  if (live.offline) { step('Twitch', true, 'chaîne hors ligne'); return finish('hors ligne', 'La chaîne n\'est pas en direct, rien à tester.'); }
+  step('Twitch', true, live.variants.length + ' qualités');
+  const b = c.relay ? await bestProxy(login) : null;
+  step('Relais', !!b || !c.relay, b ? b.name + ' (' + b.ms + ' ms)' : c.relay ? 'aucun relais ne répond, flux officiel utilisé' : 'désactivés dans tes réglages');
+  let mtxt;
+  try { mtxt = b ? absolutize(b.text, b.url) : await fetch(live.url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(8000) }).then(r => r.text()); } catch (e) { step('Liste principale', false, e.message); return finish('bloque', 'Impossible de lire la liste de lecture : ' + e.message); }
+  const vars = variantsOf(cfgLib.filterMaster(mtxt, c)).filter(v => !/audio/i.test(v.name));
+  const v = vars[0];
+  if (!v) { step('Qualité', false, 'aucune qualité disponible avec tes réglages'); return finish('erreur', 'Aucune qualité ne correspond à ton plafond.'); }
+  step('Qualité testée', true, v.name);
+  const seqs = [], polls = [];
+  let last = null, ads = false, host = '';
+  const rd = async () => {
+    const t = Date.now();
+    const r = await fetch(v.url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(5000) });
+    const txt = await r.text();
+    if (!r.ok) throw new Error('liste HTTP ' + r.status);
+    const seq = Number((txt.match(/#EXT-X-MEDIA-SEQUENCE:(\d+)/) || [])[1] || 0), L = txt.split(/\r?\n/), segs = [];
+    for (let i = 0; i < L.length; i++) if (L[i].startsWith('#EXTINF:') && /^https?:\/\//.test(L[i + 1] || '')) segs.push({ dur: parseFloat(L[i].slice(8)) || 2, url: L[i + 1].trim() });
+    if (/stitched|X-TV-TWITCH-AD|SCTE35|CUE-OUT/i.test(txt)) ads = true;
+    seqs.push(seq + segs.length); polls.push(Date.now() - t); last = segs[segs.length - 1] || last;
+    if (last) host = new URL(last.url).hostname;
+  };
+  try { await rd(); await new Promise(r => setTimeout(r, 2500)); await rd(); await new Promise(r => setTimeout(r, 2500)); await rd(); }
+  catch (e) { step('Liste de lecture', false, e.message); return finish('bloque', 'La liste de lecture ne répond pas : ' + e.message); }
+  const avance = seqs[seqs.length - 1] - seqs[0], pollMs = Math.round(polls.reduce((a, x) => a + x, 0) / polls.length);
+  step('Liste de lecture', avance > 0, avance > 0 ? '+' + avance + ' segments en 5 s · ' + pollMs + ' ms par appel' : 'la liste ne bouge plus (flux figé)');
+  if (!last) return finish('erreur', 'Aucun segment dans la liste de lecture.');
+  let dl = null;
   try {
-    const seg = new URL(req.url, 'http://x').pathname.split('/').filter(Boolean).map(decodeURIComponent);
+    const t = Date.now(), r = await fetch(last.url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(8000) }), buf = Buffer.from(await r.arrayBuffer());
+    if (!r.ok) throw new Error('segment HTTP ' + r.status);
+    dl = { ms: Date.now() - t, octets: buf.length };
+  } catch (e) { step('Segment', false, e.message); return finish('bloque', 'Le segment vidéo ne se télécharge pas : ' + e.message, { hote: host }); }
+  const ratio = dl.ms / (last.dur * 1000), kbps = Math.round(dl.octets * 8 / 1000 / (dl.ms / 1000));
+  step('Segment', ratio < 1, dl.ms + ' ms pour ' + last.dur.toFixed(1) + ' s de vidéo (' + Math.round(dl.octets / 1024) + ' Ko, ' + kbps + ' kb/s) · hôte ' + host);
+  if (ads) step('Publicité', false, 'marqueurs de pub détectés dans la liste');
+  const extra = { qualite: v.name, hote: host, segment_ms: dl.ms, duree_s: last.dur, debit_kbps: kbps, pubs: ads || undefined };
+  if (avance <= 0) return finish('bloque', 'Le flux est figé : la liste de lecture n\'avance pas.', extra);
+  if (ratio >= 1) return finish('bloque', 'Les segments arrivent plus lentement qu\'ils ne se lisent (' + dl.ms + ' ms pour ' + last.dur.toFixed(1) + ' s) : coupures probables.', extra);
+  if (ratio >= .6 || ads) return finish('lent', ads ? 'Des pubs sont présentes dans ce flux.' : 'Les segments arrivent juste à temps (' + dl.ms + ' ms pour ' + last.dur.toFixed(1) + ' s) : risque de saccades.', extra);
+  return finish('ok', 'Flux sain : segments en ' + dl.ms + ' ms pour ' + last.dur.toFixed(1) + ' s de vidéo.', extra);
+}
+
+async function handler(req, res) {
+  let pseudo = '';
+  try {
+    let seg = new URL(req.url, 'http://x').pathname.split('/').filter(Boolean).map(decodeURIComponent);
+    // adresse personnelle : /c/<pseudo>/<réglages>/... (le pseudo et les réglages voyagent dans l'adresse)
+    let cfg = cfgLib.DEFAULTS, base = '';
+    if (seg[0] === 'c' && seg.length >= 3) { pseudo = cfgLib.cleanPseudo(seg[1]); cfg = cfgLib.decode(seg[2]) || cfgLib.DEFAULTS; base = '/c/' + encodeURIComponent(seg[1]) + '/' + seg[2]; seg = seg.slice(3); }
     const strip = s => String(s || '').replace(/\.json$/, '');
     res.setHeader('Access-Control-Allow-Origin', '*');
     if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
@@ -211,8 +297,14 @@ async function handler(req, res) {
     store.incr('req'); store.incr('d:' + store.day() + ':req');
     if (['stream', 'catalog', 'p', 'manifest.json'].includes(seg[0])) store.uniq(dev);
 
-    if (!seg.length) return send(res, 200, 'text/plain; charset=utf-8', 'Addon Twitch pour Stremio. Manifeste : /manifest.json — test : /test/<nom d\'un streamer en live>');
-    if (seg[0] === 'manifest.json') { store.log({ k: 'install', dev }); return json(res, MANIFEST); }
+    if (!seg.length) return send(res, 302, 'text/plain', '', { Location: '/config' });
+    if (seg[0] === 'config') return send(res, 200, 'text/html; charset=utf-8', page('config.html'), { 'Cache-Control': 'no-cache' });
+    if (seg[0] === 'api' && seg[1] === 'report' && req.method === 'POST') return json(res, await report(req, dev));
+    if (seg[0] === 'api' && seg[1] === 'check') return json(res, await checkStream(String(new URL(req.url, 'http://x').searchParams.get('channel') || '').toLowerCase().replace(/^@/, ''), cfg, pseudo, dev));
+    if (seg[0] === 'manifest.json') {
+      store.log({ k: 'install', u: pseudo || undefined, appareil: cfg.device || undefined, reglages: pseudo ? summary(cfg) : 'défaut', dev }); store.user(pseudo, { cfg, dev: cfg.device });
+      return json(res, pseudo ? { ...MANIFEST, name: 'Twitch · ' + pseudo, description: MANIFEST.description + ' — profil de ' + pseudo } : MANIFEST);
+    }
 
     if (seg[0] === 'test' && seg[1]) { // diagnostic lisible
       const login = seg[1].toLowerCase(), out = { chaine: login, vercel_peut_lire_twitch: false };
@@ -228,12 +320,14 @@ async function handler(req, res) {
     if (seg[0] === 'p' && seg[1]) { // liste de lecture « sans pub » : récupérée côté serveur auprès d'un relais, puis servie au lecteur
       const login = strip(seg[1]).replace(/\.m3u8$/, '').toLowerCase();
       if (!LOGIN_RE.test(login)) return send(res, 400, 'text/plain; charset=utf-8', 'Nom de chaîne invalide');
-      const b = await bestProxy(login);
-      store.incr('play'); store.top(login); store.log({ k: 'play', ch: login, relais: b ? b.name : 'officiel (repli)', ms: Date.now() - t0, dev });
-      if (b) return send(res, 200, 'application/vnd.apple.mpegurl', absolutize(b.text, b.url), { 'Cache-Control': 'no-store', 'X-Relais': b.name });
-      const s = await liveStream(login); // aucun relais n'a répondu : repli sur le flux officiel
+      const b = cfg.relay ? await bestProxy(login) : null;
+      store.incr('play'); store.top(login); store.user(pseudo, { ch: login, dev: cfg.device });
+      store.log({ k: 'play', u: pseudo || undefined, ch: login, relais: b ? b.name : cfg.relay ? 'officiel (repli)' : 'officiel (relais coupés)', ms: Date.now() - t0, appareil: cfg.device || undefined, dev });
+      if (b) return send(res, 200, 'application/vnd.apple.mpegurl', cfgLib.filterMaster(absolutize(b.text, b.url), cfg), { 'Cache-Control': 'no-store', 'X-Relais': b.name });
+      const s = await liveStream(login); // aucun relais : flux officiel, servi par nous pour appliquer le plafond de qualité
       if (s.offline) return send(res, 404, 'text/plain; charset=utf-8', 'Chaîne hors ligne');
-      return send(res, 302, 'text/plain; charset=utf-8', 'Redirection', { Location: s.url, 'Cache-Control': 'no-store' });
+      const o = await fetch(s.url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(8000) }).then(r => r.text());
+      return send(res, 200, 'application/vnd.apple.mpegurl', cfgLib.filterMaster(o, cfg), { 'Cache-Control': 'no-store' });
     }
     if (seg[0] === 'relais' && seg[1]) { // diagnostic : quels relais répondent depuis Vercel ?
       const login = seg[1].toLowerCase();
@@ -262,21 +356,24 @@ async function handler(req, res) {
     if (seg[0] === 'stream' && seg[1] === 'tv') {
       const login = strip(seg[2]).replace(/^twitch:/, '').toLowerCase();
       if (!LOGIN_RE.test(login)) return json(res, { streams: [] });
-      const [s, b] = await Promise.all([liveStream(login), bestProxy(login)]);
-      store.incr('stream'); store.incr('d:' + store.day() + ':stream');
-      if (s.offline) { store.incr('stream_offline'); store.log({ k: 'stream', ch: login, etat: 'hors ligne', ms: Date.now() - t0, dev }); return json(res, { streams: [] }); }
+      const [s, b] = await Promise.all([liveStream(login), cfg.relay ? bestProxy(login) : null]);
+      store.incr('stream'); store.incr('d:' + store.day() + ':stream'); store.user(pseudo, { ch: login, dev: cfg.device });
+      const who = { u: pseudo || undefined, appareil: cfg.device || undefined, dev };
+      if (s.offline) { store.incr('stream_offline'); store.log({ k: 'stream', ...who, ch: login, etat: 'hors ligne', ms: Date.now() - t0 }); return json(res, { streams: [] }); }
       store.incr(b ? 'stream_relay' : 'stream_official'); store.top(login);
-      store.log({ k: 'stream', ch: login, relais: b ? b.name : 'aucun (officiel)', relais_ms: b ? b.ms : undefined, ms: Date.now() - t0, dev });
+      store.log({ k: 'stream', ...who, ch: login, relais: b ? b.name : cfg.relay ? 'aucun (officiel)' : 'coupés (officiel)', relais_ms: b ? b.ms : undefined, ms: Date.now() - t0, plafond: cfg.cap || undefined });
       // Un relais répond : tous les flux passent par lui (sans pub). Sinon : flux officiel.
-      const vars = b ? variantsOf(absolutize(b.text, b.url)) : s.variants;
-      const fixed = vars.filter(v => !/audio/i.test(v.name)).slice(0, 4).map(v => ({ name: 'Twitch ' + v.name.replace(/ \(source\)/, ''), title: 'En direct · qualité fixe' + (b ? ' · sans pub' : ''), url: v.url }));
-      const auto = { name: 'Twitch', title: 'En direct · qualité automatique' + (b ? ' · sans pub' : ''), url: b ? originOf(req) + '/p/' + login + '.m3u8' : s.url };
-      return json(res, { streams: [auto, ...fixed] });
+      const vars = b ? variantsOf(absolutize(b.text, b.url)) : s.variants, tag = b ? ' · sans pub' : '';
+      const video = vars.filter(v => !/audio/i.test(v.name) && cfgLib.keepVariant(v, cfg));
+      const fixed = video.slice(0, cfg.fixed).map(v => ({ name: 'Twitch ' + v.name.replace(/ \(source\)/, ''), title: 'En direct · qualité fixe' + tag, url: v.url }));
+      const auto = { name: 'Twitch', title: 'En direct · qualité automatique' + (cfg.cap ? ' (max ' + cfg.cap + 'p)' : '') + tag, url: originOf(req) + base + '/p/' + login + '.m3u8' };
+      const audio = cfg.audio ? vars.filter(v => /audio/i.test(v.name)).slice(0, 1).map(v => ({ name: 'Twitch Audio', title: 'Audio seul' + tag, url: v.url })) : [];
+      return json(res, { streams: [auto, ...fixed, ...audio] });
     }
     send(res, 404, 'text/plain; charset=utf-8', 'Introuvable');
   } catch (e) {
     console.error('requête :', e.message);
-    store.incr('err'); store.incr('d:' + store.day() + ':err'); store.log({ k: 'erreur', ou: String(req.url).split('?')[0].slice(0, 60), msg: e.message });
+    store.incr('err'); store.incr('d:' + store.day() + ':err'); store.log({ k: 'erreur', u: pseudo || undefined, ou: String(req.url).split('?')[0].slice(0, 60), msg: e.message });
     if (!res.headersSent) json(res, { error: e.message });
   }
 }
