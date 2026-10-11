@@ -72,7 +72,7 @@ async function liveStream(login, hevc) {
   if (!txt.startsWith('#EXTM3U')) throw new Error('Réponse de Twitch inattendue (pas une liste de lecture)');
   const qualities = [...txt.matchAll(/NAME="([^"]+)"/g)].map(m => m[1]);
   const variants = variantsOf(txt);
-  return { url, qualities, variants, status: r.status };
+  return { url, qualities, variants, text: txt, status: r.status };
 }
 
 
@@ -205,6 +205,20 @@ const adminRoute = makeAdmin({ send, json, relayReport, probe, check: (login, c,
     ['Délai relais', PROXY_TIMEOUT + ' ms', null],
   ] }) });
 
+// Le relais ne transmet pas toujours la demande HEVC/AV1 : les qualités plus hautes que les siennes (ex. 1440p) viennent alors du flux officiel.
+function mergedMaster(b, live, cfg) {
+  const text = absolutize(b.text, b.url);
+  if (!cfg.hevc || !live || !live.text) return text;
+  const maxH = Math.max(0, ...variantsOf(text).filter(v => !v.audio).map(v => v.h));
+  const L = live.text.split(/\r?\n/), extra = [];
+  for (let i = 0; i < L.length; i++) if (L[i].startsWith('#EXT-X-STREAM-INF') && /^https?:\/\//.test(L[i + 1] || '')) { const h = Number((L[i].match(/RESOLUTION=\d+x(\d+)/) || [])[1] || 0); if (h > maxH) extra.push(L[i], L[i + 1]); }
+  if (!extra.length) return text;
+  const lines = text.split(/\r?\n/), k = lines.findIndex(l => l.startsWith('#EXT-X-STREAM-INF'));
+  lines.splice(k < 0 ? lines.length : k, 0, ...extra);
+  return lines.join('\n');
+}
+const byQuality = (a, b) => (b.h - a.h) || (b.fps - a.fps);
+
 const pageCache = {};
 const page = name => pageCache[name] ||= fs.readFileSync(path.join(__dirname, 'lib', 'pages', name), 'utf8');
 const summary = c => [c.cap ? 'max ' + c.cap + 'p' : 'qualité max', c.fps60 ? '60 i/s' : '30 i/s', c.relay ? 'relais' : 'sans relais', c.fixed + ' fixes', c.hevc ? '1440p' : '', c.audio ? 'audio' : ''].filter(Boolean).join(' · ');
@@ -244,8 +258,10 @@ async function checkStream(login, c, u, dev) {
   step('Twitch', true, live.variants.length + ' qualités');
   const b = c.relay ? await bestProxy(login, c.hevc) : null;
   step('Relais', !!b || !c.relay, b ? b.name + ' (' + b.ms + ' ms)' : c.relay ? 'aucun relais ne répond, flux officiel utilisé' : 'désactivés dans tes réglages');
+  step('Qualités (officiel)', true, live.variants.filter(v => !v.audio).sort(byQuality).map(v => v.name).join(', ') || 'aucune');
+  if (b) step('Qualités (relais)', true, variantsOf(absolutize(b.text, b.url)).filter(v => !v.audio).sort(byQuality).map(v => v.name).join(', '));
   let mtxt;
-  try { mtxt = b ? absolutize(b.text, b.url) : await fetch(live.url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(8000) }).then(r => r.text()); } catch (e) { step('Liste principale', false, e.message); return finish('bloque', 'Impossible de lire la liste de lecture : ' + e.message); }
+  try { mtxt = b ? mergedMaster(b, live, c) : await fetch(live.url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(8000) }).then(r => r.text()); } catch (e) { step('Liste principale', false, e.message); return finish('bloque', 'Impossible de lire la liste de lecture : ' + e.message); }
   const vars = variantsOf(cfgLib.filterMaster(mtxt, c)).filter(v => !v.audio);
   const v = vars[0];
   if (!v) { step('Qualité', false, 'aucune qualité disponible avec tes réglages'); return finish('erreur', 'Aucune qualité ne correspond à ton plafond.'); }
@@ -325,10 +341,10 @@ async function handler(req, res) {
     if (seg[0] === 'p' && seg[1]) { // liste de lecture « sans pub » : récupérée côté serveur auprès d'un relais, puis servie au lecteur
       const login = strip(seg[1]).replace(/\.m3u8$/, '').toLowerCase();
       if (!LOGIN_RE.test(login)) return send(res, 400, 'text/plain; charset=utf-8', 'Nom de chaîne invalide');
-      const b = cfg.relay ? await bestProxy(login, cfg.hevc) : null;
+      const [b, lv] = await Promise.all([cfg.relay ? bestProxy(login, cfg.hevc) : null, cfg.hevc && cfg.relay ? liveStream(login, true).catch(() => null) : null]);
       store.incr('play'); store.top(login); store.user(pseudo, { ch: login, dev: cfg.device });
       store.log({ k: 'play', u: pseudo || undefined, ch: login, relais: b ? b.name : cfg.relay ? 'officiel (repli)' : 'officiel (relais coupés)', ms: Date.now() - t0, appareil: cfg.device || undefined, dev });
-      if (b) return send(res, 200, 'application/vnd.apple.mpegurl', cfgLib.filterMaster(absolutize(b.text, b.url), cfg), { 'Cache-Control': 'no-store', 'X-Relais': b.name });
+      if (b) return send(res, 200, 'application/vnd.apple.mpegurl', cfgLib.filterMaster(mergedMaster(b, lv, cfg), cfg), { 'Cache-Control': 'no-store', 'X-Relais': b.name });
       const s = await liveStream(login, cfg.hevc); // aucun relais : flux officiel, servi par nous pour appliquer le plafond de qualité
       if (s.offline) return send(res, 404, 'text/plain; charset=utf-8', 'Chaîne hors ligne');
       const o = await fetch(s.url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(8000) }).then(r => r.text());
@@ -368,9 +384,10 @@ async function handler(req, res) {
       store.incr(b ? 'stream_relay' : 'stream_official'); store.top(login);
       store.log({ k: 'stream', ...who, ch: login, relais: b ? b.name : cfg.relay ? 'aucun (officiel)' : 'coupés (officiel)', relais_ms: b ? b.ms : undefined, ms: Date.now() - t0, plafond: cfg.cap || undefined });
       // Un relais répond : tous les flux passent par lui (sans pub). Sinon : flux officiel.
-      const vars = b ? variantsOf(absolutize(b.text, b.url)) : s.variants, tag = b ? ' · sans pub' : '';
-      const video = vars.filter(v => !v.audio && cfgLib.keepVariant(v, cfg));
-      const fixed = video.slice(0, cfg.fixed).map(v => ({ name: 'Twitch ' + v.name.replace(/ \(source\)/, ''), title: 'En direct · qualité fixe' + tag, url: v.url }));
+      const vars = b ? variantsOf(mergedMaster(b, s, cfg)) : s.variants, tag = b ? ' · sans pub' : '';
+      const relayUrls = b ? new Set(variantsOf(absolutize(b.text, b.url)).map(v => v.url)) : null;
+      const video = vars.filter(v => !v.audio && cfgLib.keepVariant(v, cfg)).sort(byQuality);
+      const fixed = video.slice(0, cfg.fixed).map(v => ({ name: 'Twitch ' + v.name.replace(/ \(source\)/, ''), title: 'En direct · qualité fixe' + (relayUrls && !relayUrls.has(v.url) ? ' · officiel (pubs possibles)' : tag), url: v.url }));
       const auto = { name: 'Twitch', title: 'En direct · qualité automatique' + (cfg.cap ? ' (max ' + cfg.cap + 'p)' : '') + tag, url: originOf(req) + base + '/p/' + login + '.m3u8' };
       const audio = cfg.audio ? vars.filter(v => v.audio).slice(0, 1).map(v => ({ name: 'Twitch Audio', title: 'Audio seul' + tag, url: v.url })) : [];
       return json(res, { streams: [auto, ...fixed, ...audio] });
