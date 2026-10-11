@@ -66,6 +66,8 @@ input,select{font:inherit;font-size:.86rem;color:var(--t);background:var(--el);b
 .vd{display:flex;gap:12px;align-items:center;padding:14px 16px;border-radius:var(--r);border:1px solid;font-weight:600;margin-bottom:12px}.vd small{display:block;font-weight:400;opacity:.85}.vd.ok{background:var(--oks);border-color:rgba(16,185,129,.3);color:#6ee7b7}.vd.lent,.vd.hors{background:var(--was);border-color:rgba(245,158,11,.3);color:#fcd34d}.vd.bloque,.vd.erreur{background:var(--kos);border-color:rgba(239,68,68,.3);color:#fca5a5}
 pre{background:var(--bg2);border:1px solid var(--bs);border-radius:var(--r);padding:14px;overflow:auto;max-height:420px;font-family:var(--mono);font-size:.78rem;color:var(--t2)}
 .toast{position:fixed;right:20px;bottom:20px;z-index:300;display:grid;gap:8px}.tt{background:var(--el);border:1px solid var(--bx);border-left:3px solid var(--ok);border-radius:var(--r);padding:10px 16px;font-size:.86rem;box-shadow:0 8px 32px rgba(0,0,0,.5);animation:f .2s}.tt.e{border-left-color:var(--ko)}
+.dform{display:grid;grid-template-columns:1.2fr 1fr 1.4fr;gap:16px}@media(max-width:900px){.dform{grid-template-columns:1fr}}.dform input,.dform select{width:100%;padding:10px 12px}
+.segm{display:flex;border:1px solid var(--bd);border-radius:8px;overflow:hidden}.segm button{flex:1;font:inherit;font-size:.84rem;color:var(--t2);background:var(--el);border:0;padding:10px 12px;cursor:pointer;transition:.15s}.segm button+button{border-left:1px solid var(--bd)}.segm button.on{background:var(--as);color:var(--t);box-shadow:inset 0 -2px var(--a)}
 .spin{width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:s .7s linear infinite}@keyframes s{to{transform:rotate(360deg)}}
 </style>
 </head>
@@ -115,14 +117,26 @@ pre{background:var(--bg2);border:1px solid var(--bs);border-radius:var(--r);padd
 </div>
 
 <div class="page" id="p-diag">
- <div class="sec"><div class="sh"><div class="stt"><svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>Test de flux</div>
-  <div class="ctl"><input id="dch" placeholder="chaîne en direct" size="20"><div class="f"><select id="das"><option value="">Réglages par défaut</option></select></div><label class="dim" style="display:flex;gap:6px;align-items:center;font-size:.82rem"><input type="checkbox" id="dhv" style="min-width:0"> tester le 1440p (avec mon compte)</label><button class="btn pr" id="dgo">Lancer le test</button></div></div>
-  <div class="sb"><div id="dout" class="dim">Le test lit la liste de lecture 3 fois, télécharge un segment et dit si le flux est sain. Le résultat est ajouté au journal (avec le pseudo choisi).</div></div></div>
- <div class="sec"><div class="sh"><div class="stt"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>Lecteur de test</div><div class="ctl"><input id="lch" placeholder="chaîne en direct" size="18"><div class="f"><select id="las"><option value="">Réglages par défaut</option></select></div><label class="dim" style="display:flex;gap:6px;align-items:center;font-size:.82rem"><input type="checkbox" id="lhv" style="min-width:0"> 1440p avec mon compte</label><button class="btn pr" id="lgo">Lancer</button><button class="btn" id="lstop">Arrêter</button><button class="btn dg" id="lrep">Signaler un problème</button></div></div>
- <div class="sb"><div id="lpl" hidden><div style="background:#000;border-radius:10px;overflow:hidden;aspect-ratio:16/9;max-height:56vh;margin-bottom:12px"><video id="lv" controls playsinline muted style="width:100%;height:100%;display:block"></video></div>
-  <div class="cg" id="lst"></div><div class="logs" id="lev" style="margin-top:12px;max-height:180px;font-family:var(--mono);font-size:.76rem;padding:8px 12px;background:var(--bg2);border:1px solid var(--bs);border-radius:10px"></div></div>
-  <div class="dim" id="lhint" style="font-size:.86rem">Joue le flux dans ton navigateur avec les réglages choisis et envoie chaque blocage au journal (contexte « incident »). Le navigateur peut refuser certaines qualités (HEVC/AV1) : le test serveur ci-dessus reste la référence.</div></div></div>
- <div class="sec"><div class="sh"><div class="stt"><svg viewBox="0 0 24 24"><path d="M9.4 16.6 4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0 4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z"/></svg>Sonde rapide</div><div class="ctl"><input id="pch" placeholder="chaîne" size="20"><button class="btn" id="pgo">Analyser</button></div></div><div class="sb"><pre id="pout">Résultat ici.</pre></div></div>
+ <div class="sec"><div class="sh"><div class="stt"><svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>Diagnostic d'une chaîne</div></div>
+  <div class="sb">
+   <div class="dform">
+    <div class="f"><label>1 · Chaîne en direct</label><input id="dch" placeholder="ex : chohaj" autocomplete="off" spellcheck="false"></div>
+    <div class="f"><label>2 · Réglages à utiliser</label><select id="das"><option value="">Réglages par défaut</option></select></div>
+    <div class="f"><label>3 · Compte Twitch</label><div class="segm" id="dacc"><button data-v="0" class="on">Sans compte</button><button data-v="1">Avec mon compte (1440p)</button></div></div>
+   </div>
+   <div class="ctl" style="margin-top:16px">
+    <button class="btn pr" id="dgo">Lancer le diagnostic</button>
+    <button class="btn" id="lgo">Lire dans le navigateur</button>
+    <button class="btn" id="lstop" hidden>Arrêter la lecture</button>
+    <button class="btn dg" id="lrep">Signaler un problème</button>
+   </div>
+   <p class="dim" style="margin-top:12px;font-size:.84rem"><b>Lancer le diagnostic</b> : le serveur vérifie le flux (qualités disponibles, liste de lecture, vitesse des segments, pubs). <b>Lire dans le navigateur</b> : la chaîne est jouée ici et les blocages sont envoyés au journal. Les deux utilisent les choix ci-dessus.</p>
+  </div></div>
+ <div class="sec"><div class="sh"><div class="stt"><svg viewBox="0 0 24 24"><path d="M19.35 10.04A7.49 7.49 0 0 0 12 4C9.11 4 6.6 5.64 5.35 8.04A5.99 5.99 0 0 0 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM10 17l-3.5-3.5 1.41-1.41L10 14.17l4.59-4.59L16 11l-6 6z"/></svg>Résultat du diagnostic</div></div><div class="sb"><div id="dout" class="dim">Aucun diagnostic lancé pour le moment.</div></div></div>
+ <div class="sec" id="lsec" hidden><div class="sh"><div class="stt"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>Lecture dans le navigateur</div></div>
+  <div class="sb"><div style="background:#000;border-radius:10px;overflow:hidden;aspect-ratio:16/9;max-height:52vh;margin-bottom:12px"><video id="lv" controls playsinline muted style="width:100%;height:100%;display:block"></video></div>
+   <div class="cg" id="lst"></div><div class="logs" id="lev" style="margin-top:12px;max-height:180px;font-family:var(--mono);font-size:.76rem;padding:8px 12px;background:var(--bg2);border:1px solid var(--bs);border-radius:10px"></div>
+   <p class="dim" style="margin-top:10px;font-size:.82rem">Le navigateur peut refuser certaines qualités (HEVC/AV1) : pour le 1440p, le diagnostic serveur reste la référence.</p></div></div>
 </div>
 
 <div class="page" id="p-acct">
@@ -193,7 +207,6 @@ function render(){
  const pseudos=[...new Set([...S.users.map(u=>u.pseudo),...S.logs.map(l=>l.u).filter(Boolean)])].sort();
  pick('#fu',pseudos,'Tous');pick('#fk',[...new Set(S.logs.map(l=>l.k))].sort(),'Tous');
  const das=$('#das'),dv=das.value;das.innerHTML='<option value="">Réglages par défaut</option>'+pseudos.map(p=>'<option value="'+esc(p)+'">Comme '+esc(p)+'</option>').join('');das.value=pseudos.includes(dv)?dv:'';
- const las=$('#las'),lv0=las.value;las.innerHTML=das.innerHTML;las.value=pseudos.includes(lv0)?lv0:'';
  const ne=S.logs.filter(l=>l.lvl==='ERROR'&&Date.now()-l.t<864e5).length;$('#errN').hidden=!ne;$('#errN').textContent=ne;
  renderLogs();
 }
@@ -230,11 +243,10 @@ $('#rgo').onclick=async()=>{const c=$('#rch').value.trim();if(!c)return;const b=
  const o=r.flux_officiel&&r.flux_officiel.officiel;
  $('#relout').innerHTML='<div style="padding:14px 20px" class="dim">'+r.relais_valides+' / '+r.sur+' relais valides'+(r.flux_officiel&&r.flux_officiel.hors_ligne?' · <b style="color:var(--ko)">chaîne hors ligne</b>':'')+(o?' · flux officiel : pubs '+(o.pubs_detectees?'<b style="color:var(--ko)">détectées</b>':'non détectées')+' · segments '+esc(o.hote_segments||'?'):'')+'</div><table><thead><tr><th>Relais</th><th>État</th><th class="r">Temps</th><th>Hôte des segments</th><th>Pubs</th></tr></thead><tbody>'+r.detail.map(d=>'<tr><td>'+esc(d.relais)+'</td><td><span class="pill '+(d.ok?'ok':'ko')+'">'+(d.ok?'OK':esc(d.erreur))+'</span></td><td class="r">'+(d.ms?d.ms+' ms':'')+'</td><td class="mono dim">'+esc(d.hote_segments||'')+'</td><td>'+(d.pubs_detectees===undefined?'':d.pubs_detectees?'<span class="pill ko">oui</span>':'<span class="pill ok">non</span>')+'</td></tr>').join('')+'</tbody></table>';load()};
 /* diagnostic */
-$('#dgo').onclick=async()=>{const c=$('#dch').value.trim();if(!c)return;const b=$('#dgo');b.disabled=true;b.innerHTML='<span class="spin"></span>Test en cours (≈10 s)';$('#dout').innerHTML='';
- const r=await api('check?channel='+encodeURIComponent(c)+'&as='+encodeURIComponent($('#das').value)+($('#dhv').checked?'&hevc=1':''));b.disabled=false;b.textContent='Lancer le test';
+$('#dgo').onclick=async()=>{const c=$('#dch').value.trim();if(!c)return;const b=$('#dgo');b.disabled=true;b.innerHTML='<span class="spin"></span>Test en cours (≈10 s)';$('#dout').innerHTML='<span class="dim">Diagnostic en cours…</span>';
+ const r=await api('check?channel='+encodeURIComponent(c)+'&as='+encodeURIComponent($('#das').value)+(HV()?'&hevc=1':''));b.disabled=false;b.textContent='Lancer le test';
  const cl=r.verdict==='hors ligne'?'hors':r.verdict||'erreur';
  $('#dout').innerHTML='<div class="vd '+cl+'"><span style="font-size:1.4rem">'+({ok:'✅',lent:'⚠️',hors:'💤'}[cl]||'⛔')+'</span><div>'+esc(({ok:'Flux sain',lent:'Flux fragile',bloque:'Flux bloqué',hors:'Chaîne hors ligne'}[cl])||'Erreur')+'<small>'+esc(r.resume||r.erreur||'')+'</small></div></div><div class="steps">'+(r.etapes||[]).map(s=>'<div class="st"><i class="dot '+(s.ok?'ok':'ko')+'" style="margin-top:7px"></i><b>'+esc(s.nom)+'</b><span>'+esc(s.detail)+'</span><em>'+s.ms+' ms</em></div>').join('')+'</div>';load()};
-$('#pgo').onclick=async()=>{const c=$('#pch').value.trim();if(!c)return;$('#pout').textContent='Analyse…';$('#pout').textContent=JSON.stringify(await api('probe?channel='+encodeURIComponent(c)),null,2)};
 
 /* compte Twitch */
 async function loadAcct(ch){const r=await api('account'+(ch?'?channel='+encodeURIComponent(ch):''));
@@ -254,15 +266,17 @@ function lstats(){if(!LS)return{};const q=$('#lv').getVideoPlaybackQuality?$('#l
 const lsend=(type,detail)=>fetch('/api/report',{method:'POST',keepalive:true,headers:{'Content-Type':'application/json'},body:JSON.stringify({pseudo:LS?LS.u:'admin',ch:LS?LS.ch:'',type,detail,source:'dashboard',stats:lstats()})}).catch(()=>{});
 function lshow(){if(!LS)return;const s=lstats(),t=(LS.ms+(LS.since?performance.now()-LS.since:0))/1000;
  $('#lst').innerHTML=[['État',LS.state],['Qualité',LS.level||'–'],['Tampon',s.tampon_s+' s'],['Blocages',LS.n],['Temps bloqué',t.toFixed(1)+' s'],['Images perdues',s.images_perdues],['Débit estimé',s.debit_kbps?(s.debit_kbps/1000).toFixed(1)+' Mb/s':'–']].map(([k,v])=>'<div class="ci"><div class="cl">'+k+'</div><div class="cv">'+esc(v)+'</div></div>').join('')}
+const HV=()=>$('#dacc .on').dataset.v==='1';
+$('#dacc').onclick=e=>{const b=e.target.closest('button');if(!b)return;$$('#dacc button').forEach(x=>x.classList.toggle('on',x===b))};
 function lstop(send=true){if(!LS)return;if(LS.since){LS.ms+=performance.now()-LS.since;LS.since=0}if(send&&LS.started)lsend('info','Fin du test : '+LS.n+' blocage(s), '+(LS.ms/1000).toFixed(1)+' s bloqué en tout');
- clearInterval(ltick);if(hls){hls.destroy();hls=null}const v=$('#lv');v.pause();v.removeAttribute('src');v.load();LS=null;$('#lpl').hidden=true;$('#lhint').hidden=false}
+ clearInterval(ltick);if(hls){hls.destroy();hls=null}const v=$('#lv');v.pause();v.removeAttribute('src');v.load();LS=null;$('#lsec').hidden=true;$('#lstop').hidden=true}
 $('#lstop').onclick=()=>{lstop();toast('Test arrêté')};
 $('#lrep').onclick=async()=>{const n=prompt('Décris le problème (facultatif) :','');if(n===null)return;await lsend('note','Signalement manuel : '+(n||'blocage'));toast('Signalement envoyé au journal');load()};
-$('#lgo').onclick=async()=>{const c=$('#lch').value.trim().toLowerCase().replace(/^@/,'').replace(/[^a-z0-9_]/g,'');if(!c)return toast('Entre une chaîne en direct',1);
- lstop(false);const u=$('#las').value,usr=S&&S.users.find(x=>x.pseudo===u);let cf=u&&usr&&usr.cfg?{...usr.cfg}:null;
- if($('#lhv').checked){const o=await api('ownerbase');if(!o.sealed)return toast('Lie d\'abord ton compte (onglet Compte Twitch)',1);cf={...(cf||{}),hevc:true,tok:o.sealed}}
+$('#lgo').onclick=async()=>{const c=$('#dch').value.trim().toLowerCase().replace(/^@/,'').replace(/[^a-z0-9_]/g,'');if(!c)return toast('Entre une chaîne en direct',1);
+ lstop(false);const u=$('#das').value,usr=S&&S.users.find(x=>x.pseudo===u);let cf=u&&usr&&usr.cfg?{...usr.cfg}:null;
+ if(HV()){const o=await api('ownerbase');if(!o.sealed)return toast('Lie d\'abord ton compte (onglet Compte Twitch)',1);cf={...(cf||{}),hevc:true,tok:o.sealed}}
  const src=location.origin+(cf?'/c/'+(u||'admin')+'/'+b64(cf):'')+'/p/'+c+'.m3u8';
- LS={ch:c,u:u||'admin',n:0,ms:0,since:0,level:'',started:false,state:'Connexion…'};$('#lpl').hidden=false;$('#lhint').hidden=true;$('#lev').innerHTML='';
+ LS={ch:c,u:u||'admin',n:0,ms:0,since:0,level:'',started:false,state:'Connexion…'};$('#lsec').hidden=false;$('#lstop').hidden=false;$('#lev').innerHTML='';
  const v=$('#lv'),stall=w=>{if(!LS||LS.since)return;LS.since=performance.now();LS.n++;LS.state='Bloqué';lev('Blocage : '+w,'e')},
   resume=()=>{if(!LS||!LS.since)return;const d=performance.now()-LS.since;LS.ms+=d;LS.since=0;LS.state='En lecture';lev('Reprise après '+(d/1000).toFixed(1)+' s','w');if(d>1500&&Date.now()-lastRep>8000){lastRep=Date.now();lsend('blocage','Blocage de '+(d/1000).toFixed(1)+' s ('+(LS.level||'?')+')').then(load)}};
  v.onwaiting=()=>{if(LS&&LS.started)stall('lecture en attente de données')};v.onplaying=()=>{if(!LS)return;if(!LS.started){LS.started=true;lev('Lecture démarrée');lsend('info','Lecture de test démarrée')}LS.state='En lecture';resume()};v.onstalled=()=>lev('Données en retard (stalled)','w');
