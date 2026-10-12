@@ -86,7 +86,7 @@ const CAPS=[[0,'Maximum'],[1440,'1440p'],[1080,'1080p'],[720,'720p'],[480,'480p'
 const STEPS=['Profil','Qualité','Compte','Options','Terminer'];
 const EYE='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
 const st={pseudo:'',device:'',cap:0,fps60:true,relay:true,hevc:false,tok:'',acct:'',fixed:3,audio:false,pc:false};
-let step=0,id='',fresh=false,persistent=true,result=null,busy=false,legacy=false,nopw=true,curPw='',newPw='',newPw2='',locked=false,swapping=false;
+let step=0,id='',fresh=false,persistent=true,result=null,busy=false,legacy=false,nopw=true,curPw='',newPw='',newPw2='',locked=false,swapping=false,known=null;
 const clean=p=>String(p||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9_]/g,'').slice(0,20);
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const b64=o=>btoa(unescape(encodeURIComponent(JSON.stringify(o)))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
@@ -113,6 +113,7 @@ function body(){
   +'<div class="row"><label class="lab" for="device">Appareil <span class="hint">(facultatif)</span></label><input type="text" id="device" maxlength="24" placeholder="ex : PC, TV salon, téléphone" value="'+esc(st.device)+'"></div>'
   +'<div class="row"><label class="lab" for="pw1">'+(needPw()?'Mot de passe':'Nouveau mot de passe <span class="hint">(laisse vide pour garder l\'actuel)</span>')+'</label>'+pwField('pw1',needPw()?'6 caractères minimum':'Nouveau mot de passe')+'<div class="meter" id="meter"><i></i><i></i><i></i><i></i></div><span class="err" id="e-pw1">6 caractères minimum.</span><span class="hint">'+(needPw()?'Il protège ta configuration : il sera demandé pour la modifier. Note-le bien, il ne peut pas être récupéré.':'')+'</span></div>'
   +(needPw()?'<div class="row"><label class="lab" for="pw2">Confirme le mot de passe</label>'+pwField('pw2','Retape-le')+'<span class="err" id="e-pw2">Les deux mots de passe ne correspondent pas.</span></div>':'')
+  +(known&&!edit?'<div class="note">Tu as déjà un profil'+(known.pseudo?' (<b>'+esc(known.pseudo)+'</b>)':'')+' sur cet appareil. <a class="lnk" href="/u/'+known.id+'/configure">Modifier mon profil →</a></div>':'')
   +(edit||legacy?'':'<div class="row"><button class="lnk" id="find">J\'ai déjà un lien d\'installation → le retrouver</button><div id="findRow" hidden><input type="text" id="paste" placeholder="Colle ton ancien lien (…/manifest.json)"></div></div>')+'</div>';
  }
  if(step===1)h='<h1>Qualité de lecture</h1><p class="sub">Choisis la qualité maximale. Si ça saccade, descends à 720p ou 480p.</p><div class="grid"><div class="row"><span class="lab">Qualité maximale</span><div class="seg" id="cap">'+CAPS.map(([v,l])=>'<button data-v="'+v+'" class="'+(st.cap===v?'on':'')+'">'+l+'</button>').join('')+'</div></div>'
@@ -223,7 +224,7 @@ document.addEventListener('keydown',e=>{if(e.key!=='Enter'||e.target.tagName==='
    if(p.locked){locked=true;await show(lockHtml());return}
    nopw=true;Object.assign(st,p.cfg,{pseudo:p.pseudo});
   }else if(c){try{Object.assign(st,unb64(c[2]),{pseudo:clean(decodeURIComponent(c[1]))});legacy=true;$('#mode').textContent='Migration'}catch{}}
-  else{try{const l=JSON.parse(localStorage.twprofile||'null');if(l&&l.id&&persistent){const q=await api('/api/profile?id='+l.id);if(q.ok){location.replace('/u/'+l.id+'/configure');return}}}catch{}}
+  else{try{const l=JSON.parse(localStorage.twprofile||'null');if(l&&l.id&&persistent){const q=await api('/api/profile?id='+l.id);if(q.ok)known=l}}catch{}}
  }catch{}
  $('#steps').classList.remove('off');steps();await show(body());
 })();
