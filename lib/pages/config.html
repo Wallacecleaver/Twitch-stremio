@@ -10,139 +10,222 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
 <style>
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
-:root{--bg:#09090b;--bg3:#141417;--el:#1c1c21;--hv:#27272a;--bs:rgba(255,255,255,.07);--bd:rgba(255,255,255,.12);--bx:rgba(255,255,255,.22);--t:#fafafa;--t2:#a1a1aa;--t3:#71717a;--a:#9147ff;--ah:#772ce8;--as:rgba(145,71,255,.14);--ok:#10b981;--oks:rgba(16,185,129,.12);--wa:#f59e0b;--was:rgba(245,158,11,.1);--ko:#ef4444;--r:12px;--rl:20px;--mono:'JetBrains Mono',Consolas,monospace}
+:root{--bg:#09090b;--bg3:#141417;--el:#1c1c21;--hv:#27272a;--bs:rgba(255,255,255,.07);--bd:rgba(255,255,255,.12);--bx:rgba(255,255,255,.22);--t:#fafafa;--t2:#a1a1aa;--t3:#71717a;--a:#9147ff;--ah:#772ce8;--as:rgba(145,71,255,.14);--ok:#10b981;--oks:rgba(16,185,129,.12);--ko:#f87171;--kos:rgba(239,68,68,.12);--r:12px;--rl:22px;--mono:'JetBrains Mono',Consolas,monospace;--ease:cubic-bezier(.22,1,.36,1)}
 html{font-size:15px;-webkit-font-smoothing:antialiased;color-scheme:dark}
-body{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;background:radial-gradient(900px 500px at 50% -120px,rgba(145,71,255,.22),transparent),var(--bg);color:var(--t);min-height:100vh;line-height:1.6}
-.wrap{max-width:720px;margin:0 auto;padding:28px 18px 60px}
-.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:1.05rem;margin-bottom:22px}.brand svg{width:28px;height:28px;fill:var(--a)}.brand .badge{margin-left:auto;font-size:.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--a);background:var(--as);padding:3px 10px;border-radius:99px}
-.steps{display:flex;align-items:flex-start;margin-bottom:20px}
-.sp{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;position:relative;cursor:pointer;background:none;border:0;color:var(--t3);font:inherit;font-size:.72rem;font-weight:500}
-.sp::before{content:'';position:absolute;top:15px;right:50%;width:100%;height:2px;background:var(--bd)}.sp:first-child::before{display:none}
-.sp i{position:relative;z-index:1;width:32px;height:32px;border-radius:50%;background:var(--el);border:2px solid var(--bd);display:grid;place-items:center;font-style:normal;font-weight:700;font-size:.82rem;color:var(--t2);transition:.25s}
-.sp.done i{background:var(--a);border-color:var(--a);color:#fff}.sp.done::before,.sp.cur::before{background:var(--a)}
-.sp.cur i{border-color:var(--a);color:#fff;box-shadow:0 0 0 5px var(--as)}.sp.cur,.sp.done{color:var(--t)}
+body{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:var(--t);min-height:100vh;line-height:1.6;overflow-x:hidden}
+body::before{content:'';position:fixed;inset:-20% -10% auto -10%;height:520px;background:radial-gradient(520px 320px at 30% 0,rgba(145,71,255,.28),transparent 70%),radial-gradient(480px 300px at 75% 10%,rgba(56,189,248,.12),transparent 70%);pointer-events:none;animation:drift 14s ease-in-out infinite alternate}
+@keyframes drift{to{transform:translate3d(30px,20px,0) scale(1.06)}}
+.wrap{position:relative;max-width:720px;margin:0 auto;padding:28px 18px 60px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:1.05rem;margin-bottom:24px;animation:up .6s var(--ease) both}.brand svg{width:28px;height:28px;fill:var(--a)}
+.badge{margin-left:auto;font-size:.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--a);background:var(--as);padding:3px 10px;border-radius:99px}
+/* étapes */
+.steps{position:relative;display:flex;margin-bottom:22px;animation:up .6s .08s var(--ease) both;transition:opacity .4s,transform .4s}.steps.off{opacity:0;pointer-events:none;height:0;margin:0;overflow:hidden}
+.trk{position:absolute;top:15px;left:10%;right:10%;height:2px;background:var(--bd);border-radius:2px}
+.fill{position:absolute;top:0;left:0;height:100%;width:0;background:linear-gradient(90deg,var(--a),#c084fc);border-radius:2px;transition:width .6s var(--ease)}
+.sp{position:relative;flex:1;display:flex;flex-direction:column;align-items:center;gap:7px;cursor:pointer;background:none;border:0;color:var(--t3);font:inherit;font-size:.72rem;font-weight:500;transition:color .3s}
+.sp i{width:32px;height:32px;border-radius:50%;background:var(--el);border:2px solid var(--bd);display:grid;place-items:center;font-style:normal;font-weight:700;font-size:.82rem;color:var(--t2);transition:all .4s var(--ease)}
+.sp:hover i{border-color:var(--bx);transform:scale(1.08)}
+.sp.done i{background:var(--a);border-color:var(--a);color:#fff}
+.sp.cur i{border-color:var(--a);color:#fff;box-shadow:0 0 0 6px var(--as);transform:scale(1.1)}.sp.cur,.sp.done{color:var(--t)}
 @media(max-width:520px){.sp span{display:none}}
-.card{background:var(--bg3);border:1px solid var(--bs);border-radius:var(--rl);padding:26px;animation:in .3s ease}
-@keyframes in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
-.card h1{font-size:1.45rem;letter-spacing:-.02em;margin-bottom:4px}.sub{color:var(--t2);margin-bottom:22px}
-.grid{display:grid;gap:18px}.two{display:grid;grid-template-columns:1fr 1fr;gap:16px}@media(max-width:600px){.two{grid-template-columns:1fr}}
-.row{display:grid;gap:6px}.lab{font-size:.84rem;font-weight:600}.hint{font-size:.8rem;color:var(--t3);font-weight:400}
-input[type=text],input[type=password],select{width:100%;font:inherit;color:var(--t);background:var(--el);border:1px solid var(--bd);border-radius:var(--r);padding:12px 14px;outline:0;transition:.15s}
-input:focus,select:focus{border-color:var(--a);box-shadow:0 0 0 3px var(--as)}
-.seg{display:grid;grid-template-columns:repeat(auto-fit,minmax(92px,1fr));gap:8px}.seg button{font:inherit;font-weight:600;font-size:.9rem;color:var(--t2);background:var(--el);border:1px solid var(--bd);border-radius:var(--r);padding:12px 8px;cursor:pointer;transition:.15s}
-.seg button:hover{border-color:var(--bx);color:var(--t)}.seg button.on{background:var(--as);border-color:var(--a);color:#fff}
-.tg{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 16px;background:var(--el);border:1px solid var(--bs);border-radius:var(--r)}
+/* carte */
+.stage{position:relative;background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,.015)),var(--bg3);border:1px solid var(--bs);border-radius:var(--rl);overflow:hidden;box-shadow:0 20px 60px -20px rgba(0,0,0,.6);transition:height .45s var(--ease);animation:up .6s .14s var(--ease) both}
+.pane{padding:28px}@media(max-width:520px){.pane{padding:20px}}
+.pane.in-l{animation:inl .5s var(--ease) both}.pane.in-r{animation:inr .5s var(--ease) both}.pane.x-l{animation:xl .2s ease-in both}.pane.x-r{animation:xr .2s ease-in both}.pane.fade{animation:up .5s var(--ease) both}
+@keyframes inl{from{opacity:0;transform:translateX(44px)}to{opacity:1;transform:none}}
+@keyframes inr{from{opacity:0;transform:translateX(-44px)}to{opacity:1;transform:none}}
+@keyframes xl{to{opacity:0;transform:translateX(-36px)}}@keyframes xr{to{opacity:0;transform:translateX(36px)}}
+@keyframes up{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+.pane h1{font-size:1.5rem;letter-spacing:-.02em;margin-bottom:4px}.sub{color:var(--t2);margin-bottom:22px}
+.grid{display:grid;gap:18px}.grid>*{animation:up .55s var(--ease) both}.grid>*:nth-child(1){animation-delay:.05s}.grid>*:nth-child(2){animation-delay:.1s}.grid>*:nth-child(3){animation-delay:.15s}.grid>*:nth-child(4){animation-delay:.2s}.grid>*:nth-child(5){animation-delay:.25s}.grid>*:nth-child(6){animation-delay:.3s}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:16px}@media(max-width:600px){.two{grid-template-columns:1fr}}
+.row{display:grid;gap:6px}.lab{font-size:.84rem;font-weight:600}.hint{font-size:.8rem;color:var(--t3);font-weight:400}.err{font-size:.8rem;color:var(--ko);min-height:0;max-height:0;overflow:hidden;opacity:0;transition:.3s var(--ease)}.err.show{max-height:40px;opacity:1}
+.fld{position:relative}
+input[type=text],input[type=password],select{width:100%;font:inherit;color:var(--t);background:var(--el);border:1px solid var(--bd);border-radius:var(--r);padding:13px 14px;outline:0;transition:border-color .2s,box-shadow .25s,background .2s}
+input:hover,select:hover{border-color:var(--bx)}input:focus,select:focus{border-color:var(--a);box-shadow:0 0 0 4px var(--as);background:#202026}
+input.bad{border-color:var(--ko);box-shadow:0 0 0 4px var(--kos);animation:shake .4s}@keyframes shake{20%,60%{transform:translateX(-6px)}40%,80%{transform:translateX(6px)}}
+.fld input{padding-right:46px}.eye{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:34px;height:34px;border:0;background:none;color:var(--t3);cursor:pointer;border-radius:8px;display:grid;place-items:center;transition:.2s}.eye:hover{color:var(--t);background:var(--hv)}
+.meter{display:flex;gap:4px;height:4px}.meter i{flex:1;background:var(--hv);border-radius:4px;transition:background .3s}.meter.s1 i:nth-child(1){background:#ef4444}.meter.s2 i:nth-child(-n+2){background:#f59e0b}.meter.s3 i:nth-child(-n+3){background:#84cc16}.meter.s4 i{background:var(--ok)}
+.seg{display:grid;grid-template-columns:repeat(auto-fit,minmax(92px,1fr));gap:8px}.seg button{font:inherit;font-weight:600;font-size:.9rem;color:var(--t2);background:var(--el);border:1px solid var(--bd);border-radius:var(--r);padding:12px 8px;cursor:pointer;transition:all .25s var(--ease)}
+.seg button:hover{border-color:var(--bx);color:var(--t);transform:translateY(-1px)}.seg button:active{transform:scale(.97)}.seg button.on{background:var(--as);border-color:var(--a);color:#fff;box-shadow:0 6px 18px -8px var(--a)}
+.tg{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 16px;background:var(--el);border:1px solid var(--bs);border-radius:var(--r);cursor:pointer;transition:all .25s var(--ease)}.tg:hover{border-color:var(--bd);transform:translateY(-1px);background:#202026}
 .tg b{display:block;font-size:.92rem}.tg span{font-size:.8rem;color:var(--t3)}
-.sw{position:relative;flex:none;width:46px;height:26px;background:var(--hv);border-radius:99px;cursor:pointer;border:0;transition:.2s}.sw::after{content:'';position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:.2s}.sw.on{background:var(--a)}.sw.on::after{left:23px}
-.btn{font:inherit;font-weight:600;font-size:.92rem;border:1px solid var(--bd);background:var(--el);color:var(--t);border-radius:var(--r);padding:12px 20px;cursor:pointer;transition:.15s;display:inline-flex;align-items:center;justify-content:center;gap:8px;text-decoration:none}
-.btn:hover{border-color:var(--bx);background:var(--hv)}.btn.pr{background:var(--a);border-color:var(--a)}.btn.pr:hover{background:var(--ah)}.btn:disabled{opacity:.45;cursor:not-allowed}.btn.dg{color:#fca5a5}.btn.big{padding:14px 26px;font-size:1rem}
+.sw{position:relative;flex:none;width:48px;height:28px;background:var(--hv);border-radius:99px;border:0;transition:background .3s var(--ease);pointer-events:none}.sw::after{content:'';position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.4);transition:transform .35s var(--ease)}.sw.on{background:var(--a)}.sw.on::after{transform:translateX(20px)}
+.btn{font:inherit;font-weight:600;font-size:.92rem;border:1px solid var(--bd);background:var(--el);color:var(--t);border-radius:var(--r);padding:12px 20px;cursor:pointer;transition:all .25s var(--ease);display:inline-flex;align-items:center;justify-content:center;gap:8px;text-decoration:none;position:relative;overflow:hidden}
+.btn:hover{border-color:var(--bx);background:var(--hv);transform:translateY(-1px)}.btn:active{transform:scale(.97)}.btn.pr{background:linear-gradient(135deg,#a56bff,var(--a) 60%,var(--ah));border-color:transparent;box-shadow:0 8px 24px -10px var(--a)}.btn.pr:hover{box-shadow:0 12px 28px -8px var(--a);filter:brightness(1.08)}
+.btn:disabled{opacity:.4;cursor:not-allowed;transform:none}.btn.dg{color:#fca5a5}.btn.big{padding:15px 28px;font-size:1rem}
+.sp2{width:16px;height:16px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:s .7s linear infinite}@keyframes s{to{transform:rotate(360deg)}}
 .nav{display:flex;justify-content:space-between;gap:10px;margin-top:26px;padding-top:20px;border-top:1px solid var(--bs)}
-.note{padding:12px 14px;border-radius:var(--r);font-size:.85rem;border:1px solid;background:var(--as);border-color:rgba(145,71,255,.28);color:#dccbff}.note.w{background:var(--was);border-color:rgba(245,158,11,.28);color:#fcd34d}.note.ok{background:var(--oks);border-color:rgba(16,185,129,.3);color:#6ee7b7}
+.note{padding:12px 14px;border-radius:var(--r);font-size:.85rem;border:1px solid;background:var(--as);border-color:rgba(145,71,255,.28);color:#dccbff;transition:all .4s var(--ease)}.note.ok{background:var(--oks);border-color:rgba(16,185,129,.3);color:#6ee7b7}.note.w{background:rgba(245,158,11,.1);border-color:rgba(245,158,11,.28);color:#fcd34d}
 .url{display:flex;gap:8px}.url input{font-family:var(--mono);font-size:.76rem}
-.help{background:var(--el);border:1px solid var(--bs);border-radius:var(--r);padding:4px 16px}.help summary{cursor:pointer;padding:12px 0;font-weight:600;font-size:.88rem}.help ol{padding:0 0 14px 20px;color:var(--t2);font-size:.85rem;display:grid;gap:6px}
-.sum{display:grid;gap:0;border:1px solid var(--bs);border-radius:var(--r);overflow:hidden}.sum div{display:flex;justify-content:space-between;gap:12px;padding:11px 16px;border-bottom:1px solid var(--bs);font-size:.88rem}.sum div:last-child{border:0}.sum span{color:var(--t3)}.sum b{text-align:right}
-.done{text-align:center;display:grid;gap:14px;justify-items:center}.done .ck{width:64px;height:64px;border-radius:50%;background:var(--oks);color:var(--ok);display:grid;place-items:center;font-size:2rem}
+.help{background:var(--el);border:1px solid var(--bs);border-radius:var(--r);padding:4px 16px}.help summary{cursor:pointer;padding:12px 0;font-weight:600;font-size:.88rem}.help[open] ol{animation:up .35s var(--ease)}.help ol{padding:0 0 14px 20px;color:var(--t2);font-size:.85rem;display:grid;gap:6px}
+.sum{border:1px solid var(--bs);border-radius:var(--r);overflow:hidden}.sum div{display:flex;justify-content:space-between;gap:12px;padding:11px 16px;border-bottom:1px solid var(--bs);font-size:.88rem;animation:up .5s var(--ease) both}.sum div:last-child{border:0}.sum span{color:var(--t3)}.sum b{text-align:right}
+.done{text-align:center;display:grid;gap:14px;justify-items:center}
+.ck{width:76px;height:76px;border-radius:50%;background:var(--oks);display:grid;place-items:center;animation:pop .6s var(--ease) both}.ck svg{width:38px;height:38px;stroke:var(--ok);fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:40;stroke-dashoffset:40;animation:draw .5s .35s ease forwards}
+@keyframes pop{from{transform:scale(.4);opacity:0}to{transform:none;opacity:1}}@keyframes draw{to{stroke-dashoffset:0}}
+.lock{display:grid;gap:16px;justify-items:center;text-align:center}.lock .ico{width:64px;height:64px;border-radius:50%;background:var(--as);display:grid;place-items:center;animation:pop .5s var(--ease) both}.lock .ico svg{width:30px;height:30px;stroke:var(--a);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}.lock .row{width:100%;text-align:left}
 .acts{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
-.toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,20px);background:var(--el);border:1px solid var(--bx);border-radius:var(--r);padding:11px 20px;opacity:0;pointer-events:none;transition:.25s;z-index:99;font-size:.9rem}.toast.show{opacity:1;transform:translate(-50%,0)}
-footer{text-align:center;color:var(--t3);font-size:.78rem;margin-top:22px}
-a.lnk,.lnk{color:var(--a);cursor:pointer;text-decoration:underline;background:none;border:0;font:inherit}
+.toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,20px) scale(.96);background:var(--el);border:1px solid var(--bx);border-radius:var(--r);padding:11px 20px;opacity:0;pointer-events:none;transition:all .35s var(--ease);z-index:99;font-size:.9rem;box-shadow:0 10px 30px rgba(0,0,0,.5)}.toast.show{opacity:1;transform:translate(-50%,0) scale(1)}
+footer{text-align:center;color:var(--t3);font-size:.78rem;margin-top:22px;animation:up .6s .3s var(--ease) both}
+.lnk{color:var(--a);cursor:pointer;text-decoration:none;background:none;border:0;font:inherit;text-align:left;transition:.2s}.lnk:hover{color:#c4a1ff;text-decoration:underline}
+:focus-visible{outline:2px solid var(--a);outline-offset:2px}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-delay:0s!important;transition-duration:.01ms!important}}
 </style>
 </head>
 <body>
 <div class="wrap">
 <div class="brand"><svg viewBox="0 0 24 24"><path d="M4 2 2 6v14h5v3h3l3-3h4l5-5V2H4zm16 11-3 3h-5l-3 3v-3H6V4h14v9zm-3-6h-2v5h2V7zm-5 0h-2v5h2V7z"/></svg>Twitch pour Stremio<span class="badge" id="mode">Configuration</span></div>
-<div class="steps" id="steps"></div>
-<div class="card" id="card"></div>
+<div class="steps off" id="steps"></div>
+<div class="stage" id="stage"></div>
 <footer>Ton pseudo apparaît dans le journal de l'administrateur pour retrouver tes lectures en cas de problème.</footer>
 </div>
 <div class="toast" id="toast"></div>
 <script>
-const $=s=>document.querySelector(s);
+const $=s=>document.querySelector(s),wait=ms=>new Promise(r=>setTimeout(r,ms));
 const CAPS=[[0,'Maximum'],[1440,'1440p'],[1080,'1080p'],[720,'720p'],[480,'480p'],[360,'360p']];
 const STEPS=['Profil','Qualité','Compte','Options','Terminer'];
+const EYE='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
 const st={pseudo:'',device:'',cap:0,fps60:true,relay:true,hevc:false,tok:'',acct:'',fixed:3,audio:false,pc:false};
-let step=0,id='',fresh=false,persistent=true,result=null,busy=false,legacy=false;
-const clean=p=>String(p||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9_]/g,'').slice(0,20);
+let step=0,id='',fresh=false,persistent=true,result=null,busy=false,legacy=false,nopw=true,curPw='',newPw='',newPw2='',locked=false,swapping=false;
+const clean=p=>String(p||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9_]/g,'').slice(0,20);
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const b64=o=>btoa(unescape(encodeURIComponent(JSON.stringify(o)))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
 const unb64=s=>JSON.parse(decodeURIComponent(escape(atob(s.replace(/-/g,'+').replace(/_/g,'/')))));
-const toast=m=>{const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.remove('show'),2400)};
+const toast=m=>{const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.remove('show'),2600)};
 const opts=()=>({cap:st.cap,fps60:st.fps60,relay:st.relay,hevc:st.hevc,tok:st.tok,fixed:st.fixed,audio:st.audio,pc:st.pc,device:st.device});
 const api=(u,b)=>fetch(u,b?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}:{}).then(r=>r.json());
-const sw=(k,t,d)=>'<div class="tg"><div><b>'+t+'</b><span>'+d+'</span></div><button class="sw'+(st[k]?' on':'')+'" data-t="'+k+'" aria-label="'+t+'"></button></div>';
+const sw=(k,t,d)=>'<div class="tg" data-t="'+k+'"><div><b>'+t+'</b><span>'+d+'</span></div><button class="sw'+(st[k]?' on':'')+'" tabindex="-1" aria-hidden="true"></button></div>';
+const pwField=(i,ph)=>'<div class="fld"><input type="password" id="'+i+'" placeholder="'+ph+'" autocomplete="new-password" spellcheck="false"><button class="eye" type="button" data-eye="'+i+'" aria-label="Afficher">'+EYE+'</button></div>';
+const strength=p=>{let s=0;if(p.length>=6)s++;if(p.length>=10)s++;if(/[A-Z]/.test(p)&&/[a-z]/.test(p))s++;if(/\d/.test(p)&&/[^A-Za-z0-9]/.test(p)||p.length>=14)s++;return p?Math.max(1,s):0};
+const needPw=()=>!id||nopw||fresh;
 
 function steps(){
- $('#steps').innerHTML=STEPS.map((n,i)=>'<button class="sp'+(i<step?' done':'')+(i===step?' cur':'')+'" data-s="'+i+'"><i>'+(i<step?'✓':i+1)+'</i><span>'+n+'</span></button>').join('');
+ const el=$('#steps');
+ if(!el.firstElementChild)el.innerHTML='<div class="trk"><div class="fill" id="fill"></div></div>'+STEPS.map((n,i)=>'<button class="sp" data-s="'+i+'"><i></i><span>'+n+'</span></button>').join('');
+ el.querySelectorAll('.sp').forEach((b,i)=>{b.className='sp'+(i<step?' done':'')+(i===step?' cur':'');b.firstElementChild.textContent=i<step?'✓':i+1});
+ $('#fill').style.width=(step/4*100)+'%';
 }
-function view(){
+function body(){
  const edit=!!id&&!fresh;let h='';
- if(step===0)h='<h1>'+(edit?'Modifier ma configuration':'Bienvenue 👋')+'</h1><p class="sub">'+(edit?'Change ce que tu veux, puis enregistre : <b>rien à réinstaller</b>, ton addon dans Stremio est mis à jour tout seul.':'Quelques étapes rapides pour créer ton addon personnel. Pas de compte, pas de mot de passe.')+'</p><div class="grid">'
-  +'<div class="row"><label class="lab" for="pseudo">Ton pseudo</label><input type="text" id="pseudo" maxlength="20" placeholder="ex : christophe" autocomplete="off" spellcheck="false" value="'+esc(st.pseudo)+'"><span class="hint">Lettres, chiffres et _ (2 à 20). Il sert à retrouver tes lectures dans le journal.</span></div>'
+ if(step===0){
+  h='<h1>'+(edit?'Modifier ma configuration':'Bienvenue 👋')+'</h1><p class="sub">'+(edit?'Change ce que tu veux, puis enregistre : <b>rien à réinstaller</b>.':'Quelques étapes pour créer ton addon personnel.')+'</p><div class="grid">'
+  +'<div class="row"><label class="lab" for="pseudo">Ton pseudo</label><input type="text" id="pseudo" maxlength="20" placeholder="ex : christophe" autocomplete="off" spellcheck="false" value="'+esc(st.pseudo)+'"><span class="err" id="e-pseudo">Choisis un pseudo de 2 caractères minimum.</span><span class="hint">Lettres, chiffres et _ (2 à 20). Il sert à te retrouver dans le journal.</span></div>'
   +'<div class="row"><label class="lab" for="device">Appareil <span class="hint">(facultatif)</span></label><input type="text" id="device" maxlength="24" placeholder="ex : PC, TV salon, téléphone" value="'+esc(st.device)+'"></div>'
-  +(edit||legacy?'':'<div class="row"><button class="lnk" id="find" style="text-align:left">J\'ai déjà un lien d\'installation → le retrouver</button><div id="findRow" hidden><input type="text" id="paste" placeholder="Colle ton ancien lien (…/manifest.json)"></div></div>')+'</div>';
+  +'<div class="row"><label class="lab" for="pw1">'+(needPw()?'Mot de passe':'Nouveau mot de passe <span class="hint">(laisse vide pour garder l\'actuel)</span>')+'</label>'+pwField('pw1',needPw()?'6 caractères minimum':'Nouveau mot de passe')+'<div class="meter" id="meter"><i></i><i></i><i></i><i></i></div><span class="err" id="e-pw1">6 caractères minimum.</span><span class="hint">'+(needPw()?'Il protège ta configuration : il sera demandé pour la modifier. Note-le bien, il ne peut pas être récupéré.':'')+'</span></div>'
+  +(needPw()?'<div class="row"><label class="lab" for="pw2">Confirme le mot de passe</label>'+pwField('pw2','Retape-le')+'<span class="err" id="e-pw2">Les deux mots de passe ne correspondent pas.</span></div>':'')
+  +(edit||legacy?'':'<div class="row"><button class="lnk" id="find">J\'ai déjà un lien d\'installation → le retrouver</button><div id="findRow" hidden><input type="text" id="paste" placeholder="Colle ton ancien lien (…/manifest.json)"></div></div>')+'</div>';
+ }
  if(step===1)h='<h1>Qualité de lecture</h1><p class="sub">Choisis la qualité maximale. Si ça saccade, descends à 720p ou 480p.</p><div class="grid"><div class="row"><span class="lab">Qualité maximale</span><div class="seg" id="cap">'+CAPS.map(([v,l])=>'<button data-v="'+v+'" class="'+(st.cap===v?'on':'')+'">'+l+'</button>').join('')+'</div></div>'
   +sw('fps60','Autoriser le 60 images/s','Désactivé : seulement du 30 i/s, plus léger pour un vieux PC.')
   +'<div class="row"><label class="lab" for="fixed">Qualités fixes proposées</label><select id="fixed">'+[0,1,2,3,4,5,6].map(n=>'<option value="'+n+'"'+(st.fixed===n?' selected':'')+'>'+(n===0?'Aucune (automatique seul)':n+' qualité'+(n>1?'s':''))+'</option>').join('')+'</select><span class="hint">Elles s\'ajoutent à « Twitch » (automatique) dans la liste des sources.</span></div></div>';
  if(step===2)h='<h1>Compte Twitch <span class="hint">· facultatif</span></h1><p class="sub">Twitch ne donne le <b>1440p</b> qu\'à un compte connecté. Tu peux passer cette étape.</p><div class="grid">'
-  +'<div class="note'+(st.tok?' ok':'')+'">'+(st.tok?'Compte lié'+(st.acct?' : <b>'+esc(st.acct)+'</b>':'')+'.':'Aucun compte lié : le 1440p ne sera pas proposé.')+'</div>'
-  +'<div class="url"><input type="password" id="tokIn" placeholder="Valeur du cookie auth-token" autocomplete="off" spellcheck="false"><button class="btn pr" id="tokBtn">Lier</button>'+(st.tok?'<button class="btn dg" id="tokDel">Retirer</button>':'')+'</div>'
+  +'<div class="note'+(st.tok?' ok':'')+'" id="acctNote"></div>'
+  +'<div class="url"><input type="password" id="tokIn" placeholder="Valeur du cookie auth-token" autocomplete="off" spellcheck="false"><button class="btn pr" id="tokBtn">Lier</button><button class="btn dg" id="tokDel"'+(st.tok?'':' hidden')+'>Retirer</button></div>'
   +'<details class="help"><summary>Où trouver mon auth-token ?</summary><ol><li>Sur Chrome ou Brave, ouvre twitch.tv, connecté.</li><li>Appuie sur F12, onglet « Application ».</li><li>Cookies → https://www.twitch.tv.</li><li>Copie la valeur de la ligne <b>auth-token</b> et colle-la ci-dessus.</li></ol></details>'
-  +sw('hevc','Autoriser le 1440p (HEVC / AV1)','Demande les qualités au-delà du 1080p. Nécessite un compte lié et un lecteur compatible. En cas de souci, coupe-le.')
-  +'<span class="hint">Le jeton est vérifié puis chiffré, jamais affiché ni stocké en clair. Il donne accès à ton compte : ne partage pas ton lien.</span></div>';
+  +sw('hevc','Autoriser le 1440p (HEVC / AV1)','Demande les qualités au-delà du 1080p. Nécessite un compte lié et un lecteur compatible.')
+  +'<span class="hint">Le jeton est vérifié puis chiffré, jamais affiché ni stocké en clair. Ne partage pas ton lien.</span></div>';
  if(step===3)h='<h1>Options</h1><p class="sub">Les réglages avancés. Les valeurs par défaut conviennent à la plupart des gens.</p><div class="grid">'
   +sw('relay','Relais sans publicité','Récupère le flux depuis une autre région pour éviter les pubs.')
   +sw('audio','Proposer « Audio seul »','Utile pour écouter en arrière-plan.')
   +sw('pc','Mode ordinateur (Stremio PC)','À activer si le lecteur du PC charge sans fin.')+'</div>';
- if(step===4&&!result){const L=[['Pseudo',st.pseudo||'—'],['Appareil',st.device||'—'],['Qualité max',st.cap?st.cap+'p':'Maximum'],['60 images/s',st.fps60?'Oui':'Non'],['Compte Twitch',st.tok?(st.acct||'Lié'):'Non'],['1440p',st.hevc?'Oui':'Non'],['Relais sans pub',st.relay?'Oui':'Non'],['Mode ordinateur',st.pc?'Oui':'Non']];
-  h='<h1>'+(edit?'Tout est bon ?':'Dernière étape')+'</h1><p class="sub">Vérifie ton récapitulatif, puis '+(edit?'enregistre.':'crée ton lien.')+'</p><div class="sum">'+L.map(r=>'<div><span>'+r[0]+'</span><b>'+esc(r[1])+'</b></div>').join('')+'</div>'
-  +(edit?'<div class="note ok" style="margin-top:16px">Enregistrer met à jour ton addon <b>sans réinstallation</b>.</div>':persistent?'':'<div class="note w" style="margin-top:16px">Base de données non configurée : tu obtiendras un lien classique, à réinstaller après chaque changement.</div>');}
- if(step===4&&result)h='<div class="done"><div class="ck">✓</div><h1>'+(edit?'Configuration enregistrée':'Ton addon est prêt')+'</h1>'
-  +(edit?'<p class="sub">Les changements sont déjà actifs dans Stremio. Relance simplement la chaîne.</p>':'<p class="sub">Installe-le une seule fois. Pour changer un réglage plus tard : roue ⚙ de l\'addon dans Stremio, ou rouvre ton lien de configuration.</p>')
+ if(step===4&&!result){const L=[['Pseudo',st.pseudo||'—'],['Appareil',st.device||'—'],['Qualité max',st.cap?st.cap+'p':'Maximum'],['60 images/s',st.fps60?'Oui':'Non'],['Compte Twitch',st.tok?(st.acct||'Lié'):'Non'],['1440p',st.hevc?'Oui':'Non'],['Relais sans pub',st.relay?'Oui':'Non'],['Mode ordinateur',st.pc?'Oui':'Non'],['Mot de passe',newPw?'Défini':(edit?'Inchangé':'—')]];
+  h='<h1>'+(edit?'Tout est bon ?':'Dernière étape')+'</h1><p class="sub">Vérifie ton récapitulatif, puis '+(edit?'enregistre.':'crée ton lien.')+'</p><div class="sum">'+L.map((r,i)=>'<div style="animation-delay:'+(i*.04)+'s"><span>'+r[0]+'</span><b>'+esc(r[1])+'</b></div>').join('')+'</div>'
+  +(edit?'<div class="note ok" style="margin-top:16px">Enregistrer met à jour ton addon <b>sans réinstallation</b>.</div>':persistent?'':'<div class="note w" style="margin-top:16px">Base de données non configurée : lien classique, sans mot de passe, à réinstaller après chaque changement.</div>');}
+ if(step===4&&result)h='<div class="done"><div class="ck"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg></div><h1>'+(edit?'Configuration enregistrée':'Ton addon est prêt')+'</h1>'
+  +(edit?'<p class="sub" style="margin:0">Les changements sont déjà actifs dans Stremio. Relance simplement la chaîne.</p>':'<p class="sub" style="margin:0">Installe-le une seule fois. Pour changer un réglage plus tard : roue ⚙ de l\'addon dans Stremio (mot de passe demandé).</p>')
   +(result.link?'<div class="url" style="width:100%"><input type="text" id="link" readonly value="'+esc(result.link)+'"><button class="btn" id="copy">Copier</button></div><div class="acts"><a class="btn pr big" href="'+esc(result.stremio)+'">Installer dans Stremio</a></div>':'')
-  +(result.cfgLink?'<div class="note" style="width:100%;text-align:left">Garde ce lien pour modifier tes réglages à tout moment :<br><a class="lnk" href="'+esc(result.cfgLink)+'">'+esc(result.cfgLink)+'</a></div>':'')+'</div>';
+  +(result.cfgLink?'<div class="note" style="width:100%;text-align:left">Ton lien de configuration (mot de passe demandé) :<br><a class="lnk" href="'+esc(result.cfgLink)+'">'+esc(result.cfgLink)+'</a></div>':'')+'</div>';
  let nav='';
- if(!(step===4&&result))nav='<div class="nav"><button class="btn" id="back"'+(step?'':' disabled')+'>← Retour</button>'+(step<4?'<button class="btn pr" id="next">Continuer →</button>':'<button class="btn pr big" id="go"'+(busy?' disabled':'')+'>'+(busy?'Un instant…':edit?'Enregistrer':'Créer mon lien')+'</button>')+'</div>';
- $('#card').innerHTML=h+nav;steps();bind();
+ if(!(step===4&&result))nav='<div class="nav"><button class="btn" id="back"'+(step?'':' disabled')+'>← Retour</button>'+(step<4?'<button class="btn pr" id="next">Continuer →</button>':'<button class="btn pr big" id="go">'+(edit?'Enregistrer':'Créer mon lien')+'</button>')+'</div>';
+ return '<div class="pane">'+h+nav+'</div>';
 }
-function go(n){if(step===0&&n>0&&clean(st.pseudo).length<2){toast('Choisis d\'abord un pseudo (2 caractères minimum)');return}step=Math.max(0,Math.min(4,n));result=null;view();scrollTo({top:0,behavior:'smooth'})}
+function lockHtml(msg){return '<div class="pane"><div class="lock"><div class="ico"><svg viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div><div><h1>Configuration protégée</h1><p class="sub" style="margin:0">Entre ton mot de passe pour modifier tes réglages.</p></div><div class="row"><label class="lab" for="pwo">Mot de passe</label><div class="fld"><input type="password" id="pwo" autocomplete="current-password" spellcheck="false"><button class="eye" type="button" data-eye="pwo" aria-label="Afficher">'+EYE+'</button></div><span class="err'+(msg?' show':'')+'" id="e-pwo">'+esc(msg||'')+'</span></div><button class="btn pr big" id="unlock" style="width:100%">Déverrouiller</button></div></div>';}
+
+// transition fluide : sortie → mesure → hauteur animée → entrée
+async function show(html,dir=1){
+ const stage=$('#stage'),old=stage.firstElementChild;swapping=true;
+ const h0=stage.offsetHeight;
+ if(old){old.classList.remove('in-l','in-r','fade');old.classList.add(dir>0?'x-l':'x-r');await wait(190);old.remove()}
+ stage.insertAdjacentHTML('beforeend',html);const p=stage.lastElementChild;
+ p.classList.add(old?(dir>0?'in-l':'in-r'):'fade');
+ if(h0){const h1=p.offsetHeight;stage.style.height=h0+'px';stage.offsetHeight;stage.style.height=h1+'px';setTimeout(()=>{stage.style.height=''},480)}
+ steps();bind();swapping=false;
+}
+async function go(n,force){
+ if(swapping)return;
+ n=Math.max(0,Math.min(4,n));if(n===step&&!force)return;
+ if(n>step&&!validate(step))return;
+ const dir=n>=step?1:-1;step=n;result=null;
+ await show(body(),dir);
+ if(n>0||true)scrollTo({top:0,behavior:'smooth'});
+ const f=$('#pseudo');if(step===0&&f&&!st.pseudo)f.focus({preventScroll:true});
+}
+function bad(i,m){const e=$('#'+i);if(e){e.classList.remove('bad');void e.offsetWidth;e.classList.add('bad');e.focus()}const er=$('#e-'+i);if(er){if(m)er.textContent=m;er.classList.add('show')}return false}
+function validate(s){
+ if(s!==0)return true;
+ if(clean(st.pseudo).length<2)return bad('pseudo');
+ if(needPw()){if(newPw.length<6)return bad('pw1');if(newPw!==newPw2)return bad('pw2')}
+ else if(newPw&&newPw.length<6)return bad('pw1');
+ return true;
+}
 async function save(){
- if(st.pseudo.length<2)return go(0);
- busy=true;view();
+ if(busy)return;if(!validate(0))return go(0);
+ busy=true;const g=$('#go');g.disabled=true;g.innerHTML='<span class="sp2"></span> Un instant…';
  try{
-  if(persistent){const r=await api('/api/profile',{id,pseudo:st.pseudo,cfg:opts()});
-   if(!r.ok){if(r.persistent===false){persistent=false;busy=false;return save2()}toast(r.error||'Échec');busy=false;return view()}
-   const o=location.origin;if(!id)fresh=true;id=r.id;try{localStorage.twprofile=JSON.stringify({id,pseudo:st.pseudo})}catch{}
-   result={link:o+'/u/'+id+'/manifest.json',stremio:'stremio://'+location.host+'/u/'+id+'/manifest.json',cfgLink:o+'/u/'+id+'/configure'};
+  if(persistent){
+   const r=await api('/api/profile',{id,password:curPw,newPassword:newPw||undefined,pseudo:st.pseudo,cfg:opts()});
+   if(!r.ok){if(r.persistent===false){persistent=false;busy=false;return save2()}toast(r.error||'Échec');busy=false;g.disabled=false;g.textContent=id?'Enregistrer':'Créer mon lien';return}
+   if(!id)fresh=true;id=r.id;if(newPw){curPw=newPw;nopw=false}newPw=newPw2='';
+   try{localStorage.twprofile=JSON.stringify({id,pseudo:st.pseudo})}catch{}
+   const o=location.origin;result={link:o+'/u/'+id+'/manifest.json',stremio:'stremio://'+location.host+'/u/'+id+'/manifest.json',cfgLink:o+'/u/'+id+'/configure'};
   }else return save2();
- }catch(e){toast('Erreur : '+e.message)}
- busy=false;view();
+ }catch(e){toast('Erreur : '+e.message);busy=false;g.disabled=false;return}
+ busy=false;await show(body(),1);scrollTo({top:0,behavior:'smooth'});
 }
-function save2(){const u=location.origin+'/c/'+st.pseudo+'/'+b64(opts())+'/manifest.json';result={link:u,stremio:'stremio://'+u.replace(/^https?:\/\//,'')};busy=false;view()}
+function save2(){const u=location.origin+'/c/'+st.pseudo+'/'+b64(opts())+'/manifest.json';result={link:u,stremio:'stremio://'+u.replace(/^https?:\/\//,'')};busy=false;show(body(),1)}
 function bind(){
+ const $$=(s,f)=>document.querySelectorAll(s).forEach(f);
  $('#back')&&($('#back').onclick=()=>go(step-1));$('#next')&&($('#next').onclick=()=>go(step+1));$('#go')&&($('#go').onclick=save);
- document.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{st[b.dataset.t]=!st[b.dataset.t];b.classList.toggle('on')});
+ $$('[data-t]',el=>el.onclick=()=>{const k=el.dataset.t;st[k]=!st[k];el.querySelector('.sw').classList.toggle('on',st[k])});
+ $$('[data-eye]',b=>b.onclick=()=>{const i=$('#'+b.dataset.eye);i.type=i.type==='password'?'text':'password'});
+ const unbad=e=>{e.target.classList.remove('bad');const er=$('#e-'+e.target.id);er&&er.classList.remove('show')};
+ $$('input',i=>i.addEventListener('input',unbad));
  if($('#pseudo'))$('#pseudo').oninput=e=>{st.pseudo=clean(e.target.value);e.target.value=st.pseudo};
  if($('#device'))$('#device').oninput=e=>{st.device=e.target.value.replace(/[^\p{L}\p{N} _\-.]/gu,'').slice(0,24)};
- if($('#cap'))$('#cap').onclick=e=>{if(e.target.dataset.v!==undefined){st.cap=+e.target.dataset.v;view()}};
+ if($('#pw1')){$('#pw1').value=newPw;$('#pw1').oninput=e=>{newPw=e.target.value;$('#meter').className='meter s'+strength(newPw)};$('#meter').className='meter s'+strength(newPw)}
+ if($('#pw2')){$('#pw2').value=newPw2;$('#pw2').oninput=e=>{newPw2=e.target.value}}
+ if($('#cap'))$('#cap').onclick=e=>{const b=e.target.closest('[data-v]');if(!b)return;st.cap=+b.dataset.v;$$('#cap button',x=>x.classList.toggle('on',x===b))};
  if($('#fixed'))$('#fixed').onchange=e=>{st.fixed=+e.target.value};
- if($('#copy'))$('#copy').onclick=async()=>{try{await navigator.clipboard.writeText($('#link').value)}catch{$('#link').select();document.execCommand('copy')}toast('Lien copié')};
- if($('#tokDel'))$('#tokDel').onclick=()=>{st.tok='';st.acct='';st.hevc=false;view()};
- if($('#tokBtn'))$('#tokBtn').onclick=async()=>{const v=$('#tokIn').value.trim();if(!v)return toast('Colle d\'abord la valeur du cookie');const b=$('#tokBtn');b.disabled=true;b.textContent='Vérification…';
-  try{const r=await api('/api/seal',{token:v});if(r.ok){st.tok=r.sealed;st.acct=r.login||'';st.hevc=true;toast('Compte lié : '+(r.login||'ok'));return view()}toast(r.error||'Échec')}catch(e){toast('Erreur : '+e.message)}
+ if($('#copy'))$('#copy').onclick=async()=>{try{await navigator.clipboard.writeText($('#link').value)}catch{$('#link').select();document.execCommand('copy')}toast('Lien copié ✓')};
+ if($('#acctNote'))acct();
+ if($('#tokDel'))$('#tokDel').onclick=()=>{st.tok='';st.acct='';st.hevc=false;acct();$$('[data-t=hevc] .sw',s=>s.classList.remove('on'))};
+ if($('#tokBtn'))$('#tokBtn').onclick=async()=>{const v=$('#tokIn').value.trim();if(!v)return bad('tokIn')&&toast('Colle d\'abord la valeur du cookie');const b=$('#tokBtn');b.disabled=true;b.innerHTML='<span class="sp2"></span>';
+  try{const r=await api('/api/seal',{token:v});if(r.ok){st.tok=r.sealed;st.acct=r.login||'';st.hevc=true;$('#tokIn').value='';acct();$$('[data-t=hevc] .sw',s=>s.classList.add('on'));toast('Compte lié : '+(r.login||'ok'))}else{toast(r.error||'Échec')}}catch(e){toast('Erreur : '+e.message)}
   b.disabled=false;b.textContent='Lier'};
- if($('#find'))$('#find').onclick=()=>{$('#findRow').hidden=false;$('#paste').focus()};
- if($('#paste'))$('#paste').oninput=async e=>{const v=e.target.value,u=v.match(/\/u\/([A-Za-z0-9_-]{16,40})\//),c=v.match(/\/c\/([^/]+)\/([^/]+)\//);
-  try{if(u){location.href='/u/'+u[1]+'/configure'}else if(c){Object.assign(st,unb64(c[2]),{pseudo:clean(decodeURIComponent(c[1]))});toast('Réglages retrouvés');view()}else toast('Lien non reconnu')}catch{toast('Lien non reconnu')}};
+ if($('#find'))$('#find').onclick=()=>{$('#findRow').hidden=false;$('#find').hidden=true;$('#paste').focus()};
+ if($('#paste'))$('#paste').oninput=e=>{const v=e.target.value,u=v.match(/\/u\/([A-Za-z0-9_-]{16,40})\//),c=v.match(/\/c\/([^/]+)\/([^/]+)\//);
+  try{if(u){location.href='/u/'+u[1]+'/configure'}else if(c){Object.assign(st,unb64(c[2]),{pseudo:clean(decodeURIComponent(c[1]))});legacy=true;toast('Réglages retrouvés ✓');go(0,true)}else toast('Lien non reconnu')}catch{toast('Lien non reconnu')}};
+ if($('#unlock')){const u=async()=>{const p=$('#pwo').value;if(!p)return bad('pwo','Entre ton mot de passe.');const b=$('#unlock');b.disabled=true;b.innerHTML='<span class="sp2"></span>';
+   try{const r=await api('/api/profile',{id,action:'open',password:p});
+    if(r.ok){curPw=p;nopw=!!r.nopw;Object.assign(st,r.cfg,{pseudo:r.pseudo});locked=false;$('#steps').classList.remove('off');step=0;await show(body(),1);return}
+    b.disabled=false;b.textContent='Déverrouiller';bad('pwo',r.error||'Échec')}catch(e){b.disabled=false;b.textContent='Déverrouiller';toast('Erreur : '+e.message)}};
+  $('#unlock').onclick=u;$('#pwo').onkeydown=e=>{if(e.key==='Enter')u()};$('#pwo').focus({preventScroll:true})}
 }
+function acct(){const n=$('#acctNote');if(!n)return;n.className='note'+(st.tok?' ok':'');n.innerHTML=st.tok?'Compte lié'+(st.acct?' : <b>'+esc(st.acct)+'</b>':'')+'.':'Aucun compte lié : le 1440p ne sera pas proposé.';const d=$('#tokDel');if(d)d.hidden=!st.tok}
 $('#steps').onclick=e=>{const b=e.target.closest('[data-s]');if(b)go(+b.dataset.s)};
+document.addEventListener('keydown',e=>{if(e.key!=='Enter'||e.target.tagName==='BUTTON'||e.target.tagName==='SUMMARY'||e.target.id==='tokIn'||e.target.id==='pwo'||locked||result)return;const n=$('#next');if(n)n.click();else if($('#go'))$('#go').click()});
 (async()=>{
  const m=location.pathname.match(/\/u\/([A-Za-z0-9_-]{16,40})\/configure/),c=location.pathname.match(/\/c\/([^/]+)\/([^/]+)\/configure/);
  try{const p=await api('/api/profile'+(m?'?id='+m[1]:''));persistent=p.persistent!==false;
-  if(m){if(p.ok){id=m[1];Object.assign(st,p.cfg,{pseudo:p.pseudo,acct:p.cfg.tok?'':''});$('#mode').textContent='Modifier'}else{$('#card').innerHTML='<h1>Profil introuvable</h1><p class="sub">Ce lien de configuration n\'existe pas. <a class="lnk" href="/config">Créer un nouveau lien</a></p>';return}}
-  else if(c){try{Object.assign(st,unb64(c[2]),{pseudo:clean(decodeURIComponent(c[1]))});legacy=true;$('#mode').textContent='Migration'}catch{}}
+  if(m){
+   if(!p.ok){await show('<div class="pane"><h1>Profil introuvable</h1><p class="sub">Ce lien de configuration n\'existe pas. <a class="lnk" href="/config">Créer un nouveau lien</a></p></div>');return}
+   id=m[1];$('#mode').textContent='Modifier';
+   if(p.locked){locked=true;await show(lockHtml());return}
+   nopw=true;Object.assign(st,p.cfg,{pseudo:p.pseudo});
+  }else if(c){try{Object.assign(st,unb64(c[2]),{pseudo:clean(decodeURIComponent(c[1]))});legacy=true;$('#mode').textContent='Migration'}catch{}}
   else{try{const l=JSON.parse(localStorage.twprofile||'null');if(l&&l.id&&persistent){const q=await api('/api/profile?id='+l.id);if(q.ok){location.replace('/u/'+l.id+'/configure');return}}}catch{}}
  }catch{}
- view();
+ $('#steps').classList.remove('off');steps();await show(body());
 })();
 </script>
 </body>

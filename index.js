@@ -452,8 +452,13 @@ const adminRoute = makeAdmin({ send, json, relayReport, probe, check: async (log
 // Profils enregistrés : /u/<id>/… (l'identifiant est le secret). Les réglages sont modifiables sans réinstaller l'addon.
 const ID_RE = /^[A-Za-z0-9_-]{16,40}$/;
 async function loadProfile(id) {
-  try { const raw = await store.getKey('p:' + id); if (!raw) return null; const p = JSON.parse(raw); return { pseudo: cfgLib.cleanPseudo(p.pseudo), cfg: cfgLib.normalize(p.cfg) }; } catch { return null; }
+  try { const raw = await store.getKey('p:' + id); if (!raw) return null; const p = JSON.parse(raw); return { pseudo: cfgLib.cleanPseudo(p.pseudo), cfg: cfgLib.normalize(p.cfg), pw: typeof p.pw === 'string' ? p.pw : '' }; } catch { return null; }
 }
+const pwHash = pw => { const salt = crypto.randomBytes(16); return salt.toString('base64url') + ':' + crypto.scryptSync(String(pw), salt, 32).toString('base64url'); };
+const pwCheck = (pw, h) => { try { const [s, k] = String(h).split(':'), a = crypto.scryptSync(String(pw), Buffer.from(s, 'base64url'), 32), b = Buffer.from(k, 'base64url'); return a.length === b.length && crypto.timingSafeEqual(a, b); } catch { return false; } };
+const fails = new Map(); // essais de mot de passe ratés : 8 par profil et par 10 minutes
+const locked = id => { const f = fails.get(id); return !!f && f.n >= 8 && Date.now() - f.t < 600000; };
+const failed = id => { const f = fails.get(id), now = Date.now(); fails.set(id, f && now - f.t < 600000 ? { n: f.n + 1, t: f.t } : { n: 1, t: now }); if (fails.size > 500) fails.clear(); };
 async function profileApi(req) {
   if (tooMany(req)) return { ok: false, error: 'trop de demandes, réessaie dans une minute' };
   if (req.method === 'GET') {
@@ -461,19 +466,30 @@ async function profileApi(req) {
     if (!id) return { ok: true, persistent: store.persistent };
     if (!ID_RE.test(id)) return { ok: false, error: 'Lien inconnu' };
     const p = await loadProfile(id);
-    return p ? { ok: true, persistent: store.persistent, pseudo: p.pseudo, cfg: p.cfg } : { ok: false, error: 'Profil introuvable' };
+    if (!p) return { ok: false, error: 'Profil introuvable' };
+    return p.pw ? { ok: true, persistent: store.persistent, locked: true } : { ok: true, persistent: store.persistent, locked: false, nopw: true, pseudo: p.pseudo, cfg: p.cfg };
   }
   if (!store.persistent) return { ok: false, persistent: false, error: 'La base de données n\'est pas configurée : utilise le lien classique.' };
   let b = {}; try { b = JSON.parse(await readBody(req)); } catch { return { ok: false, error: 'requête invalide' }; }
+  const id0 = String(b.id || ''), pw = String(b.password || '').slice(0, 100), npw = String(b.newPassword || '').slice(0, 100);
+  let old = null;
+  if (id0) {
+    if (!ID_RE.test(id0) || !(old = await loadProfile(id0))) return { ok: false, error: 'Profil introuvable' };
+    if (old.pw) {
+      if (locked(id0)) return { ok: false, error: 'Trop d\'essais : réessaie dans 10 minutes.' };
+      if (!pwCheck(pw, old.pw)) { failed(id0); return { ok: false, bad: true, error: 'Mot de passe incorrect' }; }
+    }
+    if (b.action === 'open') return { ok: true, pseudo: old.pseudo, cfg: old.cfg, nopw: !old.pw };
+  }
+  if ((!old || !old.pw) && npw.length < 6) return { ok: false, error: 'Choisis un mot de passe d\'au moins 6 caractères' };
+  if (npw && npw.length < 6) return { ok: false, error: 'Mot de passe : 6 caractères minimum' };
   const pseudo = cfgLib.cleanPseudo(b.pseudo);
   if (pseudo.length < 2) return { ok: false, error: 'Pseudo trop court (2 caractères minimum)' };
   const cfg = cfgLib.normalize(b.cfg);
   if (cfg.tok && !sealLib.open(cfg.tok)) cfg.tok = '';
-  let id = String(b.id || '');
-  if (id) { if (!ID_RE.test(id) || !(await loadProfile(id))) return { ok: false, error: 'Profil introuvable' }; }
-  else id = crypto.randomBytes(16).toString('base64url');
-  await store.setKey('p:' + id, JSON.stringify({ pseudo, cfg, maj: Date.now() }));
-  store.log({ k: 'config', u: pseudo, niveau: 'INFO', reglages: summary(cfg), action: b.id ? 'modifiée' : 'créée' });
+  const id = id0 || crypto.randomBytes(16).toString('base64url');
+  await store.setKey('p:' + id, JSON.stringify({ pseudo, cfg, pw: npw ? pwHash(npw) : old.pw, maj: Date.now() }));
+  store.log({ k: 'config', u: pseudo, niveau: 'INFO', reglages: summary(cfg), action: id0 ? 'modifiée' : 'créée' });
   return { ok: true, id, pseudo };
 }
 
