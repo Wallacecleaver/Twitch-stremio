@@ -480,6 +480,7 @@ async function profileApi(req) {
       if (!pwCheck(pw, old.pw)) { failed(id0); return { ok: false, bad: true, error: 'Mot de passe incorrect' }; }
     }
     if (b.action === 'open') return { ok: true, pseudo: old.pseudo, cfg: old.cfg, nopw: !old.pw };
+    if (b.action === 'delete') { await store.delKey('p:' + id0); store.log({ k: 'config', u: old.pseudo, niveau: 'INFO', action: 'supprimée' }); return { ok: true, deleted: true }; }
   }
   if ((!old || !old.pw) && npw.length < 6) return { ok: false, error: 'Choisis un mot de passe d\'au moins 6 caractères' };
   if (npw && npw.length < 6) return { ok: false, error: 'Mot de passe : 6 caractères minimum' };
