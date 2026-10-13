@@ -84,6 +84,7 @@ footer{position:relative;z-index:1;text-align:center;color:var(--t3);font-size:.
 .lnk{color:var(--a);cursor:pointer;text-decoration:none;background:none;border:0;font:inherit;text-align:left;transition:.2s}.lnk:hover{color:#c4a1ff;text-decoration:underline}
 :focus-visible{outline:2px solid var(--a);outline-offset:3px;border-radius:8px}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-delay:0s!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+@media(max-width:520px){.url{flex-wrap:wrap}.url input{flex:1 1 100%;min-width:0}.url .btn{flex:1}.idbox .url input{font-size:.85rem;letter-spacing:0}}
 </style>
 </head>
 <body>
@@ -92,7 +93,7 @@ footer{position:relative;z-index:1;text-align:center;color:var(--t3);font-size:.
 <div class="tabs" id="tabs"><i class="ind" id="ind"></i><button class="tab on" data-tab="create">Créer un profil</button><button class="tab" data-tab="login">Se connecter</button></div>
 <div class="steps off" id="steps"></div>
 <div class="stage" id="stage"></div>
-<footer>Ton pseudo apparaît dans le journal de l'administrateur pour retrouver tes lectures en cas de problème.</footer>
+<footer id="foot">Ton pseudo apparaît dans le journal de l'administrateur pour retrouver tes lectures en cas de problème.</footer>
 </div>
 <div class="toast" id="toast"></div>
 <script>
@@ -101,7 +102,7 @@ const CAPS=[[0,'Maximum'],[1440,'1440p'],[1080,'1080p'],[720,'720p'],[480,'480p'
 const STEPS=['Profil','Qualité','Compte','Options','Terminer'];
 const EYE='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
 const st={pseudo:'',device:'',cap:0,fps60:true,relay:true,hevc:false,tok:'',acct:'',fixed:3,audio:false,pc:false};
-let step=0,id='',fresh=false,persistent=true,result=null,busy=false,legacy=false,nopw=true,curPw='',newPw='',newPw2='',locked=false,swapping=false,known=null;
+let step=0,id='',fresh=false,persistent=true,result=null,busy=false,legacy=false,nopw=true,curPw='',newPw='',newPw2='',locked=false,welcome=false,swapping=false,known=null;
 const clean=p=>String(p||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9_]/g,'').slice(0,20);
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const b64=o=>btoa(unescape(encodeURIComponent(JSON.stringify(o)))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
@@ -109,7 +110,7 @@ const unb64=s=>JSON.parse(decodeURIComponent(escape(atob(s.replace(/-/g,'+').rep
 const toast=m=>{const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.remove('show'),2600)};
 const opts=()=>({cap:st.cap,fps60:st.fps60,relay:st.relay,hevc:st.hevc,tok:st.tok,fixed:st.fixed,audio:st.audio,pc:st.pc,device:st.device});
 const api=(u,b)=>fetch(u,b?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}:{}).then(r=>r.json());
-const sw=(k,t,d)=>'<div class="tg spot" data-t="'+k+'"><div><b>'+t+'</b><span>'+d+'</span></div><button class="sw'+(st[k]?' on':'')+'" tabindex="-1" aria-hidden="true"></button></div>';
+const sw=(k,t,d)=>'<div class="tg spot" data-t="'+k+'" role="switch" tabindex="0" aria-checked="'+!!st[k]+'" aria-label="'+t+'"><div><b>'+t+'</b><span>'+d+'</span></div><button class="sw'+(st[k]?' on':'')+'" tabindex="-1" aria-hidden="true"></button></div>';
 const pwField=(i,ph)=>'<div class="fld"><input type="password" id="'+i+'" placeholder="'+ph+'" autocomplete="new-password" spellcheck="false"><button class="eye" type="button" data-eye="'+i+'" aria-label="Afficher">'+EYE+'</button></div>';
 const strength=p=>{let s=0;if(p.length>=6)s++;if(p.length>=10)s++;if(/[A-Z]/.test(p)&&/[a-z]/.test(p))s++;if(/\d/.test(p)&&/[^A-Za-z0-9]/.test(p)||p.length>=14)s++;return p?Math.max(1,s):0};
 const needPw=()=>!id||nopw||fresh;
@@ -125,7 +126,7 @@ function body(){
  const idRow=id?'<div class="row"><span class="lab">Identifiant du profil</span><div class="url"><input type="text" id="idv" readonly value="'+esc(id)+'"><button class="btn" id="copyid">Copier</button></div><span class="hint">C\'est le code unique de ton profil. Avec ton mot de passe, il te permet de te reconnecter ici (onglet « Se connecter »).</span></div>':'';
  if(step===0){
   h=(edit?'<h1>Modifier ma configuration</h1><p class="sub">Change ce que tu veux puis enregistre. <b>Rien à réinstaller</b> : ton addon dans Stremio est mis à jour tout seul.</p>'
-   :'<div class="hero"><h1>Bienvenue 👋</h1><p>Cet addon ajoute les <b>lives Twitch</b> dans Stremio. Tu choisis une chaîne en direct, elle se lance dans Stremio sur PC, TV ou téléphone, avec la qualité que tu veux (jusqu\'au 1440p) et <b>sans publicité</b> quand c\'est possible.</p><div class="feat"><div class="spot"><b>📺 Dans Stremio</b>Un catalogue de lives, comme un film ou une série.</div><div class="spot"><b>🚫 Sans pub</b>Le flux est récupéré ailleurs pour éviter les écrans de pub.</div><div class="spot"><b>⚙️ À ta façon</b>Chaque personne a son profil et ses propres réglages.</div></div><div class="why"><b>Comment ça marche ?</b> Tu crées ton profil en 5 étapes (2 minutes), tu l\'installes <b>une seule fois</b> dans Stremio, et tu pourras toujours modifier tes réglages ensuite sans réinstaller.</div></div>')
+   :'<h1>Ton profil</h1><p class="sub">Choisis un pseudo et un mot de passe. Tu pourras revenir modifier tes réglages quand tu veux, sans réinstaller.</p>'+(legacy?'<div class="why" style="margin-bottom:18px"><b>Ancien lien reconnu :</b> tes réglages ont été repris. Il te reste à choisir un mot de passe pour créer ton nouveau profil.</div>':''))
   +'<div class="grid">'
   +'<div class="row"><label class="lab" for="pseudo">Ton pseudo</label><input type="text" id="pseudo" maxlength="20" placeholder="ex : christophe" autocomplete="off" spellcheck="false" value="'+esc(st.pseudo)+'"><span class="err" id="e-pseudo">Choisis un pseudo de 2 caractères minimum.</span><span class="hint"><b>À quoi il sert ?</b> C\'est le nom de ton profil : il apparaît dans Stremio (« Twitch · '+esc(st.pseudo||'pseudo')+' ») et permet à l\'administrateur de retrouver tes lectures s\'il y a un souci. Ce n\'est <b>pas</b> un identifiant de connexion : mets ce que tu veux (2 à 20 lettres, chiffres ou _).</span></div>'
   +'<div class="row"><label class="lab" for="device">Appareil <span class="hint">(facultatif)</span></label><input type="text" id="device" maxlength="24" placeholder="ex : PC, TV salon, téléphone" value="'+esc(st.device)+'"><span class="hint">Le nom de l\'appareil où tu vas installer l\'addon. Pratique si tu fais un profil par appareil : on voit tout de suite lequel pose problème.</span></div>'
@@ -134,7 +135,7 @@ function body(){
   +(needPw()?'<div class="row"><label class="lab" for="pw2">Confirme le mot de passe</label>'+pwField('pw2','Retape-le')+'<span class="err" id="e-pw2">Les deux mots de passe ne correspondent pas.</span><span class="hint">Pour être sûr qu\'il n\'y a pas de faute de frappe.</span></div>':'')
   +'</div>';
  }
- if(step===1)h='<h1>Qualité de lecture</h1><p class="sub">Ces réglages décident de l\'image que Stremio reçoit : plus c\'est haut, plus c\'est beau, mais plus ta connexion et ton appareil doivent suivre.</p><div class="grid"><div class="row"><span class="lab">Qualité maximale</span><div class="seg" id="cap">'+CAPS.map(([v,l])=>'<button data-v="'+v+'" class="'+(st.cap===v?'on':'')+'">'+l+'</button>').join('')+'</div><span class="hint">C\'est un plafond : l\'addon ne proposera jamais mieux. « Maximum » = la meilleure qualité disponible. Si ça saccade ou si ta connexion est lente, descends à 720p ou 480p.</span></div>'
+ if(step===1)h='<h1>Qualité de lecture</h1><p class="sub">Ces réglages décident de l\'image que Stremio reçoit : plus c\'est haut, plus c\'est beau, mais plus ta connexion et ton appareil doivent suivre.</p><div class="grid"><div class="row"><span class="lab">Qualité maximale</span><div class="seg" id="cap">'+CAPS.map(([v,l])=>'<button data-v="'+v+'" aria-pressed="'+(st.cap===v)+'" class="'+(st.cap===v?'on':'')+'">'+l+'</button>').join('')+'</div><span class="hint">C\'est un plafond : l\'addon ne proposera jamais mieux. « Maximum » = la meilleure qualité disponible. Si ça saccade ou si ta connexion est lente, descends à 720p ou 480p.</span></div>'
   +sw('fps60','Autoriser le 60 images/s','Le 60 i/s rend les mouvements plus fluides (jeux, sport) mais pèse plus lourd. Coupe-le sur un vieux PC ou une connexion faible : tu auras du 30 i/s, plus léger.')
   +'<div class="row"><label class="lab" for="fixed">Qualités fixes proposées</label><select id="fixed">'+[0,1,2,3,4,5,6].map(n=>'<option value="'+n+'"'+(st.fixed===n?' selected':'')+'>'+(n===0?'Aucune (automatique seul)':n+' qualité'+(n>1?'s':''))+'</option>').join('')+'</select><span class="hint">Dans Stremio, chaque chaîne affiche plusieurs « sources ». La source <b>« Twitch »</b> adapte la qualité toute seule. Ici, tu choisis combien de sources à <b>qualité fixe</b> (1080p, 720p…) s\'ajoutent, pour forcer une qualité précise.</span></div></div>';
  if(step===2)h='<h1>Compte Twitch <span class="hint">· facultatif</span></h1><p class="sub">Tu peux passer cette étape. Elle ne sert que si tu veux le <b>1440p</b>.</p><div class="grid">'
@@ -163,18 +164,38 @@ function body(){
 }
 function loginHtml(){
  let last=null;try{last=JSON.parse(localStorage.twprofile||'null')}catch{}
- return '<div class="pane"><h1>Se connecter à mon profil</h1><p class="sub">Retrouve ton profil pour changer tes réglages. <b>Pas besoin de réinstaller</b> l\'addon : les changements sont pris en compte tout de suite dans Stremio.</p><div class="grid">'
+ return '<div class="pane"><h1>Se connecter à mon profil</h1><p class="sub">Retrouve ton profil pour changer tes réglages. <b>Pas besoin de réinstaller</b> l\'addon : les changements sont pris en compte tout de suite dans Stremio.</p><div class="grid">'+sessBanner()
  +'<div class="row"><label class="lab" for="lid">Identifiant du profil</label><input type="text" id="lid" placeholder="ex : Ow9Rf28HA40fExULUG44yw" autocomplete="off" spellcheck="false" value="'+esc(last&&last.id||'')+'"><span class="err" id="e-lid">Identifiant non reconnu.</span><span class="hint">'+(last&&last.pseudo?'Rempli avec le profil <b>'+esc(last.pseudo)+'</b> de cet appareil. ':'')+'C\'est le code affiché à la fin de la création de ton profil. Tu peux aussi coller ton lien de configuration ou d\'installation en entier : je retrouve le code dedans.</span></div>'
- +'<div class="row"><label class="lab" for="lpw">Mot de passe</label>'+pwField('lpw','Ton mot de passe')+'<span class="err" id="e-lpw"></span><span class="hint">Celui choisi à la création du profil. Si tu l\'as oublié, il ne peut pas être récupéré : il faudra créer un nouveau profil.</span></div></div>'
+ +'<div class="row"><label class="lab" for="lpw">Mot de passe</label>'+pwField('lpw','Ton mot de passe')+'<span class="err" id="e-lpw"></span><span class="hint">Celui choisi à la création du profil. Si tu l\'as oublié, contacte l\'administrateur : il peut le réinitialiser, et tu pourras alors te connecter avec ce champ vide pour en choisir un nouveau.</span></div></div>'
  +'<div class="nav" style="justify-content:flex-end"><button class="btn pr big" id="login">Se connecter</button></div></div>';
 }
 
+
+const SS={get(){try{const o=JSON.parse(sessionStorage.twsess||'null');return o&&o.id&&Date.now()-o.t<600000?o:null}catch{return null}},set(i,pw,ps){try{sessionStorage.twsess=JSON.stringify({id:i,pw,pseudo:ps,t:Date.now()})}catch{}},clear(){try{sessionStorage.removeItem('twsess')}catch{}}};
+const FOOT='Ton pseudo apparaît dans le journal de l\'administrateur pour retrouver tes lectures en cas de problème.';
+function foot(){const f=$('#foot');if(f)f.innerHTML=id?'Connecté : <b>'+esc(st.pseudo)+'</b> · <button class="lnk" id="logout">Se déconnecter</button> · session gardée 10 min dans cet onglet':FOOT}
+document.addEventListener('click',e=>{if(e.target.id==='logout'){SS.clear();location.href='/config'}});
+const sessBanner=()=>{const o=SS.get();return o?'<div class="note ok">Session active : <b>'+esc(o.pseudo||'profil')+'</b> <button class="lnk" id="resume">Reprendre →</button></div>':''};
+function welcomeHtml(){
+ return '<div class="pane"><div class="eyebrow">Bienvenue</div><h1>Les lives Twitch, dans Stremio 👋</h1><div class="grid"><p style="color:var(--t2)">Cet addon ajoute les <b>lives Twitch</b> dans Stremio. Tu choisis une chaîne en direct, elle se lance sur PC, TV ou téléphone, avec la qualité que tu veux (jusqu\'au 1440p) et <b>sans publicité</b> quand c\'est possible.</p>'
+ +'<div class="feat"><div class="spot"><b>📺 Dans Stremio</b>Un catalogue de lives, comme un film ou une série.</div><div class="spot"><b>🚫 Sans pub</b>Le flux est récupéré ailleurs pour éviter les écrans de pub.</div><div class="spot"><b>⚙️ À ta façon</b>Chaque personne a son profil et ses propres réglages.</div></div>'
+ +'<div class="why"><b>Comment ça marche ?</b> Tu crées ton profil en 5 étapes (environ 2 minutes), tu l\'installes <b>une seule fois</b> dans Stremio, puis tu pourras toujours modifier tes réglages sans réinstaller.</div>'+sessBanner()+'</div>'
+ +'<div class="nav" style="justify-content:flex-end"><button class="btn pr big" id="start">Commencer →</button></div></div>';
+}
+async function enter(i,pw,r){
+ id=i;curPw=pw;nopw=!!r.nopw;fresh=false;welcome=false;locked=false;Object.assign(st,r.cfg,{pseudo:r.pseudo});SS.set(id,pw,r.pseudo);
+ try{localStorage.twprofile=JSON.stringify({id,pseudo:r.pseudo})}catch{}
+ $('#tabs').classList.add('off');$('#mode').textContent='Modifier';$('#steps').classList.remove('off');foot();step=0;await show(body(),1);
+}
+async function resume(){const o=SS.get();if(!o)return;try{const r=await api('/api/profile',{id:o.id,action:'open',password:o.pw});if(r.ok)return enter(o.id,o.pw,r);SS.clear();toast('Session expirée : reconnecte-toi')}catch(e){toast('Erreur : '+e.message)}}
+function setSw(k,v){st[k]=v;document.querySelectorAll('[data-t="'+k+'"]').forEach(el=>{el.setAttribute('aria-checked',v);el.querySelector('.sw').classList.toggle('on',v)})}
 function tabs(m){document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.tab===m));moveInd()}
 function moveInd(){const t=document.querySelector('.tab.on'),i=$('#ind');if(t&&i){i.style.width=t.offsetWidth+'px';i.style.transform='translateX('+t.offsetLeft+'px)'}}
 addEventListener('resize',moveInd);
 async function setTab(m){
  if(swapping||busy)return;tabs(m);
  if(m==='login'){$('#steps').classList.add('off');await show(loginHtml(),1)}
+ else if(!legacy&&!id){welcome=true;$('#steps').classList.add('off');result=null;await show(welcomeHtml(),-1)}
  else{$('#steps').classList.remove('off');step=0;result=null;await show(body(),-1)}
 }
 document.addEventListener('click',e=>{const t=e.target.closest('.tab');if(t)setTab(t.dataset.tab)});
@@ -186,8 +207,7 @@ async function doLogin(){
  if(!m)return bad('lid','Identifiant non reconnu : colle le code complet ou ton lien.');
  const b=$('#login');b.disabled=true;b.innerHTML='<span class="sp2"></span> Connexion…';
  try{const r=await api('/api/profile',{id:m[1],action:'open',password:pw});
-  if(r.ok){id=m[1];curPw=pw;nopw=!!r.nopw;fresh=false;Object.assign(st,r.cfg,{pseudo:r.pseudo});try{localStorage.twprofile=JSON.stringify({id,pseudo:r.pseudo})}catch{}
-   $('#tabs').classList.add('off');$('#mode').textContent='Modifier';$('#steps').classList.remove('off');step=0;await show(body(),1);return}
+  if(r.ok)return enter(m[1],pw,r);
   b.disabled=false;b.textContent='Se connecter';
   if(r.bad)bad('lpw',r.error);else if(/introuvable/i.test(r.error||''))bad('lid','Aucun profil avec cet identifiant.');else bad('lpw',r.error||'Échec');
  }catch(e){b.disabled=false;b.textContent='Se connecter';toast('Erreur : '+e.message)}
@@ -229,7 +249,7 @@ async function save(){
    const r=await api('/api/profile',{id,password:curPw,newPassword:newPw||undefined,pseudo:st.pseudo,cfg:opts()});
    if(!r.ok){if(r.persistent===false){persistent=false;busy=false;return save2()}toast(r.error||'Échec');busy=false;g.disabled=false;g.textContent=id?'Enregistrer':'Créer mon lien';return}
    if(!id)fresh=true;id=r.id;if(newPw){curPw=newPw;nopw=false}newPw=newPw2='';
-   try{localStorage.twprofile=JSON.stringify({id,pseudo:st.pseudo})}catch{}
+   try{localStorage.twprofile=JSON.stringify({id,pseudo:st.pseudo})}catch{}SS.set(id,curPw,st.pseudo);foot();
    const o=location.origin;result={link:o+'/u/'+id+'/manifest.json',stremio:'stremio://'+location.host+'/u/'+id+'/manifest.json',cfgLink:o+'/u/'+id+'/configure'};
   }else return save2();
  }catch(e){toast('Erreur : '+e.message);busy=false;g.disabled=false;return}
@@ -239,7 +259,7 @@ function save2(){const u=location.origin+'/c/'+st.pseudo+'/'+b64(opts())+'/manif
 function bind(){
  const $$=(s,f)=>document.querySelectorAll(s).forEach(f);
  $('#back')&&($('#back').onclick=()=>go(step-1));$('#next')&&($('#next').onclick=()=>go(step+1));$('#go')&&($('#go').onclick=save);
- $$('[data-t]',el=>el.onclick=()=>{const k=el.dataset.t;st[k]=!st[k];el.querySelector('.sw').classList.toggle('on',st[k])});
+ $$('[data-t]',el=>{const t=()=>setSw(el.dataset.t,!st[el.dataset.t]);el.onclick=t;el.onkeydown=e=>{if(e.key===' '||e.key==='Enter'){e.preventDefault();t()}}});
  $$('[data-eye]',b=>b.onclick=()=>{const i=$('#'+b.dataset.eye);i.type=i.type==='password'?'text':'password'});
  const unbad=e=>{e.target.classList.remove('bad');const er=$('#e-'+e.target.id);er&&er.classList.remove('show')};
  $$('input',i=>i.addEventListener('input',unbad));
@@ -247,38 +267,41 @@ function bind(){
  if($('#device'))$('#device').oninput=e=>{st.device=e.target.value.replace(/[^\p{L}\p{N} _\-.]/gu,'').slice(0,24)};
  if($('#pw1')){$('#pw1').value=newPw;$('#pw1').oninput=e=>{newPw=e.target.value;$('#meter').className='meter s'+strength(newPw)};$('#meter').className='meter s'+strength(newPw)}
  if($('#pw2')){$('#pw2').value=newPw2;$('#pw2').oninput=e=>{newPw2=e.target.value}}
- if($('#cap'))$('#cap').onclick=e=>{const b=e.target.closest('[data-v]');if(!b)return;st.cap=+b.dataset.v;$$('#cap button',x=>x.classList.toggle('on',x===b))};
+ if($('#cap'))$('#cap').onclick=e=>{const b=e.target.closest('[data-v]');if(!b)return;st.cap=+b.dataset.v;$$('#cap button',x=>{x.classList.toggle('on',x===b);x.setAttribute('aria-pressed',x===b)})};
  if($('#fixed'))$('#fixed').onchange=e=>{st.fixed=+e.target.value};
  if($('#copy'))$('#copy').onclick=async()=>{try{await navigator.clipboard.writeText($('#link').value)}catch{$('#link').select();document.execCommand('copy')}toast('Lien copié ✓')};
  if($('#acctNote'))acct();
- if($('#tokDel'))$('#tokDel').onclick=()=>{st.tok='';st.acct='';st.hevc=false;acct();$$('[data-t=hevc] .sw',s=>s.classList.remove('on'))};
+ if($('#tokDel'))$('#tokDel').onclick=()=>{st.tok='';st.acct='';st.hevc=false;acct();setSw('hevc',false)};
  if($('#tokBtn'))$('#tokBtn').onclick=async()=>{const v=$('#tokIn').value.trim();if(!v)return bad('tokIn')&&toast('Colle d\'abord la valeur du cookie');const b=$('#tokBtn');b.disabled=true;b.innerHTML='<span class="sp2"></span>';
-  try{const r=await api('/api/seal',{token:v});if(r.ok){st.tok=r.sealed;st.acct=r.login||'';st.hevc=true;$('#tokIn').value='';acct();$$('[data-t=hevc] .sw',s=>s.classList.add('on'));toast('Compte lié : '+(r.login||'ok'))}else{toast(r.error||'Échec')}}catch(e){toast('Erreur : '+e.message)}
+  try{const r=await api('/api/seal',{token:v});if(r.ok){st.tok=r.sealed;st.acct=r.login||'';st.hevc=true;$('#tokIn').value='';acct();setSw('hevc',true);toast('Compte lié : '+(r.login||'ok'))}else{toast(r.error||'Échec')}}catch(e){toast('Erreur : '+e.message)}
   b.disabled=false;b.textContent='Lier'};
  if($('#login'))$('#login').onclick=doLogin;
+ if($('#start'))$('#start').onclick=async()=>{welcome=false;$('#steps').classList.remove('off');step=0;await show(body(),1)};
+ if($('#resume'))$('#resume').onclick=resume;
  if($('#copyid'))$('#copyid').onclick=async()=>{try{await navigator.clipboard.writeText($('#idv').value)}catch{$('#idv').select();document.execCommand('copy')}toast('Identifiant copié ✓')};
  if($('#lid')&&!$('#lid').value)$('#lid').focus({preventScroll:true});else if($('#lpw'))$('#lpw').focus({preventScroll:true});
  if($('#unlock')){const u=async()=>{const p=$('#pwo').value;if(!p)return bad('pwo','Entre ton mot de passe.');const b=$('#unlock');b.disabled=true;b.innerHTML='<span class="sp2"></span>';
    try{const r=await api('/api/profile',{id,action:'open',password:p});
-    if(r.ok){curPw=p;nopw=!!r.nopw;Object.assign(st,r.cfg,{pseudo:r.pseudo});locked=false;$('#steps').classList.remove('off');step=0;await show(body(),1);return}
+    if(r.ok)return enter(id,p,r);
     b.disabled=false;b.textContent='Déverrouiller';bad('pwo',r.error||'Échec')}catch(e){b.disabled=false;b.textContent='Déverrouiller';toast('Erreur : '+e.message)}};
   $('#unlock').onclick=u;$('#pwo').onkeydown=e=>{if(e.key==='Enter')u()};$('#pwo').focus({preventScroll:true})}
 }
 function acct(){const n=$('#acctNote');if(!n)return;n.className='note'+(st.tok?' ok':'');n.innerHTML=st.tok?'Compte lié'+(st.acct?' : <b>'+esc(st.acct)+'</b>':'')+'.':'Aucun compte lié : le 1440p ne sera pas proposé.';const d=$('#tokDel');if(d)d.hidden=!st.tok}
 $('#steps').onclick=e=>{const b=e.target.closest('[data-s]');if(b)go(+b.dataset.s)};
-document.addEventListener('keydown',e=>{if(e.key!=='Enter'||e.target.tagName==='BUTTON'||e.target.tagName==='SUMMARY'||e.target.id==='tokIn'||e.target.id==='pwo'||locked||result)return;const n=$('#next');if(n)n.click();else if($('#go'))$('#go').click();else if($('#login'))$('#login').click()});
+document.addEventListener('keydown',e=>{if(e.key!=='Enter'||e.target.tagName==='BUTTON'||(e.target.dataset&&e.target.dataset.t)||e.target.tagName==='SUMMARY'||e.target.id==='tokIn'||e.target.id==='pwo'||locked||result)return;const n=$('#next');if(n)n.click();else if($('#go'))$('#go').click();else if($('#login'))$('#login').click()});
 (async()=>{
  const m=location.pathname.match(/\/u\/([A-Za-z0-9_-]{16,40})\/configure/),c=location.pathname.match(/\/c\/([^/]+)\/([^/]+)\/configure/);
  try{const p=await api('/api/profile'+(m?'?id='+m[1]:''));persistent=p.persistent!==false;
   if(m){
    if(!p.ok){await show('<div class="pane"><h1>Profil introuvable</h1><p class="sub">Ce lien de configuration n\'existe pas. <a class="lnk" href="/config">Créer un nouveau lien</a></p></div>');return}
    id=m[1];$('#mode').textContent='Modifier';
-   if(p.locked){locked=true;$('#tabs').classList.add('off');await show(lockHtml());return}
+   if(p.locked){const o=SS.get();if(o&&o.id===m[1]){const r=await api('/api/profile',{id:o.id,action:'open',password:o.pw});if(r.ok){moveInd();return enter(o.id,o.pw,r)}SS.clear()}locked=true;$('#tabs').classList.add('off');await show(lockHtml());return}
    nopw=true;Object.assign(st,p.cfg,{pseudo:p.pseudo});
   }else if(c){try{Object.assign(st,unb64(c[2]),{pseudo:clean(decodeURIComponent(c[1]))});legacy=true;$('#mode').textContent='Migration'}catch{}}
  }catch{}
  if(id)$('#tabs').classList.add('off');moveInd();document.fonts&&document.fonts.ready.then(moveInd);
  if(location.hash==='#connexion'){tabs('login');await show(loginHtml());return}
+ if(!id&&!legacy){welcome=true;await show(welcomeHtml());return}
  $('#steps').classList.remove('off');steps();await show(body());
 })();
 </script>
