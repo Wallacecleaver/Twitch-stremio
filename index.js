@@ -333,8 +333,10 @@ const account = {
   async sealed() { const t = await ownerToken(); return t && sealLib.available() ? sealLib.seal(t) : null; },
   async unlink() { await store.delKey('acct'); acctCache = { v: null, exp: 0 }; return { ok: true }; },
 };
+const ADDON_NAME = String(process.env.ADDON_NAME || 'Wallace Live').slice(0, 40);
 const pageCache = {};
-const page = name => pageCache[name] ||= fs.readFileSync(path.join(__dirname, 'lib', 'pages', name), 'utf8');
+const page = name => pageCache[name] ||= fs.readFileSync(path.join(__dirname, 'lib', 'pages', name), 'utf8').replace(/\{\{NAME\}\}/g, ADDON_NAME.replace(/[<>&"]/g, ''));
+const asset = name => pageCache['a:' + name] ||= fs.readFileSync(path.join(__dirname, 'lib', 'assets', name));
 const summary = c => [c.cap ? 'max ' + c.cap + 'p' : 'qualité max', c.fps60 ? '60 i/s' : '30 i/s', c.relay ? 'relais' : 'sans relais', c.fixed + ' fixes', c.hevc ? '1440p' : '', c.tok ? 'compte lié' : '', c.audio ? 'audio' : ''].filter(Boolean).join(' · ');
 const readBody = req => new Promise(r => { let b = ''; req.on('data', c => { b += c; if (b.length > 8000) req.destroy(); }); req.on('end', () => r(b)); req.on('error', () => r(b)); });
 const text = (v, n) => String(v ?? '').replace(/[\u0000-\u001f]/g, ' ').slice(0, n);
@@ -521,13 +523,16 @@ async function handler(req, res) {
     if (['stream', 'catalog', 'p', 'manifest.json'].includes(seg[0])) store.uniq(dev);
 
     if (!seg.length) return send(res, 302, 'text/plain', '', { Location: '/config' });
+    if (seg[0] === 'logo.png') return send(res, 200, 'image/png', asset('logo.png'), { 'Cache-Control': 'public, max-age=86400' });
+    if (seg[0] === 'logo.svg') return send(res, 200, 'image/svg+xml', asset('logo.svg'), { 'Cache-Control': 'public, max-age=86400' });
     if (seg[0] === 'config' || seg[0] === 'configure') return send(res, 200, 'text/html; charset=utf-8', page('config.html'), { 'Cache-Control': 'no-cache' });
     if (seg[0] === 'api' && seg[1] === 'profile') return json(res, await profileApi(req));
     if (seg[0] === 'api' && seg[1] === 'seal' && req.method === 'POST') return json(res, await sealToken(req));
     if (seg[0] === 'api' && seg[1] === 'report' && req.method === 'POST') return json(res, await report(req, dev));
     if (seg[0] === 'manifest.json') {
       store.log({ k: 'install', u: pseudo || undefined, appareil: cfg.device || undefined, reglages: pseudo ? summary(cfg) : 'défaut', dev }); store.user(pseudo, { cfg: { ...cfg, tok: undefined, compte: !!cfg.tok }, dev: cfg.device });
-      return json(res, pseudo ? { ...MANIFEST, name: 'Twitch · ' + pseudo, description: MANIFEST.description + ' — profil de ' + pseudo } : MANIFEST);
+      const mf = { ...MANIFEST, name: ADDON_NAME, logo: originOf(req) + '/logo.png' };
+      return json(res, pseudo ? { ...mf, name: ADDON_NAME + ' · ' + pseudo, description: MANIFEST.description + ' — profil de ' + pseudo } : mf);
     }
 
     if (seg[0] === 'test' && seg[1]) { // diagnostic lisible
