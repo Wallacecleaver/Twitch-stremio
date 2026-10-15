@@ -90,6 +90,10 @@ pre{background:var(--bg2);border:1px solid var(--bs);border-radius:var(--r);padd
 .slay>*{min-width:0}
 .spane{display:none;margin-bottom:0}.spane.on{display:block;animation:f .18s}
 .spane .sh{padding:16px 20px}
+.pt{font-size:.72rem;text-transform:uppercase;letter-spacing:.09em;color:var(--t3);font-weight:600;margin:26px 0 10px}
+.mini{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;margin-bottom:6px}
+.mc{display:flex;gap:12px;align-items:center;background:var(--bg3);border:1px solid var(--bs);border-radius:var(--r);padding:12px 14px}.mc .si{margin:0;width:34px;height:34px;flex:none}.mc .si svg{width:18px;height:18px}.mc b{display:block;font-size:1.15rem;line-height:1.2;font-variant-numeric:tabular-nums}.mc span{font-size:.76rem;color:var(--t2)}
+#p-dash .grid{margin-bottom:12px}#p-dash .sec{margin-bottom:14px}.xn{font-size:.72rem;font-weight:600;color:var(--t2);background:var(--el);border-radius:99px;padding:1px 8px;margin-left:6px}
 </style>
 </head>
 <body>
@@ -104,14 +108,18 @@ pre{background:var(--bg2);border:1px solid var(--bs);border-radius:var(--r);padd
 <div id="ban"></div>
 
 <div class="page on" id="p-dash">
- <div class="grid" id="kpi1"></div><div class="grid" id="kpi2"></div>
+ <div class="pt" style="margin-top:0">Aperçu</div>
+ <div class="grid" id="kpi1"></div><div class="mini" id="kpi2"></div>
+ <div class="pt">Activité</div>
  <div class="cols">
   <div class="sec"><div class="sh"><div class="stt"><svg viewBox="0 0 24 24"><path d="M5 9.2h3V19H5zM10.6 5h2.8v14h-2.8zm5.6 8H19v6h-2.8z"/></svg>Activité · 7 jours</div><div class="leg"><span><i style="background:var(--a)"></i>Lectures</span><span><i style="background:var(--ko)"></i>Incidents</span></div></div><div class="sb"><div class="chart" id="chart"></div></div></div>
   <div class="sec"><div class="sh"><div class="stt"><svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/></svg>Chaînes les plus lancées</div></div><div class="sb" id="topch"></div></div>
  </div>
- <div class="sec"><div class="sh"><div class="stt"><svg viewBox="0 0 24 24"><path d="M5 9.2h3V19H5zM10.6 5h2.8v14h-2.8zm5.6 8H19v6h-2.8z"/></svg>Répartition</div></div><div class="sb"><div class="bg" id="mix"></div></div></div>
+
+ <div class="pt">Répartition</div>
+ <div class="sec"><div class="sh"><div class="stt"><svg viewBox="0 0 24 24"><path d="M5 9.2h3V19H5zM10.6 5h2.8v14h-2.8zm5.6 8H19v6h-2.8z"/></svg>Détail des lectures</div></div><div class="sb"><div class="bg" id="mix"></div></div></div>
+ <div class="pt">Santé</div>
  <div class="sec"><div class="sh"><div class="stt"><svg viewBox="0 0 24 24"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>Derniers incidents</div><span class="cnt" id="incN">0</span></div><div class="sb np tw" id="incs"></div></div>
- <div class="sec"><div class="sh"><div class="stt"><svg viewBox="0 0 24 24"><path d="M15 9H9v6h6V9zm-2 4h-2v-2h2v2zm8-2V9h-2V7c-1.1 0-2-.9-2-2h-2V3h-2v2h-2V3H9v2H7c-1.1 0-2 .9-2 2v2H3v2h2v2H3v2h2v2c0 1.1.9 2 2 2h2v2h2v-2h2v2h2v-2h2c1.1 0 2-.9 2-2v-2h2v-2h-2v-2h2z"/></svg>Système</div></div><div class="sb"><div class="cg" id="sys"></div></div></div>
 </div>
 
 <div class="page" id="p-users">
@@ -264,6 +272,7 @@ const go0=go;go=function(k){go0(k);if(k==='site'&&!SITE0)loadSite()};
 $('#tabs').onclick=e=>{const b=e.target.closest('.tab');if(b)go(b.dataset.k)};go(cur);loadProf();
 async function api(p,o){const r=await fetch('/admin/api/'+p,o);if((r.headers.get('content-type')||'').includes('html')){location.reload();return{}}return r.json()}
 const card=(c,ic,l,v,s)=>'<div class="sc"><div class="si '+c+'"><svg viewBox="0 0 24 24"><path d="'+ic+'"/></svg></div><div class="sl">'+l+'</div><div class="sv">'+v+'</div><div class="ss">'+s+'</div></div>';
+const mc=(c,ic,l,v,sub)=>'<div class="mc"><div class="si '+c+'"><svg viewBox="0 0 24 24"><path d="'+ic+'"/></svg></div><div><b>'+v+'</b><span>'+l+' · '+sub+'</span></div></div>';
 const bi=(rows,empty)=>rows.length?rows.map(([a,b,w])=>'<div><div class="bi"><span>'+a+'</span><span>'+b+'</span></div>'+(w!=null?'<div class="bar"><i style="width:'+w+'%"></i></div>':'')+'</div>').join(''):'<div class="be">'+(empty||'Aucune donnée')+'</div>';
 const IP={u:IC.users,v:'M8 5v14l11-7z',s:'M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z',w:'M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z',x:'M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z',p:'M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z',o:'M18 9v4H6V9H4v6h16V9z'};
 
@@ -273,7 +282,7 @@ function render(){
  $('#upt').textContent=dur(S.up);
  const rel=g('stream_relay'),off=g('stream_official');
  $('#kpi1').innerHTML=card('in',IP.u,'Utilisateurs',n(S.users.length),'pseudos enregistrés')+card('pr',IC.users,'Appareils aujourd\'hui',n(S.uniq[S.uniq.length-1]),'max '+n(Math.max(0,...S.uniq))+' / jour sur 7 j')+card('ok',IP.v,'Lectures demandées',n(g('stream')),n(g('play'))+' en qualité automatique')+card('ok',IP.s,'Sans publicité',pct(rel,rel+off),n(rel)+' via relais · '+n(off)+' officiel');
- $('#kpi2').innerHTML=card('wa',IP.w,'Incidents',n(g('incident')),'blocages et tests échoués')+card('ko',IP.x,'Erreurs serveur',n(g('err')),pct(g('err'),g('req'))+' des requêtes')+card('in',IP.p,'Requêtes',n(g('req')),'depuis le dernier reset')+card('pr',IP.o,'Chaînes hors ligne',n(g('stream_offline')),'demandes sans live');
+ $('#kpi2').innerHTML=mc('wa',IP.w,'Incidents',n(g('incident')),'blocages et tests')+mc('ko',IP.x,'Erreurs',n(g('err')),pct(g('err'),g('req'))+' des requêtes')+mc('in',IP.p,'Requêtes',n(g('req')),'depuis le reset')+mc('pr',IP.o,'Hors ligne',n(g('stream_offline')),'demandes sans live');
  const v1=D.map(d=>g('d:'+d+':stream')),v2=D.map(d=>g('d:'+d+':incident')),mx=Math.max(1,...v1,...v2);
  $('#chart').innerHTML=D.map((d,i)=>'<div class="col"><em>'+n(v1[i])+(v2[i]?' · '+n(v2[i]):'')+'</em><div class="bars"><i class="a" style="height:'+Math.max(2,Math.round(v1[i]/mx*140))+'px"></i><i class="k" style="height:'+Math.max(2,Math.round(v2[i]/mx*140))+'px"></i></div><span>'+d.slice(8)+'/'+d.slice(5,7)+'</span></div>').join('');
  const tm=Math.max(1,...S.top.map(t=>t[1]));
@@ -282,9 +291,8 @@ function render(){
  const byDev={};S.users.forEach(u=>{const k=u.dev||'Non précisé';byDev[k]=(byDev[k]||0)+u.n});
  $('#mix').innerHTML='<div class="bc"><div class="bt">Lectures</div>'+bi([['Relais sans pub',n(rel)+' · '+pct(rel,tot),Math.round(100*rel/tot)],['Flux officiel (repli)',n(off)+' · '+pct(off,tot),Math.round(100*off/tot)],['Hors ligne',n(g('stream_offline'))+' · '+pct(g('stream_offline'),tot),Math.round(100*g('stream_offline')/tot)]])+'</div><div class="bc"><div class="bt">Relais gagnants</div>'+bi(wins.map(([a,b])=>[esc(a),n(b),Math.round(b/wm*100)]))+'</div><div class="bc"><div class="bt">Par appareil (lectures)</div>'+bi(Object.entries(byDev).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([a,b])=>[esc(a),n(b)]))+'</div>';
  $('#incN').textContent=inc.length;
- $('#incs').innerHTML=inc.length?'<table><thead><tr><th>Heure</th><th>Utilisateur</th><th>Chaîne</th><th>Type</th><th>Détail</th></tr></thead><tbody>'+inc.slice(0,12).map(l=>'<tr><td class="dim mono">'+ago(l.t)+'</td><td>'+(l.u?'<span class="user" data-u="'+esc(l.u)+'">'+esc(l.u)+'</span>':'<span class="dim">–</span>')+'</td><td>'+esc(l.ch||'–')+'</td><td><span class="pill '+(l.lvl==='ERROR'?'ko':'wa')+'">'+esc(l.type||l.verdict||l.k)+'</span></td><td>'+esc(l.detail||l.resume||'')+'</td></tr>').join('')+'</tbody></table>':'<div class="empty">Aucun incident. 🎉</div>';
- const mem=S.sys&&S.sys.mem_mb;
- $('#sys').innerHTML=S.config.rows.map(([k,v,ok])=>'<div class="ci"><div class="cl">'+esc(k)+'</div><div class="cv"><i class="dot '+(ok===true?'ok':ok===false?'ko':'')+'"></i>'+esc(v)+'</div></div>').join('')+(S.sys?'<div class="ci"><div class="cl">Mémoire</div><div class="cv">'+mem+' Mo</div></div><div class="ci"><div class="cl">Région</div><div class="cv">'+esc(S.sys.region)+'</div></div><div class="ci"><div class="cl">Node</div><div class="cv">'+esc(S.sys.node)+'</div></div>':'');
+ const gr=new Map();inc.forEach(l=>{const d=l.detail||l.resume||'',k=[l.u,l.ch,l.type||l.verdict||l.k,d].join('|'),e=gr.get(k);if(e)e.n++;else gr.set(k,{...l,d,n:1})});
+ $('#incs').innerHTML=gr.size?'<table><thead><tr><th>Dernière fois</th><th>Utilisateur</th><th>Chaîne</th><th>Type</th><th>Détail</th></tr></thead><tbody>'+[...gr.values()].slice(0,8).map(l=>'<tr><td class="dim mono">'+ago(l.t)+'</td><td>'+(l.u?'<span class="user" data-u="'+esc(l.u)+'">'+esc(l.u)+'</span>':'<span class="dim">–</span>')+'</td><td>'+esc(l.ch||'–')+'</td><td><span class="pill '+(l.lvl==='ERROR'?'ko':'wa')+'">'+esc(l.type||l.verdict||l.k)+'</span>'+(l.n>1?'<span class="xn">×'+l.n+'</span>':'')+'</td><td>'+esc(l.d)+'</td></tr>').join('')+'</tbody></table>':'<div class="empty">Aucun incident. 🎉</div>';
  // utilisateurs
  const q=$('#usq').value.toLowerCase().trim(),us=S.users.slice().sort((a,b)=>(b.last||0)-(a.last||0)).filter(u=>!q||u.pseudo.includes(q)||(u.dev||'').toLowerCase().includes(q));
  $('#usN').textContent=us.length;
@@ -294,7 +302,7 @@ function render(){
  const names=S.config.relais.map(r=>r.name);
  $('#relst').innerHTML='<table><thead><tr><th>Relais</th><th>Réussite</th><th style="width:160px"></th><th class="r">Latence moy.</th><th class="r">Essais</th><th class="r">Gagnant</th></tr></thead><tbody>'+names.map(nm=>{const ok=g('r|'+nm+'|ok'),ko=g('r|'+nm+'|fail'),t=ok+ko,ms=ok?Math.round(g('r|'+nm+'|ms')/ok):0,p=t?Math.round(100*ok/t):0;return '<tr><td>'+esc(nm)+'</td><td><span class="pill '+(!t?'':p>=70?'ok':p>=30?'wa':'ko')+'">'+(t?p+' %':'–')+'</span></td><td><div class="bar" style="margin:0"><i style="width:'+p+'%;background:'+(p>=70?'var(--ok)':p>=30?'var(--wa)':'var(--ko)')+'"></i></div></td><td class="r">'+(ms?ms+' ms':'–')+'</td><td class="r">'+n(t)+'</td><td class="r">'+n(g('r|'+nm+'|win'))+'</td></tr>'}).join('')+'</tbody></table>';
  RLS=S.config.relais;renderRl();
- $('#cfg').innerHTML=S.config.rows.map(([k,v,ok])=>'<div class="ci"><div class="cl">'+esc(k)+'</div><div class="cv"><i class="dot '+(ok===true?'ok':ok===false?'ko':'')+'"></i>'+esc(v)+'</div></div>').join('');
+ $('#cfg').innerHTML=S.config.rows.map(([k,v,ok])=>'<div class="ci"><div class="cl">'+esc(k)+'</div><div class="cv"><i class="dot '+(ok===true?'ok':ok===false?'ko':'')+'"></i>'+esc(v)+'</div></div>').join('')+(S.sys?'<div class="ci"><div class="cl">Mémoire</div><div class="cv">'+S.sys.mem_mb+' Mo</div></div><div class="ci"><div class="cl">Région</div><div class="cv">'+esc(S.sys.region)+'</div></div><div class="ci"><div class="cl">Node</div><div class="cv">'+esc(S.sys.node)+'</div></div>':'');
  // sélecteurs
  const pick=(id,vals,first)=>{const el=$(id),v=el.value;el.innerHTML='<option value="">'+first+'</option>'+vals.map(x=>'<option value="'+esc(x)+'">'+esc(x)+'</option>').join('');el.value=vals.includes(v)?v:''};
  const pseudos=[...new Set([...S.users.map(u=>u.pseudo),...S.logs.map(l=>l.u).filter(Boolean)])].sort();
