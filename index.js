@@ -12,6 +12,7 @@ const store = require('./lib/store');
 const makeAdmin = require('./lib/admin');
 const cfgLib = require('./lib/settings');
 const sealLib = require('./lib/seal');
+const siteLib = require('./lib/site');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
@@ -333,9 +334,16 @@ const account = {
   async sealed() { const t = await ownerToken(); return t && sealLib.available() ? sealLib.seal(t) : null; },
   async unlink() { await store.delKey('acct'); acctCache = { v: null, exp: 0 }; return { ok: true }; },
 };
-const ADDON_NAME = String(process.env.ADDON_NAME || 'Wallace Live').slice(0, 40);
 const pageCache = {};
-const page = name => pageCache[name] ||= fs.readFileSync(path.join(__dirname, 'lib', 'pages', name), 'utf8').replace(/\{\{NAME\}\}/g, ADDON_NAME.replace(/[<>&"]/g, ''));
+const rawPage = name => pageCache[name] ||= fs.readFileSync(path.join(__dirname, 'lib', 'pages', name), 'utf8');
+const page = rawPage;
+const escH = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const accentCss = hex => { const rgb = [1, 3, 5].map(k => parseInt(hex.slice(k, k + 2), 16)), dark = rgb.map(x => Math.round(x * .72).toString(16).padStart(2, '0')).join(''); return ':root{--a:' + hex + ';--ah:#' + dark + ';--as:rgba(' + rgb.join(',') + ',.15)}'; };
+async function configPage() { // page /config : nom, logo, couleur et textes viennent des réglages du site (dashboard)
+  const s = await siteLib.load(), pub = { name: s.name, color: s.color, title: s.title, text: s.text, banner: s.banner, open: s.open, needCode: !!s.code, def: s.def, v: s.logoV };
+  const credit = s.credit ? escH(s.credit) : 'Addon gratuit et non officiel · n\'héberge aucun contenu · créé par <b>Wallace</b>';
+  return rawPage('config.html').replace(/\{\{NAME\}\}/g, () => escH(s.name)).replace(/\{\{COLOR\}\}/g, () => s.color).replace('{{ACCENT}}', () => accentCss(s.color)).replace('{{CREDIT}}', () => credit).replace(/\{\{V\}\}/g, () => String(s.logoV)).replace('{{SITE}}', () => JSON.stringify(pub).replace(/</g, '\\u003c'));
+}
 const asset = name => pageCache['a:' + name] ||= fs.readFileSync(path.join(__dirname, 'lib', 'assets', name));
 const summary = c => [c.cap ? 'max ' + c.cap + 'p' : 'qualité max', c.fps60 ? '60 i/s' : '30 i/s', c.relay ? 'relais' : 'sans relais', c.fixed + ' fixes', c.hevc ? '1440p' : '', c.tok ? 'compte lié' : '', c.audio ? 'audio' : ''].filter(Boolean).join(' · ');
 const readBody = req => new Promise(r => { let b = ''; req.on('data', c => { b += c; if (b.length > 8000) req.destroy(); }); req.on('end', () => r(b)); req.on('error', () => r(b)); });
@@ -483,6 +491,11 @@ async function profileApi(req) {
     }
     if (b.action === 'open') return { ok: true, pseudo: old.pseudo, cfg: old.cfg, nopw: !old.pw };
   }
+  if (!id0) {
+    const S = await siteLib.load();
+    if (!S.open) return { ok: false, error: 'Les inscriptions sont fermées pour le moment.' };
+    if (S.code && String(b.code || '').trim() !== S.code) return { ok: false, bad: 'code', error: 'Code d\'invitation incorrect' };
+  }
   if ((!old || !old.pw) && npw.length < 6) return { ok: false, error: 'Choisis un mot de passe d\'au moins 6 caractères' };
   if (npw && npw.length < 6) return { ok: false, error: 'Mot de passe : 6 caractères minimum' };
   const pseudo = cfgLib.cleanPseudo(b.pseudo);
@@ -523,16 +536,20 @@ async function handler(req, res) {
     if (['stream', 'catalog', 'p', 'manifest.json'].includes(seg[0])) store.uniq(dev);
 
     if (!seg.length) return send(res, 302, 'text/plain', '', { Location: '/config' });
-    if (seg[0] === 'logo.png') return send(res, 200, 'image/png', asset('logo.png'), { 'Cache-Control': 'public, max-age=86400' });
+    if (seg[0] === 'logo.png') {
+      const S = await siteLib.load(); let buf = null, type = 'image/png';
+      if (S.logoV) { try { const m = /^data:(image\/(?:png|jpeg|webp));base64,(.+)$/.exec((await store.getKey('logo')) || ''); if (m) { type = m[1]; buf = Buffer.from(m[2], 'base64'); } } catch { /* logo par défaut */ } }
+      return send(res, 200, type, buf || asset('logo.png'), { 'Cache-Control': 'public, max-age=300' });
+    }
     if (seg[0] === 'logo.svg') return send(res, 200, 'image/svg+xml', asset('logo.svg'), { 'Cache-Control': 'public, max-age=86400' });
-    if (seg[0] === 'config' || seg[0] === 'configure') return send(res, 200, 'text/html; charset=utf-8', page('config.html'), { 'Cache-Control': 'no-cache' });
+    if (seg[0] === 'config' || seg[0] === 'configure') return send(res, 200, 'text/html; charset=utf-8', await configPage(), { 'Cache-Control': 'no-cache' });
     if (seg[0] === 'api' && seg[1] === 'profile') return json(res, await profileApi(req));
     if (seg[0] === 'api' && seg[1] === 'seal' && req.method === 'POST') return json(res, await sealToken(req));
     if (seg[0] === 'api' && seg[1] === 'report' && req.method === 'POST') return json(res, await report(req, dev));
     if (seg[0] === 'manifest.json') {
       store.log({ k: 'install', u: pseudo || undefined, appareil: cfg.device || undefined, reglages: pseudo ? summary(cfg) : 'défaut', dev }); store.user(pseudo, { cfg: { ...cfg, tok: undefined, compte: !!cfg.tok }, dev: cfg.device });
-      const mf = { ...MANIFEST, name: ADDON_NAME, logo: originOf(req) + '/logo.png' };
-      return json(res, pseudo ? { ...mf, name: ADDON_NAME + ' · ' + pseudo, description: MANIFEST.description + ' — profil de ' + pseudo } : mf);
+      const S = await siteLib.load(), mf = { ...MANIFEST, name: S.name, logo: originOf(req) + '/logo.png?v=' + S.logoV };
+      return json(res, pseudo ? { ...mf, name: S.name + ' · ' + pseudo, description: MANIFEST.description + ' — profil de ' + pseudo } : mf);
     }
 
     if (seg[0] === 'test' && seg[1]) { // diagnostic lisible
