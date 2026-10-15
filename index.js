@@ -258,9 +258,13 @@ async function helix(path, qs) {
 const thumb = u => String(u || '').replace('{width}', '440').replace('{height}', '248');
 const metaOf = s => ({
   id: 'twitch:' + s.user_login, type: 'tv', name: s.user_name, poster: thumb(s.thumbnail_url), posterShape: 'landscape', background: thumb(s.thumbnail_url),
-  description: s.title + '\n\n🎮 ' + s.game_name + ' · 👁 ' + s.viewer_count + ' spectateurs', genres: s.game_name ? [s.game_name] : [], releaseInfo: 'EN DIRECT',
+  description: s.title + '\n\n🎮 ' + s.game_name + ' · 👁 ' + fmtN(s.viewer_count) + ' spectateurs', genres: s.game_name ? [s.game_name] : [], releaseInfo: '🔴 ' + fmtN(s.viewer_count) + ' 👁',
 });
 
+const fmtN = n => (n >= 1e6 ? (n / 1e6).toFixed(1).replace('.', ',').replace(',0', '') + ' M' : n >= 1000 ? (n / 1e3).toFixed(n >= 1e5 ? 0 : 1).replace('.', ',').replace(',0', '') + ' k' : String(n)); // 111882 → « 112 k »
+const GAMES = ['Just Chatting', 'Fortnite', 'League of Legends', 'Valorant', 'Counter-Strike', 'Grand Theft Auto V', 'Rocket League', 'Minecraft', 'Call of Duty', 'World of Warcraft', 'Apex Legends', 'Rust', 'EA Sports FC', 'Dead by Daylight', 'Music', 'Sports']; // filtre « jeu » proposé par Stremio
+const byGame = (list, g, get) => (g ? list.filter(x => String(get(x) || '').toLowerCase().includes(g.toLowerCase())) : list);
+const extraOf = e => new URLSearchParams(String(e || '').replace(/\.json$/, ''));
 // Fiche d'une chaîne (photo, titre du live, jeu, spectateurs) via la même API publique que le site web de Twitch : aucune clé nécessaire.
 const INFO_QUERY = 'query ChannelInfo($login: String!) { user(login: $login) { displayName login description profileImageURL(width: 300) bannerImageURL offlineImageURL stream { title viewersCount previewImageURL(width: 1280, height: 720) game { displayName } } } }';
 const infoCache = new Map();
@@ -320,7 +324,7 @@ const MANIFEST = {
   id: 'community.twitch.lives', version: '0.1.0', name: 'Twitch', description: 'Lives Twitch dans Stremio',
   resources: ['catalog', 'meta', 'stream'], types: ['tv'], idPrefixes: ['twitch:'],
   behaviorHints: { configurable: true, configurationRequired: false },
-  catalogs: [{ type: 'tv', id: 'twitch-top', name: 'Twitch · Lives populaires', extra: [{ name: 'search', isRequired: false }] }],
+  catalogs: [{ type: 'tv', id: 'twitch-top', name: 'Twitch · Lives populaires', extra: [{ name: 'search', isRequired: false }, { name: 'genre', isRequired: false, options: GAMES }] }],
 };
 
 async function probe(login) { // diagnostic d'une chaîne pour le dashboard
@@ -605,7 +609,7 @@ async function handler(req, res) {
     if (seg[0] === 'manifest.json') {
       store.log({ k: 'install', u: pseudo || undefined, appareil: cfg.device || undefined, reglages: pseudo ? summary(cfg) : 'défaut', dev }); store.user(pseudo, { cfg: { ...cfg, tok: undefined, compte: !!cfg.tok }, dev: cfg.device });
       const S = await siteLib.load(), mf = { ...MANIFEST, name: S.name, logo: originOf(req) + '/logo.png?v=' + S.logoV };
-      if (auth && S.feat.followed) mf.catalogs = [{ type: 'tv', id: 'twitch-followed', name: 'Twitch · Mes chaînes suivies' }, ...MANIFEST.catalogs];
+      if (auth && S.feat.followed) mf.catalogs = [{ type: 'tv', id: 'twitch-followed', name: 'Twitch · Mes chaînes suivies', extra: [{ name: 'genre', isRequired: false, options: GAMES }] }, ...MANIFEST.catalogs];
       return json(res, pseudo ? { ...mf, name: S.name + ' · ' + pseudo, description: MANIFEST.description + ' — profil de ' + pseudo } : mf);
     }
 
@@ -651,9 +655,9 @@ async function handler(req, res) {
     if (seg[0] === 'catalog' && seg[1] === 'tv' && strip(seg[2]) === 'twitch-followed') {
       if (!auth || !F.followed) return json(res, { metas: [] });
       try {
-        const L = (await followedChannels(auth)).filter(x => x.info.live); // seules les chaînes en direct : les autres apparaissent quand elles passent en ligne
+        const L = byGame((await followedChannels(auth)).filter(x => x.info.live), extraOf(seg[3]).get('genre'), x => x.info.game); // seules les chaînes en direct : les autres apparaissent quand elles passent en ligne
         store.log({ k: 'catalog', u: pseudo || undefined, n: L.length, suivis: true, dev });
-        return json(res, { metas: L.map(x => { const m = metaFromInfo(x.login, x.info); delete m.logo; return { ...m, background: undefined, releaseInfo: x.info.live ? '🔴 ' + x.info.viewers.toLocaleString('fr-FR') + ' 👁' : 'Hors ligne' }; }) }, { 'Cache-Control': 'no-store' });
+        return json(res, { metas: L.map(x => { const m = metaFromInfo(x.login, x.info); delete m.logo; return { ...m, background: undefined, name: fmtN(x.info.viewers) + ' · ' + x.info.name, releaseInfo: '🔴 ' + fmtN(x.info.viewers) + ' 👁' }; }) }, { 'Cache-Control': 'no-store' });
       } catch (e) { store.incr('err'); store.log({ k: 'erreur', u: pseudo || undefined, ou: 'catalogue des chaînes suivies', msg: e.message }); return json(res, { metas: [] }); }
     }
     if (seg[0] === 'catalog' && seg[1] === 'tv') {
@@ -667,7 +671,7 @@ async function handler(req, res) {
       }
       let list = [];
       if (!F.catalog) return json(res, { metas: [] });
-      try { list = await helix('/streams', { first: 50 }); store.log({ k: 'catalog', n: list.length, dev }); } catch (e) { console.error('catalogue :', e.message); store.incr('err'); store.log({ k: 'erreur', ou: 'catalogue', msg: e.message }); } // sans identifiants : catalogue vide
+      try { list = byGame(await helix('/streams', { first: extraOf(seg[3]).get('genre') ? 100 : 50 }), extraOf(seg[3]).get('genre'), x => x.game_name); store.log({ k: 'catalog', n: list.length, dev }); } catch (e) { console.error('catalogue :', e.message); store.incr('err'); store.log({ k: 'erreur', ou: 'catalogue', msg: e.message }); } // sans identifiants : catalogue vide
       return json(res, { metas: list.map(metaOf) }, { 'Cache-Control': 'public, s-maxage=30' });
     }
     if (seg[0] === 'meta' && seg[1] === 'tv') {
@@ -696,7 +700,7 @@ async function handler(req, res) {
       try {
       // Colonne de droite étroite dans Stremio : lignes courtes (≈ 24 caractères) pour ne rien couper.
       const cut = (t, n) => (t.length > n ? t.slice(0, n - 1).trimEnd() + '…' : t);
-      const nb = info && info.viewers ? info.viewers.toLocaleString('fr-FR') : '';
+      const nb = info && info.viewers ? fmtN(info.viewers) : '';
       const adLine = ok => ok ? '🚫 Sans pub' : '⚠️ Officiel · avec pubs';
       const entry = (name, lines, url) => ({ name, title: lines.filter(Boolean).join('\n'), url });
       const label = v => {
