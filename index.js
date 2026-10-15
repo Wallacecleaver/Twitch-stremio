@@ -261,6 +261,32 @@ const metaOf = s => ({
   description: s.title + '\n\n🎮 ' + s.game_name + ' · 👁 ' + s.viewer_count + ' spectateurs', genres: s.game_name ? [s.game_name] : [], releaseInfo: 'EN DIRECT',
 });
 
+// Fiche d'une chaîne (photo, titre du live, jeu, spectateurs) via la même API publique que le site web de Twitch : aucune clé nécessaire.
+const INFO_QUERY = 'query ChannelInfo($login: String!) { user(login: $login) { displayName login description profileImageURL(width: 300) bannerImageURL offlineImageURL stream { title viewersCount previewImageURL(width: 1280, height: 720) game { displayName } } } }';
+const infoCache = new Map();
+async function channelInfo(login) {
+  const c = infoCache.get(login);
+  if (c && c.exp > Date.now()) return c.v;
+  let v = null;
+  try {
+    const r = await fetch(GQL, { method: 'POST', headers: { 'Client-ID': GQL_CLIENT_ID, 'Content-Type': 'application/json', 'User-Agent': UA }, body: JSON.stringify({ operationName: 'ChannelInfo', variables: { login }, query: INFO_QUERY }), signal: AbortSignal.timeout(4000) });
+    const u = r.ok ? ((await r.json().catch(() => ({}))).data || {}).user : null;
+    if (u && u.login) v = { name: u.displayName || login, avatar: u.profileImageURL || '', banner: u.offlineImageURL || u.bannerImageURL || '', bio: u.description || '', live: !!u.stream, title: u.stream ? u.stream.title || '' : '', game: u.stream && u.stream.game ? u.stream.game.displayName : '', viewers: u.stream ? Number(u.stream.viewersCount) || 0 : 0, preview: u.stream ? u.stream.previewImageURL || '' : '' };
+  } catch { /* sans fiche : on affiche une fiche simple */ }
+  infoCache.set(login, { v, exp: Date.now() + (v ? 45000 : 10000) });
+  if (infoCache.size > 300) infoCache.delete(infoCache.keys().next().value);
+  return v;
+}
+const metaFromInfo = (login, i) => {
+  const nb = i.viewers.toLocaleString('fr-FR'), live = 'https://static-cdn.jtvnw.net/previews-ttv/live_user_' + login + '-1280x720.jpg';
+  return {
+    id: 'twitch:' + login, type: 'tv', name: i.name, posterShape: 'landscape',
+    poster: i.preview || i.avatar || live, background: i.preview || i.banner || i.avatar || undefined, ...(i.avatar ? { logo: i.avatar } : {}),
+    description: i.live ? ('🔴 ' + i.name + ' est en direct' + (i.game ? '  ·  🎮 ' + i.game : '') + '  ·  👁 ' + nb + '\n\n' + (i.title || '')).trim() : ('⚫ ' + i.name + ' est hors ligne' + (i.bio ? '\n\n' + i.bio : '')),
+    genres: i.game ? [i.game] : [], releaseInfo: i.live ? 'EN DIRECT · ' + nb + ' spectateurs' : 'Hors ligne',
+  };
+};
+
 /* ------------------------------------------------------------------ addon */
 const MANIFEST = {
   id: 'community.twitch.lives', version: '0.1.0', name: 'Twitch', description: 'Lives Twitch dans Stremio',
@@ -597,8 +623,9 @@ async function handler(req, res) {
       const search = seg[3] ? (new URLSearchParams(strip(seg[3])).get('search') || '').trim().toLowerCase().replace(/^@/, '') : '';
       if (search) { // recherche d'une chaîne par son nom (sans clés Twitch) : la fiche s'ouvre, puis le live se lance
         if (!LOGIN_RE.test(search)) return json(res, { metas: [] });
-        let meta = { id: 'twitch:' + search, type: 'tv', name: search, poster: 'https://static-cdn.jtvnw.net/previews-ttv/live_user_' + search + '-440x248.jpg', posterShape: 'landscape' };
-        try { const s = (await helix('/streams', { user_login: search }))[0]; if (s) meta = metaOf(s); } catch { /* sans clés : fiche simple */ }
+        const info = await channelInfo(search);
+        let meta = info ? metaFromInfo(search, info) : { id: 'twitch:' + search, type: 'tv', name: search, poster: 'https://static-cdn.jtvnw.net/previews-ttv/live_user_' + search + '-440x248.jpg', posterShape: 'landscape' };
+        if (!info) { try { const s = (await helix('/streams', { user_login: search }))[0]; if (s) meta = metaOf(s); } catch { /* sans clés : fiche simple */ } }
         return json(res, { metas: [meta] });
       }
       let list = [];
@@ -609,8 +636,9 @@ async function handler(req, res) {
     if (seg[0] === 'meta' && seg[1] === 'tv') {
       const login = strip(seg[2]).replace(/^twitch:/, '').toLowerCase();
       if (!LOGIN_RE.test(login)) return json(res, { meta: null });
-      let meta = { id: 'twitch:' + login, type: 'tv', name: login, poster: 'https://static-cdn.jtvnw.net/previews-ttv/live_user_' + login + '-440x248.jpg', posterShape: 'landscape' };
-      try { const s = (await helix('/streams', { user_login: login }))[0]; if (s) meta = metaOf(s); } catch { /* fiche minimale */ }
+      const info = await channelInfo(login);
+      let meta = info ? metaFromInfo(login, info) : { id: 'twitch:' + login, type: 'tv', name: login, poster: 'https://static-cdn.jtvnw.net/previews-ttv/live_user_' + login + '-440x248.jpg', posterShape: 'landscape' };
+      if (!info) { try { const s = (await helix('/streams', { user_login: login }))[0]; if (s) meta = metaOf(s); } catch { /* fiche minimale */ } }
       return json(res, { meta });
     }
     if (seg[0] === 'stream' && seg[1] === 'tv') {
