@@ -118,8 +118,6 @@ pre{background:var(--bg2);border:1px solid var(--bs);border-radius:var(--r);padd
 
  <div class="pt">Répartition</div>
  <div class="sec"><div class="sh"><div class="stt"><svg viewBox="0 0 24 24"><path d="M5 9.2h3V19H5zM10.6 5h2.8v14h-2.8zm5.6 8H19v6h-2.8z"/></svg>Détail des lectures</div></div><div class="sb"><div class="bg" id="mix"></div></div></div>
- <div class="pt">Santé</div>
- <div class="sec"><div class="sh"><div class="stt"><svg viewBox="0 0 24 24"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>Derniers incidents</div><span class="cnt" id="incN">0</span></div><div class="sb np tw" id="incs"></div></div>
 </div>
 
 <div class="page" id="p-users">
@@ -290,9 +288,6 @@ function render(){
  const tot=rel+off+g('stream_offline')||1,wins=S.config.relais.map(r=>[r.name,g('r|'+r.name+'|win')]).filter(x=>x[1]).sort((a,b)=>b[1]-a[1]).slice(0,6),wm=Math.max(1,...wins.map(w=>w[1]));
  const byDev={};S.users.forEach(u=>{const k=u.dev||'Non précisé';byDev[k]=(byDev[k]||0)+u.n});
  $('#mix').innerHTML='<div class="bc"><div class="bt">Lectures</div>'+bi([['Relais sans pub',n(rel)+' · '+pct(rel,tot),Math.round(100*rel/tot)],['Flux officiel (repli)',n(off)+' · '+pct(off,tot),Math.round(100*off/tot)],['Hors ligne',n(g('stream_offline'))+' · '+pct(g('stream_offline'),tot),Math.round(100*g('stream_offline')/tot)]])+'</div><div class="bc"><div class="bt">Relais gagnants</div>'+bi(wins.map(([a,b])=>[esc(a),n(b),Math.round(b/wm*100)]))+'</div><div class="bc"><div class="bt">Par appareil (lectures)</div>'+bi(Object.entries(byDev).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([a,b])=>[esc(a),n(b)]))+'</div>';
- $('#incN').textContent=inc.length;
- const gr=new Map();inc.forEach(l=>{const d=l.detail||l.resume||'',k=[l.u,l.ch,l.type||l.verdict||l.k,d].join('|'),e=gr.get(k);if(e)e.n++;else gr.set(k,{...l,d,n:1})});
- $('#incs').innerHTML=gr.size?'<table><thead><tr><th>Dernière fois</th><th>Utilisateur</th><th>Chaîne</th><th>Type</th><th>Détail</th></tr></thead><tbody>'+[...gr.values()].slice(0,8).map(l=>'<tr><td class="dim mono">'+ago(l.t)+'</td><td>'+(l.u?'<span class="user" data-u="'+esc(l.u)+'">'+esc(l.u)+'</span>':'<span class="dim">–</span>')+'</td><td>'+esc(l.ch||'–')+'</td><td><span class="pill '+(l.lvl==='ERROR'?'ko':'wa')+'">'+esc(l.type||l.verdict||l.k)+'</span>'+(l.n>1?'<span class="xn">×'+l.n+'</span>':'')+'</td><td>'+esc(l.d)+'</td></tr>').join('')+'</tbody></table>':'<div class="empty">Aucun incident. 🎉</div>';
  // utilisateurs
  const q=$('#usq').value.toLowerCase().trim(),us=S.users.slice().sort((a,b)=>(b.last||0)-(a.last||0)).filter(u=>!q||u.pseudo.includes(q)||(u.dev||'').toLowerCase().includes(q));
  $('#usN').textContent=us.length;
