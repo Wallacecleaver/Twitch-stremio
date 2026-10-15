@@ -91,9 +91,22 @@ pre{background:var(--bg2);border:1px solid var(--bs);border-radius:var(--r);padd
 .spane{display:none;margin-bottom:0}.spane.on{display:block;animation:f .18s}
 .spane .sh{padding:16px 20px}
 .pt{font-size:.72rem;text-transform:uppercase;letter-spacing:.09em;color:var(--t3);font-weight:600;margin:26px 0 10px}
-.mini{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;margin-bottom:6px}
+.mini{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;margin-bottom:14px}
 .mc{display:flex;gap:12px;align-items:center;background:var(--bg3);border:1px solid var(--bs);border-radius:var(--r);padding:12px 14px}.mc .si{margin:0;width:34px;height:34px;flex:none}.mc .si svg{width:18px;height:18px}.mc b{display:block;font-size:1.15rem;line-height:1.2;font-variant-numeric:tabular-nums}.mc span{font-size:.76rem;color:var(--t2)}
 #p-dash .grid{margin-bottom:12px}#p-dash .sec{margin-bottom:14px}.xn{font-size:.72rem;font-weight:600;color:var(--t2);background:var(--el);border-radius:99px;padding:1px 8px;margin-left:6px}
+.hero{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:18px}.hero h1{font-size:1.55rem;font-weight:700;letter-spacing:-.02em;line-height:1.2}.hero p{font-size:.84rem;color:var(--t3);margin-top:2px}
+.cols.c2{grid-template-columns:1.6fr 1fr}@media(max-width:960px){.cols.c2{grid-template-columns:1fr}}
+.cols>.sec{margin-bottom:14px;display:flex;flex-direction:column}.cols>.sec>.sb{flex:1}
+.bg2{display:grid;grid-template-columns:1fr 1fr;gap:14px}@media(max-width:760px){.bg2{grid-template-columns:1fr}}.bg2 .sec{margin-bottom:14px}
+#p-dash .sc{padding:16px 18px;position:relative;overflow:hidden}#p-dash .sc .si{margin-bottom:10px}
+.sp{position:absolute;right:0;bottom:0;width:55%;height:46px;opacity:.9;pointer-events:none}
+.dl{display:inline-flex;align-items:center;gap:3px;font-size:.72rem;font-weight:600;border-radius:99px;padding:1px 8px;margin-left:6px;vertical-align:middle}.dl.up{background:var(--oks);color:#6ee7b7}.dl.dw{background:var(--kos);color:#fca5a5}.dl.eq{background:var(--el);color:var(--t2)}
+.rk{display:grid;grid-template-columns:22px 1fr auto;gap:2px 10px;align-items:center;padding:7px 0}.rk+.rk{border-top:1px solid var(--bs)}.rk>b{font-size:.74rem;color:var(--t3);font-weight:600;text-align:center}.rk>span{font-size:.88rem;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.rk>em{font-style:normal;font-size:.82rem;color:var(--t2);font-variant-numeric:tabular-nums}.rk .bar{grid-column:2/4;margin-top:2px;height:4px}
+.fd{display:grid;grid-template-columns:34px 1fr auto;gap:12px;align-items:center;padding:11px 20px;border-bottom:1px solid var(--bs)}.fd:last-child{border:0}.fd:hover{background:rgba(255,255,255,.025)}
+.av{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:.82rem;color:#fff}
+.fd .t1{font-size:.88rem;font-weight:500}.fd .t1 b{font-weight:600}.fd .t2{font-size:.76rem;color:var(--t3)}.fd .tr{text-align:right;font-size:.76rem;color:var(--t3);white-space:nowrap}
+.dn{display:flex;align-items:center;gap:22px;flex-wrap:wrap;justify-content:center}.dc{width:132px;height:132px;border-radius:50%;position:relative;flex:none}.dc::after{content:"";position:absolute;inset:20px;border-radius:50%;background:var(--bg3)}.dc b{position:absolute;inset:0;z-index:1;display:grid;place-items:center;font-size:1.35rem;font-weight:700;letter-spacing:-.02em}
+.dg{display:grid;gap:9px;font-size:.84rem;min-width:150px}.dg div{display:flex;align-items:center;gap:8px}.dg i{width:9px;height:9px;border-radius:3px;flex:none}.dg span{margin-left:auto;color:var(--t2);font-variant-numeric:tabular-nums}
 </style>
 </head>
 <body>
@@ -108,16 +121,20 @@ pre{background:var(--bg2);border:1px solid var(--bs);border-radius:var(--r);padd
 <div id="ban"></div>
 
 <div class="page on" id="p-dash">
- <div class="pt" style="margin-top:0">Aperçu</div>
+ <div class="hero"><div><h1>Vue d'ensemble</h1><p id="heroSub"></p></div><div class="ctl"><a class="btn" href="/config" target="_blank">Page config ↗</a><button class="btn" id="goLogs" type="button">Journal</button></div></div>
  <div class="grid" id="kpi1"></div><div class="mini" id="kpi2"></div>
- <div class="pt">Activité</div>
  <div class="cols">
-  <div class="sec"><div class="sh"><div class="stt"><svg viewBox="0 0 24 24"><path d="M5 9.2h3V19H5zM10.6 5h2.8v14h-2.8zm5.6 8H19v6h-2.8z"/></svg>Activité · 7 jours</div><div class="leg"><span><i style="background:var(--a)"></i>Lectures</span><span><i style="background:var(--ko)"></i>Incidents</span></div></div><div class="sb"><div class="chart" id="chart"></div></div></div>
-  <div class="sec"><div class="sh"><div class="stt"><svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/></svg>Chaînes les plus lancées</div></div><div class="sb" id="topch"></div></div>
+  <div class="sec"><div class="sh"><div class="stt"><svg viewBox="0 0 24 24"><path d="M5 9.2h3V19H5zM10.6 5h2.8v14h-2.8zm5.6 8H19v6h-2.8z"/></svg> Activité · 7 jours</div><div class="leg"><span><i style="background:var(--a)"></i>Lectures</span><span><i style="background:var(--ko)"></i>Incidents</span></div></div><div class="sb"><div class="chart" id="chart"></div></div></div>
+  <div class="sec"><div class="sh"><div class="stt"><svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/></svg> Chaînes les plus lancées</div></div><div class="sb" id="topch"></div></div>
  </div>
-
- <div class="pt">Répartition</div>
- <div class="sec"><div class="sh"><div class="stt"><svg viewBox="0 0 24 24"><path d="M5 9.2h3V19H5zM10.6 5h2.8v14h-2.8zm5.6 8H19v6h-2.8z"/></svg>Détail des lectures</div></div><div class="sb"><div class="bg" id="mix"></div></div></div>
+ <div class="cols c2">
+  <div class="sec"><div class="sh"><div class="stt"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg> Dernières lectures</div><span class="cnt" id="feedN">0</span></div><div class="sb np" id="feed"></div></div>
+  <div class="sec"><div class="sh"><div class="stt"><svg viewBox="0 0 24 24"><path d="M11 2v20c-5.07-.5-9-4.79-9-10s3.93-9.5 9-10zm2.03 0v8.99H22c-.47-4.74-4.27-8.5-8.97-8.99zm0 11.01V22c4.7-.5 8.5-4.26 8.97-8.99h-8.97z"/></svg> Répartition</div></div><div class="sb" id="donut"></div></div>
+ </div>
+ <div class="bg2">
+  <div class="sec"><div class="sh"><div class="stt"><svg viewBox="0 0 24 24"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg> Relais gagnants</div></div><div class="sb" id="wins"></div></div>
+  <div class="sec"><div class="sh"><div class="stt"><svg viewBox="0 0 24 24"><path d="M4 6h18V4H4c-1.1 0-2 .9-2 2v11H0v3h14v-3H4V6zm19 2h-6c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h6c.55 0 1-.45 1-1V9c0-.55-.45-1-1-1zm-1 9h-4v-7h4v7z"/></svg> Par appareil</div></div><div class="sb" id="bydev"></div></div>
+ </div>
 </div>
 
 <div class="page" id="p-users">
@@ -258,6 +275,7 @@ function sPane(k){try{localStorage.admset=k}catch{}$$('.spane').forEach(x=>x.cla
 $('#snav').onclick=e=>{const b=e.target.closest('.sn');if(b)sPane(b.dataset.s)};
 {let k='info';try{k=localStorage.admset||'info'}catch{}sPane($('.spane[data-s="'+k+'"]')?k:'info')}
 let FT=null,RLS=[],rlH='';
+$('#goLogs').onclick=()=>go('logs');
 function renderRl(){const off=FT?FT.offRelays:[];$('#rlN').textContent=(RLS.length-RLS.filter(r=>off.includes(r.name)).length)+' actifs sur '+RLS.length;
  const h='<table><thead><tr><th>Actif</th><th>Nom</th><th>Adresse</th></tr></thead><tbody>'+RLS.map(r=>'<tr class="rrow'+(off.includes(r.name)?' off':'')+'"><td><label class="tg"><input type="checkbox" data-r="'+esc(r.name)+'"'+(off.includes(r.name)?'':' checked')+'><i></i></label></td><td>'+esc(r.name)+'</td><td class="mono dim">'+esc(r.url)+'</td></tr>').join('')+'</tbody></table>';if(h!==rlH){rlH=h;$('#rlist').innerHTML=h}}
 function fFill(F){FT=F;$$('#p-set [data-f]').forEach(i=>i.checked=!!F[i.dataset.f]);$('#capMax').value=String(F.capMax);$('#tmo').value=String(F.timeout);if(document.activeElement!==$('#maintMsg'))$('#maintMsg').value=F.maintMsg;$('#maintBox').classList.toggle('mon',F.maint);$('#sdM').hidden=!F.maint;$('#maintSt').textContent=F.maint?'ACTIF':'inactif';$('#maintSt').className='pill'+(F.maint?' wa':'');renderRl()}
@@ -279,15 +297,28 @@ function render(){
  $('#ban').innerHTML=(S.persistent?'':'<div class="banner w">Stockage temporaire : stats, journal et utilisateurs se remettent à zéro régulièrement. Connecte une base Upstash (UPSTASH_REDIS_REST_URL / UPSTASH_REDIS_REST_TOKEN) pour tout conserver.</div>')+(S.lastError?'<div class="banner e">Erreur de stockage : '+esc(S.lastError)+'</div>':'');
  $('#upt').textContent=dur(S.up);
  const rel=g('stream_relay'),off=g('stream_official');
- $('#kpi1').innerHTML=card('in',IP.u,'Utilisateurs',n(S.users.length),'pseudos enregistrés')+card('pr',IC.users,'Appareils aujourd\'hui',n(S.uniq[S.uniq.length-1]),'max '+n(Math.max(0,...S.uniq))+' / jour sur 7 j')+card('ok',IP.v,'Lectures demandées',n(g('stream')),n(g('play'))+' en qualité automatique')+card('ok',IP.s,'Sans publicité',pct(rel,rel+off),n(rel)+' via relais · '+n(off)+' officiel');
- $('#kpi2').innerHTML=mc('wa',IP.w,'Incidents',n(g('incident')),'blocages et tests')+mc('ko',IP.x,'Erreurs',n(g('err')),pct(g('err'),g('req'))+' des requêtes')+mc('in',IP.p,'Requêtes',n(g('req')),'depuis le reset')+mc('pr',IP.o,'Hors ligne',n(g('stream_offline')),'demandes sans live');
- const v1=D.map(d=>g('d:'+d+':stream')),v2=D.map(d=>g('d:'+d+':incident')),mx=Math.max(1,...v1,...v2);
- $('#chart').innerHTML=D.map((d,i)=>'<div class="col"><em>'+n(v1[i])+(v2[i]?' · '+n(v2[i]):'')+'</em><div class="bars"><i class="a" style="height:'+Math.max(2,Math.round(v1[i]/mx*140))+'px"></i><i class="k" style="height:'+Math.max(2,Math.round(v2[i]/mx*140))+'px"></i></div><span>'+d.slice(8)+'/'+d.slice(5,7)+'</span></div>').join('');
- const tm=Math.max(1,...S.top.map(t=>t[1]));
- $('#topch').innerHTML=bi(S.top.map(([c,v])=>[esc(c),n(v),Math.round(v/tm*100)]));
+const v1=D.map(d=>g('d:'+d+':stream')),v2=D.map(d=>g('d:'+d+':incident')),mx=Math.max(1,...v1,...v2),L=v1.length-1;
+ const spk=(vals,col)=>{const m=Math.max(1,...vals),pts=vals.map((v,i)=>[Math.round(i*100/Math.max(1,vals.length-1)),Math.round(26-v/m*22)]),l=pts.map(q=>q.join(',')).join(' ');return '<svg class="sp" viewBox="0 0 100 30" preserveAspectRatio="none"><polygon points="0,30 '+l+' 100,30" fill="'+col+'" opacity=".14"/><polyline points="'+l+'" fill="none" stroke="'+col+'" stroke-width="1.6" vector-effect="non-scaling-stroke" stroke-linejoin="round"/></svg>'};
+ const dl=(a,b)=>{if(!b&&!a)return '';if(!b)return '<span class="dl up">nouveau</span>';const d=Math.round(100*(a-b)/b);return '<span class="dl '+(d>0?'up':d<0?'dw':'eq')+'">'+(d>0?'+':'')+d+' %</span>'};
+ const card2=(c,ic,l,v,sub,sp,extra)=>'<div class="sc"><div class="si '+c+'"><svg viewBox="0 0 24 24"><path d="'+ic+'"/></svg></div><div class="sl">'+l+'</div><div class="sv">'+v+(extra||'')+'</div><div class="ss">'+sub+'</div>'+(sp||'')+'</div>';
+ $('#kpi1').innerHTML=card2('in',IP.u,'Utilisateurs',n(S.users.length),'pseudos enregistrés')+card2('pr',IC.users,'Appareils aujourd\'hui',n(S.uniq[S.uniq.length-1]),'max '+n(Math.max(0,...S.uniq))+' / jour sur 7 j',spk(S.uniq,'#a78bfa'))+card2('ok',IP.v,'Lectures demandées',n(g('stream')),n(v1[L])+' aujourd\'hui · '+n(g('play'))+' en auto',spk(v1,'#34d399'),dl(v1[L],v1[L-1]))+card2('ok',IP.s,'Sans publicité',pct(rel,rel+off),n(rel)+' via relais · '+n(off)+' officiel');
+ const ra=S.config.relais.length-(FT?S.config.relais.filter(r=>FT.offRelays.includes(r.name)).length:0);
+ $('#kpi2').innerHTML=mc('wa',IP.w,'Incidents',n(g('incident')),'blocages et tests')+mc('ko',IP.x,'Erreurs',n(g('err')),pct(g('err'),g('req'))+' des requêtes')+mc('in',IC.relays,'Relais actifs',ra+' / '+S.config.relais.length,'disponibles')+mc('pr',IP.o,'Hors ligne',n(g('stream_offline')),'demandes sans live');
+ $('#chart').innerHTML=D.map((d,i)=>'<div class="col"><em>'+n(v1[i])+(v2[i]?' · '+n(v2[i]):'')+'</em><div class="bars"><i class="a" style="height:'+Math.max(2,Math.round(v1[i]/mx*150))+'px"></i><i class="k" style="height:'+Math.max(2,Math.round(v2[i]/mx*150))+'px"></i></div><span>'+d.slice(8)+'/'+d.slice(5,7)+'</span></div>').join('');
+ const top=S.top.slice(0,6),tm=Math.max(1,...top.map(t=>t[1]));
+ $('#topch').innerHTML=top.length?top.map(([c,v],i)=>'<div class="rk"><b>'+(i+1)+'</b><span>'+esc(c)+'</span><em>'+n(v)+'</em><div class="bar"><i style="width:'+Math.round(v/tm*100)+'%"></i></div></div>').join(''):'<div class="be">Aucune donnée</div>';
  const tot=rel+off+g('stream_offline')||1,wins=S.config.relais.map(r=>[r.name,g('r|'+r.name+'|win')]).filter(x=>x[1]).sort((a,b)=>b[1]-a[1]).slice(0,6),wm=Math.max(1,...wins.map(w=>w[1]));
  const byDev={};S.users.forEach(u=>{const k=u.dev||'Non précisé';byDev[k]=(byDev[k]||0)+u.n});
- $('#mix').innerHTML='<div class="bc"><div class="bt">Lectures</div>'+bi([['Relais sans pub',n(rel)+' · '+pct(rel,tot),Math.round(100*rel/tot)],['Flux officiel (repli)',n(off)+' · '+pct(off,tot),Math.round(100*off/tot)],['Hors ligne',n(g('stream_offline'))+' · '+pct(g('stream_offline'),tot),Math.round(100*g('stream_offline')/tot)]])+'</div><div class="bc"><div class="bt">Relais gagnants</div>'+bi(wins.map(([a,b])=>[esc(a),n(b),Math.round(b/wm*100)]))+'</div><div class="bc"><div class="bt">Par appareil (lectures)</div>'+bi(Object.entries(byDev).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([a,b])=>[esc(a),n(b)]))+'</div>';
+ const dvs=Object.entries(byDev).sort((a,b)=>b[1]-a[1]).slice(0,6),dm=Math.max(1,...dvs.map(x=>x[1]));
+ $('#wins').innerHTML=wins.length?wins.map(([a,b],i)=>'<div class="rk"><b>'+(i+1)+'</b><span>'+esc(a)+'</span><em>'+n(b)+'</em><div class="bar"><i style="width:'+Math.round(b/wm*100)+'%"></i></div></div>').join(''):'<div class="be">Aucune donnée</div>';
+ $('#bydev').innerHTML=dvs.length?dvs.map(([a,b],i)=>'<div class="rk"><b>'+(i+1)+'</b><span>'+esc(a)+'</span><em>'+n(b)+'</em><div class="bar"><i style="width:'+Math.round(b/dm*100)+'%"></i></div></div>').join(''):'<div class="be">Aucune donnée</div>';
+ const pr=rel/tot*100,po=off/tot*100;
+ $('#donut').innerHTML='<div class="dn"><div class="dc" style="background:conic-gradient(var(--a) 0 '+pr+'%,#f59e0b '+pr+'% '+(pr+po)+'%,#52525b '+(pr+po)+'% 100%)"><b>'+pct(rel,tot)+'</b></div><div class="dg"><div><i style="background:var(--a)"></i>Relais sans pub<span>'+n(rel)+'</span></div><div><i style="background:#f59e0b"></i>Flux officiel<span>'+n(off)+'</span></div><div><i style="background:#52525b"></i>Hors ligne<span>'+n(g('stream_offline'))+'</span></div></div></div>';
+ const hue=s=>{let h=0;for(const c of String(s))h=(h*31+c.charCodeAt(0))%360;return h};
+ const fd=S.logs.filter(l=>l.k==='play').slice(0,7);
+ $('#feedN').textContent=fd.length;
+ $('#feed').innerHTML=fd.length?fd.map(l=>{const u=l.u||'anonyme';return '<div class="fd"><div class="av" style="background:hsl('+hue(u)+' 55% 38%)">'+esc(u.slice(0,1).toUpperCase())+'</div><div><div class="t1"><b>'+esc(u)+'</b> regarde <b>'+esc(l.ch||'?')+'</b></div><div class="t2">'+esc(l.relais||'–')+(l.appareil?' · '+esc(l.appareil):'')+(l.ms?' · '+l.ms+' ms':'')+'</div></div><div class="tr">'+ago(l.t)+'</div></div>'}).join(''):'<div class="empty">Aucune lecture pour le moment.</div>';
+ $('#heroSub').textContent=new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'})+' · mis à jour à '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
  // utilisateurs
  const q=$('#usq').value.toLowerCase().trim(),us=S.users.slice().sort((a,b)=>(b.last||0)-(a.last||0)).filter(u=>!q||u.pseudo.includes(q)||(u.dev||'').toLowerCase().includes(q));
  $('#usN').textContent=us.length;
