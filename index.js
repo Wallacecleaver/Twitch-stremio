@@ -656,14 +656,20 @@ async function handler(req, res) {
       const relayUrls = b ? new Set(variantsOf(absolutize(b.text, b.url)).map(v => v.url)) : null;
       const video = vars.filter(v => !v.audio && cfgLib.keepVariant(v, cfg)).sort(byQuality);
       // Affichage dans la liste des sources de Stremio : nom court à gauche, détails sur plusieurs lignes à droite.
+      try {
       const nb = info && info.viewers ? info.viewers.toLocaleString('fr-FR') : '', live = '🔴 EN DIRECT' + (nb ? ' · ' + nb + ' spectateurs' : '');
       const adLine = ok => ok ? '🚫 Sans pub' + (b ? ' · relais ' + b.name : '') : '⚠️ Flux officiel · pubs possibles';
       const entry = (name, lines, url) => { const d = lines.filter(Boolean).join('\n'); return { name, title: d, description: d, url }; };
       const label = v => { const m = /(\d{3,4})p(\d+)?/.exec(v.name) || [], h = m[1] || (v.h ? String(v.h) : ''), f = m[2] || (v.fps > 30 ? String(v.fps) : '30'); return { short: h ? h + 'p' + (m[2] || (v.fps > 30 ? v.fps : '')) : v.name.replace(/ \(source\)/, ''), long: h ? '📺 ' + h + 'p · ' + f + ' images/s' + (/source/i.test(v.name) ? ' · qualité source' : '') : '📺 ' + v.name }; };
-      const fixed = video.slice(0, cfg.fixed).map(v => { const l = label(v); return entry('Twitch\n' + l.short, [l.long, adLine(!relayUrls || relayUrls.has(v.url))], pcOn(cfg) ? pcUrl(originOf(req), base, v.url) : v.url); });
+      const fixed = video.slice(0, cfg.fixed).map(v => { const l = label(v); return entry('Twitch\n' + l.short, [l.long, adLine(!!relayUrls && relayUrls.has(v.url))], pcOn(cfg) ? pcUrl(originOf(req), base, v.url) : v.url); });
       const auto = entry('Twitch\nAuto', [live, info && info.game ? '🎮 ' + info.game : '', '✨ Qualité automatique' + (cfg.cap ? ' (max ' + cfg.cap + 'p)' : '') + ' · ' + adLine(!!b).replace('🚫 ', '').replace('⚠️ ', '⚠️ ')], originOf(req) + base + '/p/' + login + '.m3u8');
       const audio = cfg.audio ? vars.filter(v => v.audio).slice(0, 1).map(v => entry('Twitch\nAudio', ['🎧 Audio seul', adLine(!!b)], v.url)) : [];
       return json(res, { streams: [auto, ...fixed, ...audio] });
+      } catch (e) { // mise en forme impossible : liste simple, pour ne jamais perdre les flux
+        store.log({ k: 'erreur', u: pseudo || undefined, ou: 'mise en forme des sources', msg: e.message });
+        const plain = video.slice(0, cfg.fixed).map(v => ({ name: 'Twitch ' + v.name.replace(/ \(source\)/, ''), title: 'En direct · qualité fixe' + (b ? ' · sans pub' : ''), url: pcOn(cfg) ? pcUrl(originOf(req), base, v.url) : v.url }));
+        return json(res, { streams: [{ name: 'Twitch', title: 'En direct · qualité automatique' + (b ? ' · sans pub' : ''), url: originOf(req) + base + '/p/' + login + '.m3u8' }, ...plain] });
+      }
     }
     send(res, 404, 'text/plain; charset=utf-8', 'Introuvable');
   } catch (e) {
