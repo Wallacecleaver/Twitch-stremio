@@ -262,7 +262,8 @@ const metaOf = s => ({
 });
 
 const fmtN = n => (n >= 1e6 ? (n / 1e6).toFixed(1).replace('.', ',').replace(',0', '') + ' M' : n >= 1000 ? (n / 1e3).toFixed(n >= 1e5 ? 0 : 1).replace('.', ',').replace(',0', '') + ' k' : String(n)); // 111882 → « 112 k »
-const GAMES = ['Just Chatting', 'Fortnite', 'League of Legends', 'Valorant', 'Counter-Strike', 'Grand Theft Auto V', 'Rocket League', 'Minecraft', 'Call of Duty', 'World of Warcraft', 'Apex Legends', 'Rust', 'EA Sports FC', 'Dead by Daylight', 'Music', 'Sports']; // filtre « jeu » proposé par Stremio
+const GAMES = ['Just Chatting', 'Fortnite', 'League of Legends', 'VALORANT', 'Counter-Strike', 'Garry\'s Mod', 'Grand Theft Auto V', 'Rocket League', 'Minecraft', 'Call of Duty: Warzone', 'World of Warcraft', 'Apex Legends', 'Rust', 'Overwatch 2', 'Teamfight Tactics', 'Escape from Tarkov', 'Dead by Daylight', 'Music', 'Sports']; // menu « jeu » de Stremio (la recherche accepte n'importe quel jeu)
+const ALIAS = { gmod: 'Garry\'s Mod', gta: 'Grand Theft Auto V', gta5: 'Grand Theft Auto V', gtav: 'Grand Theft Auto V', lol: 'League of Legends', cs: 'Counter-Strike', cs2: 'Counter-Strike', csgo: 'Counter-Strike', wow: 'World of Warcraft', cod: 'Call of Duty: Warzone', warzone: 'Call of Duty: Warzone', tft: 'Teamfight Tactics', ow: 'Overwatch 2', overwatch: 'Overwatch 2', rl: 'Rocket League', valo: 'VALORANT', jc: 'Just Chatting', tarkov: 'Escape from Tarkov', dbd: 'Dead by Daylight' };
 const byGame = (list, g, get) => (g ? list.filter(x => String(get(x) || '').toLowerCase().includes(g.toLowerCase())) : list);
 const extraOf = e => new URLSearchParams(String(e || '').replace(/\.json$/, ''));
 // Fiche d'une chaîne (photo, titre du live, jeu, spectateurs) via la même API publique que le site web de Twitch : aucune clé nécessaire.
@@ -319,12 +320,39 @@ async function followedChannels(oauth) {
   return v;
 }
 
+// Lives populaires et lives d'un jeu, via l'API publique du site web de Twitch (aucune clé nécessaire).
+const STREAM_NODE = 'title viewersCount previewImageURL(width: 640, height: 360) game { displayName } broadcaster { login displayName profileImageURL(width: 300) }';
+const streamsCache = new Map();
+async function gqlRaw(query) {
+  const r = await fetch(GQL, { method: 'POST', headers: { 'Client-ID': GQL_CLIENT_ID, 'Content-Type': 'application/json', 'User-Agent': UA }, body: JSON.stringify({ query }), signal: AbortSignal.timeout(8000) });
+  if (!r.ok) throw new Error('Twitch (lives) : HTTP ' + r.status);
+  const j = await r.json().catch(() => ({}));
+  if (!j.data) throw new Error('Twitch n\'a pas renvoyé de lives' + (j.errors && j.errors[0] ? ' : ' + String(j.errors[0].message).slice(0, 120) : ''));
+  return j.data;
+}
+const toLive = n => n && n.broadcaster && n.broadcaster.login ? { login: n.broadcaster.login, info: { name: n.broadcaster.displayName || n.broadcaster.login, avatar: n.broadcaster.profileImageURL || '', banner: '', bio: '', live: true, title: n.title || '', game: n.game ? n.game.displayName : '', viewers: Number(n.viewersCount) || 0, preview: n.previewImageURL || '' } } : null;
+async function liveStreams(game) { // game vide = les plus regardés de tout Twitch ; null si le jeu n'existe pas
+  const k = game.toLowerCase(), c = streamsCache.get(k);
+  if (c && c.exp > Date.now()) return c.v;
+  let edges, v;
+  if (!game) edges = ((await gqlRaw('query { streams(first: 60) { edges { node { ' + STREAM_NODE + ' } } } }')).streams || {}).edges;
+  else {
+    for (const name of [...new Set([game, game.toLowerCase(), game.toUpperCase()])]) { const g = (await gqlRaw('query { game(name: ' + JSON.stringify(name) + ') { streams(first: 60) { edges { node { ' + STREAM_NODE + ' } } } } }')).game; if (g) { edges = (g.streams || {}).edges || []; break; } }
+  }
+  v = edges ? edges.map(e => toLive(e && e.node)).filter(Boolean).sort((a, b) => b.info.viewers - a.info.viewers) : null;
+  streamsCache.set(k, { v, exp: Date.now() + 30000 });
+  if (streamsCache.size > 80) streamsCache.delete(streamsCache.keys().next().value);
+  return v;
+}
+const gameOf = q => { const k = q.toLowerCase().replace(/[^a-z0-9]/g, ''), a = ALIAS[k]; if (a) return a; const g = GAMES.find(x => x.toLowerCase().replace(/[^a-z0-9]/g, '').includes(k)); return k.length >= 3 && g ? g : q; };
+const catalogMeta = x => { const m = metaFromInfo(x.login, x.info); delete m.logo; return { ...m, background: undefined, name: '👁 ' + fmtN(x.info.viewers) + ' · ' + x.info.name, releaseInfo: '🔴 ' + fmtN(x.info.viewers) + ' 👁' }; };
+
 /* ------------------------------------------------------------------ addon */
 const MANIFEST = {
   id: 'community.twitch.lives', version: '0.1.0', name: 'Twitch', description: 'Lives Twitch dans Stremio',
   resources: ['catalog', 'meta', 'stream'], types: ['tv'], idPrefixes: ['twitch:'],
   behaviorHints: { configurable: true, configurationRequired: false },
-  catalogs: [{ type: 'tv', id: 'twitch-top', name: 'Twitch · Lives populaires', extra: [{ name: 'search', isRequired: false }, { name: 'genre', isRequired: false, options: GAMES }] }],
+  catalogs: [{ type: 'tv', id: 'twitch-top', name: 'Twitch · Lives par jeu', extra: [{ name: 'search', isRequired: false }, { name: 'genre', isRequired: false, options: GAMES }] }],
 };
 
 async function probe(login) { // diagnostic d'une chaîne pour le dashboard
@@ -657,8 +685,15 @@ async function handler(req, res) {
       try {
         const L = byGame((await followedChannels(auth)).filter(x => x.info.live), extraOf(seg[3]).get('genre'), x => x.info.game); // seules les chaînes en direct : les autres apparaissent quand elles passent en ligne
         store.log({ k: 'catalog', u: pseudo || undefined, n: L.length, suivis: true, dev });
-        return json(res, { metas: L.map(x => { const m = metaFromInfo(x.login, x.info); delete m.logo; return { ...m, background: undefined, name: '👁 ' + fmtN(x.info.viewers) + ' · ' + x.info.name, releaseInfo: '🔴 ' + fmtN(x.info.viewers) + ' 👁' }; }) }, { 'Cache-Control': 'no-store' });
+        return json(res, { metas: L.map(catalogMeta) }, { 'Cache-Control': 'no-store' });
       } catch (e) { store.incr('err'); store.log({ k: 'erreur', u: pseudo || undefined, ou: 'catalogue des chaînes suivies', msg: e.message }); return json(res, { metas: [] }); }
+    }
+    if (seg[0] === 'catalog' && seg[1] === 'tv' && strip(seg[2]) === 'twitch-top' && F.catalog) { // sans jeu : les plus regardés ; avec un jeu (menu ou recherche) : ses lives
+      const ex = extraOf(seg[3]), genre = ex.get('genre'), q = (ex.get('search') || '').trim();
+      try {
+        if (genre || !q) { const L = await liveStreams(genre || ''); store.log({ k: 'catalog', u: pseudo || undefined, n: L ? L.length : 0, jeu: genre || 'populaires', dev }); return json(res, { metas: (L || []).map(catalogMeta) }, { 'Cache-Control': 'public, s-maxage=30' }); }
+        if (q.length >= 3) { const L = await liveStreams(gameOf(q)); if (L && L.length) { store.log({ k: 'catalog', u: pseudo || undefined, n: L.length, jeu: gameOf(q), dev }); return json(res, { metas: L.map(catalogMeta) }, { 'Cache-Control': 'public, s-maxage=30' }); } }
+      } catch (e) { store.incr('err'); store.log({ k: 'erreur', u: pseudo || undefined, ou: 'catalogue des lives par jeu', msg: e.message }); }
     }
     if (seg[0] === 'catalog' && seg[1] === 'tv') {
       const search = seg[3] ? (new URLSearchParams(strip(seg[3])).get('search') || '').trim().toLowerCase().replace(/^@/, '') : '';
