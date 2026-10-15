@@ -107,6 +107,17 @@ pre{background:var(--bg2);border:1px solid var(--bs);border-radius:var(--r);padd
 .fd .t1{font-size:.88rem;font-weight:500}.fd .t1 b{font-weight:600}.fd .t2{font-size:.76rem;color:var(--t3)}.fd .tr{text-align:right;font-size:.76rem;color:var(--t3);white-space:nowrap}
 .dn{display:flex;align-items:center;gap:22px;flex-wrap:wrap;justify-content:center}.dc{width:132px;height:132px;border-radius:50%;position:relative;flex:none}.dc::after{content:"";position:absolute;inset:20px;border-radius:50%;background:var(--bg3)}.dc b{position:absolute;inset:0;z-index:1;display:grid;place-items:center;font-size:1.35rem;font-weight:700;letter-spacing:-.02em}
 .dg{display:grid;gap:9px;font-size:.84rem;min-width:150px}.dg div{display:flex;align-items:center;gap:8px}.dg i{width:9px;height:9px;border-radius:3px;flex:none}.dg span{margin-left:auto;color:var(--t2);font-variant-numeric:tabular-nums}
+.tbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:16px 0}.srch{position:relative;flex:1;min-width:220px}.srch svg{position:absolute;left:11px;top:50%;transform:translateY(-50%);width:18px;height:18px;color:var(--t3)}.srch input{width:100%;padding:10px 12px 10px 38px}
+.tbar .segm{flex:none}.tbar .segm button{padding:9px 14px}.tbar select{padding:10px 12px}
+.segm button.on{background:var(--a);color:#fff}
+.ugrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px}@media(max-width:420px){.ugrid{grid-template-columns:1fr}}
+.uc{background:var(--bg3);border:1px solid var(--bs);border-radius:var(--rl);padding:18px;display:flex;flex-direction:column;gap:14px;transition:border-color .15s}.uc:hover{border-color:var(--bd)}
+.uh{display:flex;gap:12px;align-items:center}.uh .av{width:44px;height:44px;font-size:1.05rem;position:relative;flex:none}.uh .av i{position:absolute;right:-1px;bottom:-1px;width:12px;height:12px;border-radius:50%;border:2px solid var(--bg3);background:var(--t3)}.uh .av i.on{background:var(--ok)}.uh .av i.rc{background:var(--wa)}
+.uh b{font-size:1rem;font-weight:600;display:block;line-height:1.25}.uh span{font-size:.78rem;color:var(--t3)}.uh .ub{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.us{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.us div{background:var(--bg2);border:1px solid var(--bs);border-radius:10px;padding:9px 11px}.us b{display:block;font-size:1.1rem;font-variant-numeric:tabular-nums;line-height:1.25}.us span{font-size:.7rem;color:var(--t3);text-transform:uppercase;letter-spacing:.05em}
+.ul{font-size:.82rem;color:var(--t2);display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}.ul b{color:var(--t);font-weight:500}
+.ch{display:flex;gap:6px;flex-wrap:wrap}.ch span{font-size:.72rem;color:var(--t2);background:var(--el);border:1px solid var(--bs);border-radius:99px;padding:2px 9px}
+.ua{display:flex;gap:8px;flex-wrap:wrap;border-top:1px solid var(--bs);padding-top:14px;margin-top:auto}.ua .btn{padding:6px 12px;font-size:.8rem}.ua .btn.dg{margin-left:auto}
 </style>
 </head>
 <body>
@@ -138,8 +149,13 @@ pre{background:var(--bg2);border:1px solid var(--bs);border-radius:var(--r);padd
 </div>
 
 <div class="page" id="p-users">
- <div class="sec"><div class="sh"><div class="stt"><svg viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5s-3 1.34-3 3 1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>Utilisateurs</div><div class="ctl"><span class="cnt" id="usN">0</span><input id="usq" placeholder="Chercher un pseudo…"></div></div><div class="sb np tw" id="users"></div></div>
- <div class="sec"><div class="sh"><div class="stt"><svg viewBox="0 0 24 24"><path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>Profils enregistrés (page /config)</div><div class="ctl"><span class="cnt" id="pfN">0</span><button class="hb" id="pfRef">Actualiser</button></div></div><div class="sb np tw" id="pfl"></div><div class="sb"><span class="dim">Mot de passe oublié : « Réinitialiser » retire le mot de passe du profil. La personne se reconnecte avec l'identifiant en laissant le mot de passe vide, puis en choisit un nouveau. Son addon installé ne change pas.</span></div></div>
+ <div class="hero"><div><h1>Utilisateurs</h1><p id="usSub"></p></div><div class="ctl"><button class="btn" id="pfRef" type="button">Actualiser</button></div></div>
+ <div class="mini" id="usK"></div>
+ <div class="tbar"><div class="srch"><svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg><input id="usq" placeholder="Chercher un pseudo ou un appareil…" autocomplete="off"></div>
+  <div class="segm" id="usF"><button data-f="all" class="on">Tous</button><button data-f="act">Actifs</button><button data-f="inc">Incidents</button><button data-f="pro">Profils</button></div>
+  <select id="usS" aria-label="Trier"><option value="last">Dernière activité</option><option value="n">Plus de lectures</option><option value="inc">Plus d'incidents</option><option value="az">Pseudo (A–Z)</option></select></div>
+ <div class="ugrid" id="users"></div>
+ <p class="dim" style="font-size:.8rem;margin-top:14px">Mot de passe oublié : « Réinitialiser » retire le mot de passe du profil. La personne se reconnecte avec son identifiant en laissant le mot de passe vide, puis en choisit un nouveau. Son addon déjà installé ne change pas.</p>
 </div>
 
 <div class="page" id="p-relays">
@@ -319,11 +335,7 @@ const v1=D.map(d=>g('d:'+d+':stream')),v2=D.map(d=>g('d:'+d+':incident')),mx=Mat
  $('#feedN').textContent=fd.length;
  $('#feed').innerHTML=fd.length?fd.map(l=>{const u=l.u||'anonyme';return '<div class="fd"><div class="av" style="background:hsl('+hue(u)+' 55% 38%)">'+esc(u.slice(0,1).toUpperCase())+'</div><div><div class="t1"><b>'+esc(u)+'</b> regarde <b>'+esc(l.ch||'?')+'</b></div><div class="t2">'+esc(l.relais||'–')+(l.appareil?' · '+esc(l.appareil):'')+(l.ms?' · '+l.ms+' ms':'')+'</div></div><div class="tr">'+ago(l.t)+'</div></div>'}).join(''):'<div class="empty">Aucune lecture pour le moment.</div>';
  $('#heroSub').textContent=new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'})+' · mis à jour à '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
- // utilisateurs
- const q=$('#usq').value.toLowerCase().trim(),us=S.users.slice().sort((a,b)=>(b.last||0)-(a.last||0)).filter(u=>!q||u.pseudo.includes(q)||(u.dev||'').toLowerCase().includes(q));
- $('#usN').textContent=us.length;
- const sm=c=>c?[c.cap?'max '+c.cap+'p':'qualité max',c.fps60?'60 i/s':'30 i/s',c.relay?'relais':'sans relais',c.hevc?'1440p':'',c.compte?'compte lié':'',c.fixed+' fixes',c.audio?'audio':''].filter(Boolean).join(' · '):'<span class="dim">défaut</span>';
- $('#users').innerHTML=us.length?'<table><thead><tr><th>Pseudo</th><th>Appareil</th><th class="r">Lectures</th><th class="r">Incidents</th><th>Dernière chaîne</th><th>Dernière activité</th><th>Réglages</th><th></th></tr></thead><tbody>'+us.map(u=>'<tr><td><span class="user" data-u="'+esc(u.pseudo)+'">'+esc(u.pseudo)+'</span></td><td>'+esc(u.dev||'–')+'</td><td class="r">'+n(u.n)+'</td><td class="r">'+(u.inc?'<span class="pill wa">'+u.inc+'</span>':'<span class="dim">0</span>')+'</td><td>'+esc(u.ch||'–')+'</td><td class="dim">'+ago(u.last)+'</td><td class="dim" style="font-size:.8rem">'+(typeof sm(u.cfg)==='string'?sm(u.cfg):'')+'</td><td><button class="btn" data-log="'+esc(u.pseudo)+'">Journal</button></td></tr>').join('')+'</tbody></table>':'<div class="empty">Aucun utilisateur pour le moment. Les pseudos apparaissent dès qu\'une personne installe son lien depuis <a href="/config" style="color:var(--a)">/config</a>.</div>';
+ renderUsers();
  // relais
  const names=S.config.relais.map(r=>r.name);
  $('#relst').innerHTML='<table><thead><tr><th>Relais</th><th>Réussite</th><th style="width:160px"></th><th class="r">Latence moy.</th><th class="r">Essais</th><th class="r">Gagnant</th></tr></thead><tbody>'+names.map(nm=>{const ok=g('r|'+nm+'|ok'),ko=g('r|'+nm+'|fail'),t=ok+ko,ms=ok?Math.round(g('r|'+nm+'|ms')/ok):0,p=t?Math.round(100*ok/t):0;return '<tr><td>'+esc(nm)+'</td><td><span class="pill '+(!t?'':p>=70?'ok':p>=30?'wa':'ko')+'">'+(t?p+' %':'–')+'</span></td><td><div class="bar" style="margin:0"><i style="width:'+p+'%;background:'+(p>=70?'var(--ok)':p>=30?'var(--wa)':'var(--ko)')+'"></i></div></td><td class="r">'+(ms?ms+' ms':'–')+'</td><td class="r">'+n(t)+'</td><td class="r">'+n(g('r|'+nm+'|win'))+'</td></tr>'}).join('')+'</tbody></table>';
@@ -357,13 +369,34 @@ function renderLogs(){
  $('#logs').innerHTML=rows.length?rows.map(l=>{const L=LV[l.lvl||'INFO'];return '<div class="le '+(l.lvl||'')+'"><span class="lt" title="'+new Date(l.t).toLocaleString('fr-FR')+'">'+new Date(l.t).toLocaleTimeString('fr-FR')+' <span class="dim">· '+ago(l.t).replace('il y a ','')+'</span></span><span><span class="pill '+L[0]+'">'+L[1]+'</span></span><span><span class="pill '+(KC[l.k]||'')+'">'+esc(l.k)+'</span></span><span>'+(l.u?'<span class="user" data-u="'+esc(l.u)+'">'+esc(l.u)+'</span>':'<span class="dim">anonyme</span>')+(l.appareil?'<div class="dim" style="font-size:.74rem">'+esc(l.appareil)+'</div>':'')+'</span><span class="lm">'+msg(l)+'</span></div>'}).join(''):'<div class="empty">Aucune entrée ne correspond.</div>';
 }
 document.addEventListener('click',e=>{const u=e.target.closest('[data-u],[data-log]');if(!u)return;const p=u.dataset.u||u.dataset.log;$('#fu').value=p;go('logs');renderLogs()});
-for(const id of['#fl','#fk','#fu','#fq'])$(id).oninput=()=>S&&renderLogs();$('#usq').oninput=()=>S&&render();
-async function loadProf(){try{const r=await api('profiles'),L=r.profils||[];$('#pfN').textContent=L.length;
- $('#pfl').innerHTML=L.length?'<table><thead><tr><th>Pseudo</th><th>Appareil</th><th>Mot de passe</th><th>Compte Twitch</th><th>Mise à jour</th><th></th></tr></thead><tbody>'+L.map(p=>'<tr><td><span class="user" data-u="'+esc(p.pseudo)+'">'+esc(p.pseudo)+'</span></td><td>'+esc(p.device||'–')+'</td><td>'+(p.pw?'défini':'<span class="dim">aucun (à définir)</span>')+'</td><td>'+(p.compte?'lié':'<span class="dim">–</span>')+'</td><td class="dim">'+(p.maj?new Date(p.maj).toLocaleString('fr-FR'):'–')+'</td><td class="r"><button class="hb" data-pf="reset" data-r="'+p.ref+'"'+(p.pw?'':' disabled')+'>Réinitialiser</button> <button class="hb" data-pf="delete" data-r="'+p.ref+'">Supprimer</button></td></tr>').join('')+'</tbody></table>':'<div class="dim" style="padding:18px">Aucun profil enregistré (ou base de données non configurée).</div>'}catch(e){}}
+for(const id of['#fl','#fk','#fu','#fq'])$(id).oninput=()=>S&&renderLogs();$('#usq').oninput=()=>S&&renderUsers();
+
+let PROF=[],usF='all';
+function renderUsers(){
+ if(!S||!S.users)return;const now=Date.now(),byP=new Map(PROF.map(p=>[p.pseudo,p])),m=new Map();
+ S.users.forEach(u=>m.set(u.pseudo,{...u,prof:byP.get(u.pseudo)}));
+ PROF.forEach(p=>{if(!m.has(p.pseudo))m.set(p.pseudo,{pseudo:p.pseudo,n:0,inc:0,last:p.maj||0,dev:p.device,cfg:null,prof:p})});
+ const all=[...m.values()],act=u=>u.last&&now-u.last<86400000,live=u=>u.last&&now-u.last<600000;
+ $('#usSub').textContent=all.length+' personne'+(all.length>1?'s':'')+' · '+all.filter(act).length+' active'+(all.filter(act).length>1?'s':'')+' dans les dernières 24 h';
+ $('#usK').innerHTML=mc('in',IP.u,'Utilisateurs',all.length,'au total')+mc('ok',IP.v,'En ligne',all.filter(live).length,'actifs depuis 10 min')+mc('pr',IP.s,'Profils protégés',PROF.filter(p=>p.pw).length+' / '+PROF.length,'mot de passe défini')+mc('wa',IP.w,'Avec incidents',all.filter(u=>u.inc).length,'à surveiller');
+ const q=$('#usq').value.toLowerCase().trim(),so=$('#usS').value;
+ let L=all.filter(u=>(!q||u.pseudo.includes(q)||(u.dev||'').toLowerCase().includes(q))&&(usF==='all'||(usF==='act'&&act(u))||(usF==='inc'&&u.inc)||(usF==='pro'&&u.prof)));
+ L.sort((a,b)=>so==='n'?b.n-a.n:so==='inc'?b.inc-a.inc:so==='az'?a.pseudo.localeCompare(b.pseudo):(b.last||0)-(a.last||0));
+ const hue=t=>{let h=0;for(const c of String(t))h=(h*31+c.charCodeAt(0))%360;return h};
+ const chips=c=>c?[c.cap?'max '+c.cap+'p':'qualité max',c.fps60?'60 i/s':'30 i/s',c.relay?'relais sans pub':'sans relais',c.hevc?'1440p':'',c.pc?'mode ordinateur':'',c.audio?'audio':'',c.fixed+' fixe'+(c.fixed>1?'s':'')].filter(Boolean):['réglages par défaut'];
+ $('#users').innerHTML=L.length?L.map(u=>{const pf=u.prof,st=live(u)?'on':act(u)?'rc':'';
+  return '<div class="uc"><div class="uh"><div class="av" style="background:hsl('+hue(u.pseudo)+' 55% 38%)">'+esc(u.pseudo.slice(0,1).toUpperCase())+'<i class="'+st+'"></i></div><div><b>'+esc(u.pseudo)+'</b><span>'+esc(u.dev||'appareil non précisé')+'</span></div><div class="ub">'+(pf?'<span class="pill '+(pf.pw?'ok':'wa')+'">'+(pf.pw?'mot de passe':'sans mot de passe')+'</span>':'<span class="pill">lien simple</span>')+(pf&&pf.compte?'<span class="pill in">compte lié</span>':'')+'</div></div>'+
+  '<div class="us"><div><b>'+n(u.n)+'</b><span>Lectures</span></div><div><b>'+(u.inc?'<span style="color:var(--wa)">'+n(u.inc)+'</span>':'0')+'</b><span>Incidents</span></div><div><b>'+(u.last?ago(u.last).replace('il y a ',''):'–')+'</b><span>Activité</span></div></div>'+
+  '<div class="ul"><span>Dernière chaîne : <b>'+esc(u.ch||'–')+'</b></span>'+(pf&&pf.maj?'<span>Profil modifié le '+new Date(pf.maj).toLocaleDateString('fr-FR')+'</span>':'')+'</div>'+
+  '<div class="ch">'+chips(u.cfg).map(x=>'<span>'+esc(x)+'</span>').join('')+'</div>'+
+  '<div class="ua"><button class="btn" data-log="'+esc(u.pseudo)+'" type="button">Voir le journal</button>'+(pf?'<button class="btn" data-pf="reset" data-r="'+pf.ref+'" type="button"'+(pf.pw?'':' disabled')+'>Réinitialiser le mdp</button><button class="btn dg" data-pf="delete" data-r="'+pf.ref+'" type="button">Supprimer</button>':'')+'</div></div>'}).join(''):'<div class="empty" style="grid-column:1/-1">Aucun utilisateur ne correspond. Les pseudos apparaissent dès qu\'une personne installe son lien depuis <a href="/config" style="color:var(--a)">/config</a>.</div>'}
+$('#usF').onclick=e=>{const b=e.target.closest('button');if(!b)return;usF=b.dataset.f;$$('#usF button').forEach(x=>x.classList.toggle('on',x===b));renderUsers()};
+$('#usS').onchange=renderUsers;
+async function loadProf(){try{const r=await api('profiles');PROF=r.profils||[];renderUsers()}catch(e){}}
 $('#pfRef').onclick=loadProf;
-$('#pfl').onclick=async e=>{const b=e.target.closest('[data-pf]');if(!b)return;const del=b.dataset.pf==='delete';
- if(b.dataset.sure!=='1'){b.dataset.sure='1';b.textContent=del?'Confirmer la suppression':'Confirmer';setTimeout(()=>{b.dataset.sure='';b.textContent=del?'Supprimer':'Réinitialiser'},4000);return}
- b.disabled=true;const r=await api('profiles',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ref:b.dataset.r,action:b.dataset.pf})});loadProf();load()};
+$('#users').onclick=async e=>{const b=e.target.closest('[data-pf]');if(!b)return;const del=b.dataset.pf==='delete',t0=del?'Supprimer':'Réinitialiser le mdp';
+ if(b.dataset.sure!=='1'){b.dataset.sure='1';b.textContent=del?'Confirmer la suppression':'Confirmer';setTimeout(()=>{if(b.isConnected){b.dataset.sure='';b.textContent=t0}},4000);return}
+ b.disabled=true;await api('profiles',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ref:b.dataset.r,action:b.dataset.pf})});toast(del?'Profil supprimé':'Mot de passe réinitialisé');loadProf();load()};
 async function load(){try{S=await api('state?n=500');if(S.stats)render()}catch(e){}}
 function schedule(){clearInterval(timer);timer=setInterval(()=>{if(!paused&&!document.hidden)load()},+$('#rf').value)}
 $('#rf').onchange=schedule;
