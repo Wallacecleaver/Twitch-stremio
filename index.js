@@ -21,7 +21,7 @@ const PORT = process.env.PORT || 7000;
 const GQL = 'https://gql.twitch.tv/gql';
 const GQL_CLIENT_ID = 'kimne78kx3ncx6brgo4mv6wki5h1ko'; // identifiant public du lecteur web de Twitch
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
-const FAST_BREAD = process.env.FAST_BREAD === '1'; // faible latence : plus réactif mais moins stable sur certains lecteurs (PC)
+let FEAT = siteLib.DEF.feat; // interrupteurs du dashboard (Paramètres), rafraîchis à chaque requête
 const LOGIN_RE = /^[a-z0-9_]{3,25}$/;
 
 const send = (res, code, type, body, h = {}) => { res.writeHead(code, { 'Content-Type': type, ...h }); res.end(body); };
@@ -80,7 +80,7 @@ const HEVC_TRIES = [
 ];
 function usherUrl(login, t, extra, v2) {
   const exact = extra && extra._exact; if (exact) { extra = { ...extra }; delete extra._exact; }
-  const q = new URLSearchParams(exact ? { sig: t.signature, token: t.value, p: String(Math.floor(Math.random() * 1e7)), ...extra } : { sig: t.signature, token: t.value, allow_source: 'true', allow_audio_only: 'true', ...(FAST_BREAD ? { fast_bread: 'true' } : {}), player: 'twitchweb', type: 'any', supported_codecs: 'avc1', p: String(Math.floor(Math.random() * 1e7)), ...(extra || {}) });
+  const q = new URLSearchParams(exact ? { sig: t.signature, token: t.value, p: String(Math.floor(Math.random() * 1e7)), ...extra } : { sig: t.signature, token: t.value, allow_source: 'true', allow_audio_only: 'true', ...(FEAT.fast ? { fast_bread: 'true' } : {}), player: 'twitchweb', type: 'any', supported_codecs: 'avc1', p: String(Math.floor(Math.random() * 1e7)), ...(extra || {}) });
   return 'https://usher.ttvnw.net/api/' + (v2 ? 'v2/' : '') + 'channel/hls/' + login + '.m3u8?' + q;
 }
 // qualités individuelles d'une liste de lecture principale : [{ name, url }]
@@ -150,7 +150,7 @@ async function liveOnce(login, tokType, extra, tok, v2) {
 /* ------------------------------------------------------------------ relais « sans pub » (variable PROXIES pour changer la liste) */
 // Un relais renvoie la liste de lecture d'une chaîne depuis une autre région, où Twitch n'insère pas de publicité.
 // Format de PROXIES : une adresse par ligne, avec {channel} (nom optionnel : « Nom | adresse »).
-const Q = '?allow_source=true&allow_audio_only=true' + (FAST_BREAD ? '&fast_bread=true' : '');
+const Q = '?allow_source=true&allow_audio_only=true';
 const DEFAULT_PROXIES = [
   ['Luminous EU', 'https://eu.luminous.dev/live/{channel}'], ['Luminous EU 2', 'https://eu2.luminous.dev/live/{channel}'], ['Luminous EU 3', 'https://eu3.luminous.dev/live/{channel}'],
   ['Luminous AS', 'https://as.luminous.dev/live/{channel}'], ['Nadeko', 'https://twitch-al.nadeko.net/live/{channel}'],
@@ -158,16 +158,16 @@ const DEFAULT_PROXIES = [
   ['Perfprod EU 4', 'https://lb-eu4.cdn-perfprod.com/live/{channel}'], ['Perfprod EU 5', 'https://lb-eu5.cdn-perfprod.com/live/{channel}'], ['Perfprod NA', 'https://lb-na.cdn-perfprod.com/live/{channel}'],
   ['Perfprod AS', 'https://lb-as.cdn-perfprod.com/live/{channel}'], ['Perfprod SA', 'https://lb-sa.cdn-perfprod.com/live/{channel}'],
 ].map(([name, url]) => ({ name, url: url + Q }));
-function proxyList() {
+const allProxies = () => {
   const env = String(process.env.PROXIES || '').split('\n').map(x => x.trim()).filter(Boolean);
   if (!env.length) return DEFAULT_PROXIES;
   return env.map((l, i) => { const [a, b] = l.includes('|') ? l.split('|').map(x => x.trim()) : ['Relais ' + (i + 1), l]; return { name: a, url: b }; }).filter(x => /^https:\/\/.+\{channel\}/.test(x.url));
-}
-const PROXY_TIMEOUT = 2500;
+};
+const proxyList = () => allProxies().filter(x => !FEAT.offRelays.includes(x.name));
 const isMaster = t => typeof t === 'string' && t.startsWith('#EXTM3U') && /#EXT-X-STREAM-INF/.test(t);
 async function askProxy(px, login, signal, hevc) {
-  const t0 = Date.now(), url = px.url.replace('{channel}', login) + (hevc ? (px.url.includes('?') ? '&' : '?') + 'supported_codecs=av1,h265,h264' : '');
-  const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), PROXY_TIMEOUT);
+  const t0 = Date.now(), url = px.url.replace('{channel}', login) + (FEAT.fast ? (px.url.includes('?') ? '&' : '?') + 'fast_bread=true' : '') + (hevc ? (px.url.includes('?') ? '&' : '?') + 'supported_codecs=av1,h265,h264' : '');
+  const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), FEAT.timeout);
   if (signal) signal.addEventListener('abort', () => ctl.abort(), { once: true });
   try {
     const r = await fetch(url, { headers: { 'User-Agent': UA }, signal: ctl.signal, redirect: 'follow' });
@@ -445,7 +445,7 @@ async function checkStream(login, c, u, dev, auth) {
 
 const mask = v => v ? 'défini' : 'absent';
 const adminRoute = makeAdmin({ send, json, relayReport, probe, check: async (login, c, u) => { const n = cfgLib.normalize(c || {}); return checkStream(login, n, u || 'admin', 'admin', n.hevc ? await ownerToken() : null); }, account, config: () => ({
-  relais: proxyList(),
+  relais: allProxies(),
   rows: [
     ['Version', require('./package.json').version, null],
     ['Stockage persistant (Upstash)', store.persistent ? 'actif' : 'mémoire temporaire', store.persistent],
@@ -454,9 +454,7 @@ const adminRoute = makeAdmin({ send, json, relayReport, probe, check: async (log
     ['Catalogue « Lives populaires »', process.env.TWITCH_CLIENT_ID && process.env.TWITCH_CLIENT_SECRET ? 'disponible' : 'vide (clés Twitch manquantes)', !!(process.env.TWITCH_CLIENT_ID && process.env.TWITCH_CLIENT_SECRET)],
     ['Compte Twitch lié', acctCache.v ? 'oui' : 'non / pas encore vérifié', acctCache.v ? true : null],
     ['Chiffrement des jetons (SECRET)', sealLib.available() ? 'actif' : 'absent (liaison de compte impossible)', sealLib.available()],
-    ['Relais configurés', String(proxyList().length) + (process.env.PROXIES ? ' (variable PROXIES)' : ' (liste par défaut)'), null],
-    ['Faible latence (FAST_BREAD)', FAST_BREAD ? 'activée' : 'désactivée', null],
-    ['Délai relais', PROXY_TIMEOUT + ' ms', null],
+    ['Relais actifs', proxyList().length + ' sur ' + allProxies().length + (process.env.PROXIES ? ' (variable PROXIES)' : ' (liste par défaut)'), null],
   ] }) });
 
 // Profils enregistrés : /u/<id>/… (l'identifiant est le secret). Les réglages sont modifiables sans réinstaller l'addon.
@@ -528,6 +526,10 @@ async function handler(req, res) {
     res.setHeader('Access-Control-Allow-Origin', '*');
     if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
     if (await adminRoute(req, res, seg)) return;
+    const SS = await siteLib.load(), F = FEAT = SS.feat; store.setLog(F.logs);
+    cfg = { ...cfg, relay: cfg.relay && F.relays, pc: cfg.pc && F.pc, hevc: cfg.hevc && F.hevc, audio: cfg.audio && F.audio, cap: F.capMax && (!cfg.cap || cfg.cap > F.capMax) ? F.capMax : cfg.cap };
+    if (!cfg.hevc) auth = null;
+    const maint = () => json(res, { streams: [{ name: '⚠️ Maintenance', title: F.maintMsg || 'Addon en maintenance, réessaie un peu plus tard.', externalUrl: originOf(req) + '/config' }] });
     // statistiques : on attend leur enregistrement avant de répondre (Vercel coupe le travail après la réponse)
     const end = res.end.bind(res);
     res.end = (...a) => { store.flush().finally(() => end(...a)); return res; };
@@ -575,6 +577,7 @@ async function handler(req, res) {
     if (seg[0] === 'p' && seg[1]) { // liste de lecture « sans pub » : récupérée côté serveur auprès d'un relais, puis servie au lecteur
       const login = strip(seg[1]).replace(/\.m3u8$/, '').toLowerCase();
       if (!LOGIN_RE.test(login)) return send(res, 400, 'text/plain; charset=utf-8', 'Nom de chaîne invalide');
+      if (F.maint) return send(res, 503, 'text/plain; charset=utf-8', 'Addon en maintenance');
       const fin = m => pcOn(cfg) ? pcMaster(m, originOf(req), base) : m;
       const [b, lv] = await Promise.all([cfg.relay ? bestProxy(login, cfg.hevc) : null, cfg.hevc && cfg.relay ? liveStream(login, true, auth).catch(() => null) : null]);
       store.incr('play'); store.top(login); store.user(pseudo, { ch: login, dev: cfg.device });
@@ -599,6 +602,7 @@ async function handler(req, res) {
         return json(res, { metas: [meta] });
       }
       let list = [];
+      if (!F.catalog) return json(res, { metas: [] });
       try { list = await helix('/streams', { first: 50 }); store.log({ k: 'catalog', n: list.length, dev }); } catch (e) { console.error('catalogue :', e.message); store.incr('err'); store.log({ k: 'erreur', ou: 'catalogue', msg: e.message }); } // sans identifiants : catalogue vide
       return json(res, { metas: list.map(metaOf) }, { 'Cache-Control': 'public, s-maxage=30' });
     }
@@ -612,6 +616,7 @@ async function handler(req, res) {
     if (seg[0] === 'stream' && seg[1] === 'tv') {
       const login = strip(seg[2]).replace(/^twitch:/, '').toLowerCase();
       if (!LOGIN_RE.test(login)) return json(res, { streams: [] });
+      if (F.maint) return maint();
       const [s, b] = await Promise.all([liveStream(login, cfg.hevc, auth), cfg.relay ? bestProxy(login, cfg.hevc) : null]);
       store.incr('stream'); store.incr('d:' + store.day() + ':stream'); store.user(pseudo, { ch: login, dev: cfg.device });
       const who = { u: pseudo || undefined, appareil: cfg.device || undefined, dev };
