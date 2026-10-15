@@ -657,7 +657,7 @@ async function handler(req, res) {
       try {
         const L = byGame((await followedChannels(auth)).filter(x => x.info.live), extraOf(seg[3]).get('genre'), x => x.info.game); // seules les chaînes en direct : les autres apparaissent quand elles passent en ligne
         store.log({ k: 'catalog', u: pseudo || undefined, n: L.length, suivis: true, dev });
-        return json(res, { metas: L.map(x => { const m = metaFromInfo(x.login, x.info); delete m.logo; return { ...m, background: undefined, name: fmtN(x.info.viewers) + ' · ' + x.info.name, releaseInfo: '🔴 ' + fmtN(x.info.viewers) + ' 👁' }; }) }, { 'Cache-Control': 'no-store' });
+        return json(res, { metas: L.map(x => { const m = metaFromInfo(x.login, x.info); delete m.logo; return { ...m, background: undefined, name: '👁 ' + fmtN(x.info.viewers) + ' · ' + x.info.name, releaseInfo: '🔴 ' + fmtN(x.info.viewers) + ' 👁' }; }) }, { 'Cache-Control': 'no-store' });
       } catch (e) { store.incr('err'); store.log({ k: 'erreur', u: pseudo || undefined, ou: 'catalogue des chaînes suivies', msg: e.message }); return json(res, { metas: [] }); }
     }
     if (seg[0] === 'catalog' && seg[1] === 'tv') {
