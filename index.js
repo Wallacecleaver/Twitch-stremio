@@ -288,17 +288,29 @@ const metaFromInfo = (login, i) => {
 };
 
 // Chaînes suivies du compte Twitch lié au profil (jeton « auth-token » déjà utilisé pour le 1440p), via l'API du site web de Twitch.
-const FOLLOW_QUERY = 'query Followed { currentUser { login follows(first: 100) { edges { node { login displayName profileImageURL(width: 300) stream { title viewersCount previewImageURL(width: 640, height: 360) game { displayName } } } } } } }';
+const NODE_FIELDS = 'login displayName profileImageURL(width: 300) stream { title viewersCount previewImageURL(width: 640, height: 360) game { displayName } }';
+const followQuery = (field, after) => 'query Followed { currentUser { login ' + field + '(first: 100' + (after ? ', after: "' + after + '"' : '') + ') { edges { cursor node { ' + NODE_FIELDS + ' } } pageInfo { hasNextPage } } } }';
 const followCache = new Map();
+async function followPage(oauth, field, after) {
+  const r = await fetch(GQL, { method: 'POST', headers: { 'Client-ID': GQL_CLIENT_ID, Authorization: 'OAuth ' + oauth, 'Content-Type': 'application/json', 'User-Agent': UA, 'X-Device-Id': crypto.randomBytes(16).toString('hex') }, body: JSON.stringify({ operationName: 'Followed', query: followQuery(field, after) }), signal: AbortSignal.timeout(8000) });
+  if (!r.ok) throw new Error('Twitch (suivis) : HTTP ' + r.status);
+  const j = await r.json().catch(() => ({})), u = j && j.data && j.data.currentUser, conn = u && u[field];
+  if (!conn) throw new Error('Twitch n\'a pas renvoyé les chaînes suivies' + (j && j.errors && j.errors[0] ? ' : ' + String(j.errors[0].message).slice(0, 120) : ' (compte non reconnu ?)'));
+  return { edges: (conn.edges || []).filter(e => e && e.node && e.node.login), more: !!(conn.pageInfo && conn.pageInfo.hasNextPage) };
+}
 async function followedChannels(oauth) {
   const key = crypto.createHash('sha1').update(oauth).digest('hex').slice(0, 10), c = followCache.get(key);
   if (c && c.exp > Date.now()) return c.v;
-  const r = await fetch(GQL, { method: 'POST', headers: { 'Client-ID': GQL_CLIENT_ID, Authorization: 'OAuth ' + oauth, 'Content-Type': 'application/json', 'User-Agent': UA, 'X-Device-Id': crypto.randomBytes(16).toString('hex') }, body: JSON.stringify({ operationName: 'Followed', query: FOLLOW_QUERY }), signal: AbortSignal.timeout(8000) });
-  if (!r.ok) throw new Error('Twitch (suivis) : HTTP ' + r.status);
-  const j = await r.json().catch(() => ({})), u = j && j.data && j.data.currentUser;
-  if (!u) throw new Error('Twitch n\'a pas renvoyé les chaînes suivies' + (j && j.errors && j.errors[0] ? ' : ' + String(j.errors[0].message).slice(0, 120) : ' (compte non reconnu ?)'));
-  const v = ((u.follows && u.follows.edges) || []).map(e => e && e.node).filter(n => n && n.login).map(n => ({ login: n.login, info: { name: n.displayName || n.login, avatar: n.profileImageURL || '', banner: '', bio: '', live: !!n.stream, title: n.stream ? n.stream.title || '' : '', game: n.stream && n.stream.game ? n.stream.game.displayName : '', viewers: n.stream ? Number(n.stream.viewersCount) || 0 : 0, preview: n.stream ? n.stream.previewImageURL || '' : '' } }));
-  v.sort((a, b) => (b.info.live - a.info.live) || (b.info.viewers - a.info.viewers));
+  const collect = async (field, maxPages) => { // toutes les pages (100 par page) : un compte peut suivre des centaines de chaînes
+    const out = []; let after = '';
+    for (let i = 0; i < maxPages; i++) { const pg = await followPage(oauth, field, after); out.push(...pg.edges.map(e => e.node)); if (!pg.more || !pg.edges.length) break; after = pg.edges[pg.edges.length - 1].cursor; if (!after) break; }
+    return out;
+  };
+  let nodes;
+  try { nodes = await collect('followedLiveUsers', 3); } // la liste « en direct » du site web de Twitch
+  catch (e1) { try { nodes = (await collect('follows', 8)).filter(n => n.stream); } catch (e2) { throw new Error(e1.message + ' | ' + e2.message); } }
+  const v = nodes.filter(n => n.stream).map(n => ({ login: n.login, info: { name: n.displayName || n.login, avatar: n.profileImageURL || '', banner: '', bio: '', live: true, title: n.stream.title || '', game: n.stream.game ? n.stream.game.displayName : '', viewers: Number(n.stream.viewersCount) || 0, preview: n.stream.previewImageURL || '' } }));
+  v.sort((a, b) => b.info.viewers - a.info.viewers);
   followCache.set(key, { v, exp: Date.now() + 30000 });
   return v;
 }
