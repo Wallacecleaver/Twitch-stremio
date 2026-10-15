@@ -659,7 +659,7 @@ async function handler(req, res) {
       try {
       const nb = info && info.viewers ? info.viewers.toLocaleString('fr-FR') : '', live = '🔴 EN DIRECT' + (nb ? ' · ' + nb + ' spectateurs' : '');
       const adLine = ok => ok ? '🚫 Sans pub' + (b ? ' · relais ' + b.name : '') : '⚠️ Flux officiel · pubs possibles';
-      const entry = (name, lines, url) => { const d = lines.filter(Boolean).join('\n'); return { name, title: d, description: d, url }; };
+      const entry = (name, lines, url) => { const d = lines.filter(Boolean).join('\n'); return { name, title: d, url }; };
       const label = v => { const m = /(\d{3,4})p(\d+)?/.exec(v.name) || [], h = m[1] || (v.h ? String(v.h) : ''), f = m[2] || (v.fps > 30 ? String(v.fps) : '30'); return { short: h ? h + 'p' + (m[2] || (v.fps > 30 ? v.fps : '')) : v.name.replace(/ \(source\)/, ''), long: h ? '📺 ' + h + 'p · ' + f + ' images/s' + (/source/i.test(v.name) ? ' · qualité source' : '') : '📺 ' + v.name }; };
       const fixed = video.slice(0, cfg.fixed).map(v => { const l = label(v); return entry('Twitch\n' + l.short, [l.long, adLine(!!relayUrls && relayUrls.has(v.url))], pcOn(cfg) ? pcUrl(originOf(req), base, v.url) : v.url); });
       const auto = entry('Twitch\nAuto', [live, info && info.game ? '🎮 ' + info.game : '', '✨ Qualité automatique' + (cfg.cap ? ' (max ' + cfg.cap + 'p)' : '') + ' · ' + adLine(!!b).replace('🚫 ', '').replace('⚠️ ', '⚠️ ')], originOf(req) + base + '/p/' + login + '.m3u8');
