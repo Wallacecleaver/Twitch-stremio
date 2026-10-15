@@ -287,6 +287,22 @@ const metaFromInfo = (login, i) => {
   };
 };
 
+// Chaînes suivies du compte Twitch lié au profil (jeton « auth-token » déjà utilisé pour le 1440p), via l'API du site web de Twitch.
+const FOLLOW_QUERY = 'query Followed { currentUser { login follows(first: 100) { edges { node { login displayName profileImageURL(width: 300) stream { title viewersCount previewImageURL(width: 640, height: 360) game { displayName } } } } } } }';
+const followCache = new Map();
+async function followedChannels(oauth) {
+  const key = crypto.createHash('sha1').update(oauth).digest('hex').slice(0, 10), c = followCache.get(key);
+  if (c && c.exp > Date.now()) return c.v;
+  const r = await fetch(GQL, { method: 'POST', headers: { 'Client-ID': GQL_CLIENT_ID, Authorization: 'OAuth ' + oauth, 'Content-Type': 'application/json', 'User-Agent': UA, 'X-Device-Id': crypto.randomBytes(16).toString('hex') }, body: JSON.stringify({ operationName: 'Followed', query: FOLLOW_QUERY }), signal: AbortSignal.timeout(8000) });
+  if (!r.ok) throw new Error('Twitch (suivis) : HTTP ' + r.status);
+  const j = await r.json().catch(() => ({})), u = j && j.data && j.data.currentUser;
+  if (!u) throw new Error('Twitch n\'a pas renvoyé les chaînes suivies' + (j && j.errors && j.errors[0] ? ' : ' + String(j.errors[0].message).slice(0, 120) : ' (compte non reconnu ?)'));
+  const v = ((u.follows && u.follows.edges) || []).map(e => e && e.node).filter(n => n && n.login).map(n => ({ login: n.login, info: { name: n.displayName || n.login, avatar: n.profileImageURL || '', banner: '', bio: '', live: !!n.stream, title: n.stream ? n.stream.title || '' : '', game: n.stream && n.stream.game ? n.stream.game.displayName : '', viewers: n.stream ? Number(n.stream.viewersCount) || 0 : 0, preview: n.stream ? n.stream.previewImageURL || '' : '' } }));
+  v.sort((a, b) => (b.info.live - a.info.live) || (b.info.viewers - a.info.viewers));
+  followCache.set(key, { v, exp: Date.now() + 30000 });
+  return v;
+}
+
 /* ------------------------------------------------------------------ addon */
 const MANIFEST = {
   id: 'community.twitch.lives', version: '0.1.0', name: 'Twitch', description: 'Lives Twitch dans Stremio',
@@ -577,6 +593,7 @@ async function handler(req, res) {
     if (seg[0] === 'manifest.json') {
       store.log({ k: 'install', u: pseudo || undefined, appareil: cfg.device || undefined, reglages: pseudo ? summary(cfg) : 'défaut', dev }); store.user(pseudo, { cfg: { ...cfg, tok: undefined, compte: !!cfg.tok }, dev: cfg.device });
       const S = await siteLib.load(), mf = { ...MANIFEST, name: S.name, logo: originOf(req) + '/logo.png?v=' + S.logoV };
+      if (auth && S.feat.followed) mf.catalogs = [{ type: 'tv', id: 'twitch-followed', name: 'Twitch · Mes chaînes suivies' }, ...MANIFEST.catalogs];
       return json(res, pseudo ? { ...mf, name: S.name + ' · ' + pseudo, description: MANIFEST.description + ' — profil de ' + pseudo } : mf);
     }
 
@@ -618,6 +635,14 @@ async function handler(req, res) {
       const login = seg[1].toLowerCase();
       if (!LOGIN_RE.test(login)) return json(res, { erreur: 'nom de chaîne invalide' });
       return json(res, await relayReport(login));
+    }
+    if (seg[0] === 'catalog' && seg[1] === 'tv' && strip(seg[2]) === 'twitch-followed') {
+      if (!auth || !F.followed) return json(res, { metas: [] });
+      try {
+        const L = await followedChannels(auth);
+        store.log({ k: 'catalog', u: pseudo || undefined, n: L.length, suivis: true, dev });
+        return json(res, { metas: L.map(x => { const m = metaFromInfo(x.login, x.info); delete m.logo; return { ...m, background: undefined, releaseInfo: x.info.live ? '🔴 ' + x.info.viewers.toLocaleString('fr-FR') + ' 👁' : 'Hors ligne' }; }) }, { 'Cache-Control': 'no-store' });
+      } catch (e) { store.incr('err'); store.log({ k: 'erreur', u: pseudo || undefined, ou: 'catalogue des chaînes suivies', msg: e.message }); return json(res, { metas: [] }); }
     }
     if (seg[0] === 'catalog' && seg[1] === 'tv') {
       const search = seg[3] ? (new URLSearchParams(strip(seg[3])).get('search') || '').trim().toLowerCase().replace(/^@/, '') : '';
