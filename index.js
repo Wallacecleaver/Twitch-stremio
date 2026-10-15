@@ -282,8 +282,8 @@ const metaFromInfo = (login, i) => {
   return {
     id: 'twitch:' + login, type: 'tv', name: i.name, posterShape: 'landscape',
     poster: i.preview || i.avatar || live, background: i.preview || i.banner || i.avatar || undefined, ...(i.avatar ? { logo: i.avatar } : {}),
-    description: i.live ? ('🔴 ' + i.name + ' est en direct' + (i.game ? '  ·  🎮 ' + i.game : '') + '  ·  👁 ' + nb + '\n\n' + (i.title || '')).trim() : ('⚫ ' + i.name + ' est hors ligne' + (i.bio ? '\n\n' + i.bio : '')),
-    genres: i.game ? [i.game] : [], releaseInfo: i.live ? 'EN DIRECT · ' + nb + ' spectateurs' : 'Hors ligne',
+    description: i.live ? ((i.game ? '🎮 ' + i.game + '\n\n' : '') + (i.title || '')).trim() : ('Hors ligne' + (i.bio ? '\n\n' + i.bio : '')),
+    genres: i.game ? [i.game] : [], releaseInfo: i.name,
   };
 };
 
@@ -645,19 +645,24 @@ async function handler(req, res) {
       const login = strip(seg[2]).replace(/^twitch:/, '').toLowerCase();
       if (!LOGIN_RE.test(login)) return json(res, { streams: [] });
       if (F.maint) return maint();
-      const [s, b] = await Promise.all([liveStream(login, cfg.hevc, auth), cfg.relay ? bestProxy(login, cfg.hevc) : null]);
+      const [s, b, info] = await Promise.all([liveStream(login, cfg.hevc, auth), cfg.relay ? bestProxy(login, cfg.hevc) : null, Promise.race([channelInfo(login), new Promise(r => setTimeout(() => r(null), 1500))])]);
       store.incr('stream'); store.incr('d:' + store.day() + ':stream'); store.user(pseudo, { ch: login, dev: cfg.device });
       const who = { u: pseudo || undefined, appareil: cfg.device || undefined, dev };
       if (s.offline) { store.incr('stream_offline'); store.log({ k: 'stream', ...who, ch: login, etat: 'hors ligne', ms: Date.now() - t0 }); return json(res, { streams: [] }); }
       store.incr(b ? 'stream_relay' : 'stream_official'); store.top(login);
       store.log({ k: 'stream', ...who, ch: login, relais: b ? b.name : cfg.relay ? 'aucun (officiel)' : 'coupés (officiel)', relais_ms: b ? b.ms : undefined, ms: Date.now() - t0, plafond: cfg.cap || undefined });
       // Un relais répond : tous les flux passent par lui (sans pub). Sinon : flux officiel.
-      const vars = b ? variantsOf(mergedMaster(b, s, cfg)) : s.variants, tag = b ? ' · sans pub' : '';
+      const vars = b ? variantsOf(mergedMaster(b, s, cfg)) : s.variants;
       const relayUrls = b ? new Set(variantsOf(absolutize(b.text, b.url)).map(v => v.url)) : null;
       const video = vars.filter(v => !v.audio && cfgLib.keepVariant(v, cfg)).sort(byQuality);
-      const fixed = video.slice(0, cfg.fixed).map(v => ({ name: 'Twitch ' + v.name.replace(/ \(source\)/, ''), title: 'En direct · qualité fixe' + (relayUrls && !relayUrls.has(v.url) ? ' · officiel (pubs possibles)' : tag), url: pcOn(cfg) ? pcUrl(originOf(req), base, v.url) : v.url }));
-      const auto = { name: 'Twitch', title: 'En direct · qualité automatique' + (cfg.cap ? ' (max ' + cfg.cap + 'p)' : '') + tag, url: originOf(req) + base + '/p/' + login + '.m3u8' };
-      const audio = cfg.audio ? vars.filter(v => v.audio).slice(0, 1).map(v => ({ name: 'Twitch Audio', title: 'Audio seul' + tag, url: v.url })) : [];
+      // Affichage dans la liste des sources de Stremio : nom court à gauche, détails sur plusieurs lignes à droite.
+      const nb = info && info.viewers ? info.viewers.toLocaleString('fr-FR') : '', live = '🔴 EN DIRECT' + (nb ? ' · ' + nb + ' spectateurs' : '');
+      const adLine = ok => ok ? '🚫 Sans pub' + (b ? ' · relais ' + b.name : '') : '⚠️ Flux officiel · pubs possibles';
+      const entry = (name, lines, url) => { const d = lines.filter(Boolean).join('\n'); return { name, title: d, description: d, url }; };
+      const label = v => { const m = /(\d{3,4})p(\d+)?/.exec(v.name) || [], h = m[1] || (v.h ? String(v.h) : ''), f = m[2] || (v.fps > 30 ? String(v.fps) : '30'); return { short: h ? h + 'p' + (m[2] || (v.fps > 30 ? v.fps : '')) : v.name.replace(/ \(source\)/, ''), long: h ? '📺 ' + h + 'p · ' + f + ' images/s' + (/source/i.test(v.name) ? ' · qualité source' : '') : '📺 ' + v.name }; };
+      const fixed = video.slice(0, cfg.fixed).map(v => { const l = label(v); return entry('Twitch\n' + l.short, [l.long, adLine(!relayUrls || relayUrls.has(v.url))], pcOn(cfg) ? pcUrl(originOf(req), base, v.url) : v.url); });
+      const auto = entry('Twitch\nAuto', [live, info && info.game ? '🎮 ' + info.game : '', '✨ Qualité automatique' + (cfg.cap ? ' (max ' + cfg.cap + 'p)' : '') + ' · ' + adLine(!!b).replace('🚫 ', '').replace('⚠️ ', '⚠️ ')], originOf(req) + base + '/p/' + login + '.m3u8');
+      const audio = cfg.audio ? vars.filter(v => v.audio).slice(0, 1).map(v => entry('Twitch\nAudio', ['🎧 Audio seul', adLine(!!b)], v.url)) : [];
       return json(res, { streams: [auto, ...fixed, ...audio] });
     }
     send(res, 404, 'text/plain; charset=utf-8', 'Introuvable');
