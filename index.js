@@ -639,7 +639,7 @@ async function handler(req, res) {
     if (seg[0] === 'catalog' && seg[1] === 'tv' && strip(seg[2]) === 'twitch-followed') {
       if (!auth || !F.followed) return json(res, { metas: [] });
       try {
-        const L = await followedChannels(auth);
+        const L = (await followedChannels(auth)).filter(x => x.info.live); // seules les chaînes en direct : les autres apparaissent quand elles passent en ligne
         store.log({ k: 'catalog', u: pseudo || undefined, n: L.length, suivis: true, dev });
         return json(res, { metas: L.map(x => { const m = metaFromInfo(x.login, x.info); delete m.logo; return { ...m, background: undefined, releaseInfo: x.info.live ? '🔴 ' + x.info.viewers.toLocaleString('fr-FR') + ' 👁' : 'Hors ligne' }; }) }, { 'Cache-Control': 'no-store' });
       } catch (e) { store.incr('err'); store.log({ k: 'erreur', u: pseudo || undefined, ou: 'catalogue des chaînes suivies', msg: e.message }); return json(res, { metas: [] }); }
