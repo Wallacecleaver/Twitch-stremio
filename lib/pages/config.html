@@ -275,11 +275,12 @@ async function runVerify(){
  if(!alive())return;
  if(!chk)vset('tw','ko','Vérification impossible (serveur injoignable).');
  else if(chk.maint)vset('tw','warn','L\'addon est en maintenance : les lives sont suspendus.');
- else if(chk.twitch&&chk.twitch.ok)vset('tw','ok','Twitch répond ('+chk.twitch.ms+' ms) · '+chk.twitch.n+' lives lus.');
+ else if(chk.twitch&&chk.twitch.ok)vset('tw','ok','Twitch répond ('+chk.twitch.ms+' ms)'+(chk.twitch.n?' · '+chk.twitch.n+' lives lus.':'.'));
  else vset('tw','ko','Twitch ne répond pas : '+((chk.twitch&&chk.twitch.err)||'erreur inconnue')+'.');
  await nap();if(!alive())return;
  if(st.relay){vset('rel','run','Test des relais…');await nap();
   if(!chk||!chk.relais)vset('rel','warn','Relais coupés par le propriétaire : flux officiel (avec pubs).');
+  else if(chk.relais.ok&&chk.relais.sansLive)vset('rel','ok',chk.relais.total+' relais configurés (test en direct impossible : aucun live trouvé à l\'instant).');
   else if(chk.relais.ok)vset('rel','ok','Relais « '+chk.relais.nom+' » opérationnel ('+chk.relais.ms+' ms, '+chk.relais.total+' disponibles).');
   else vset('rel','warn','Aucun relais ne répond : l\'addon utilisera le flux officiel.');
   if(!alive())return}
