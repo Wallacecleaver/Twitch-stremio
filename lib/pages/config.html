@@ -78,6 +78,18 @@ input.bad{border-color:var(--ko);box-shadow:0 0 0 4px var(--kos);animation:shake
 .feat div{position:relative;overflow:hidden;background:var(--el);border:1px solid var(--bs);border-radius:var(--r);padding:14px 16px;font-size:.82rem;color:var(--t2);transition:all .4s var(--ease);animation:up .7s var(--ease) both}.feat div:nth-child(1){animation-delay:.1s}.feat div:nth-child(2){animation-delay:.18s}.feat div:nth-child(3){animation-delay:.26s}.feat div:hover{transform:translateY(-4px);border-color:rgba(157,92,255,.4)}.feat b{display:block;color:var(--t);font-size:.9rem;margin-bottom:3px}
 .why{font-size:.82rem;color:var(--t2);background:linear-gradient(90deg,rgba(157,92,255,.12),rgba(157,92,255,.02));border-left:3px solid var(--a);border-radius:0 var(--r) var(--r) 0;padding:12px 16px;line-height:1.55}.why b{color:var(--t)}
 .idbox{display:grid;gap:7px;width:100%;text-align:left;background:linear-gradient(135deg,rgba(157,92,255,.18),rgba(56,189,248,.07));border:1px solid rgba(157,92,255,.35);border-radius:var(--r);padding:16px}.idbox .lab{color:#e2d4ff}.idbox .url input{font-size:.92rem;letter-spacing:.03em}
+.vf{border:1px solid var(--bd);border-radius:20px;padding:18px;background:linear-gradient(180deg,rgba(255,255,255,.04),rgba(255,255,255,.01));display:grid;gap:10px;margin:18px 0 4px}
+.vh{display:flex;align-items:center;justify-content:space-between;font:600 .7rem 'Space Grotesk',monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--a2)}.vh b{font-size:1.05rem;color:var(--t);letter-spacing:0}
+.vb{height:5px;border-radius:9px;background:rgba(255,255,255,.08);overflow:hidden}.vb i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--a2),var(--ok));transition:width .5s var(--ease)}
+.vr{display:flex;align-items:center;gap:14px;padding:12px 14px;border:1px solid var(--bs);border-radius:14px;background:var(--el);transition:.3s;animation:up .5s var(--ease) both}
+.vr .ic{flex:none;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-size:.8rem;font-weight:700;background:rgba(255,255,255,.07);color:var(--t3)}
+.vr .tx{flex:1;min-width:0}.vr .tx b{display:block;font-size:.9rem}.vr .tx span{display:block;color:var(--t2);font-size:.78rem;overflow-wrap:anywhere}
+.vr .tg2{font:700 .62rem 'Space Grotesk',monospace;letter-spacing:.1em;color:var(--t3)}
+.vr.run{border-color:rgba(56,189,248,.4);background:rgba(56,189,248,.06)}.vr.run .ic{background:none}.vr.run .tg2{color:var(--a2)}
+.vr.ok{border-color:rgba(52,211,153,.35);background:var(--oks)}.vr.ok .ic{background:var(--ok);color:#052e1d}.vr.ok .tg2{color:var(--ok)}
+.vr.warn{border-color:rgba(251,191,36,.4);background:rgba(251,191,36,.07)}.vr.warn .ic{background:#fbbf24;color:#3b2a00}.vr.warn .tg2{color:#fbbf24}
+.vr.ko{border-color:rgba(251,113,133,.45);background:var(--kos)}.vr.ko .ic{background:var(--ko);color:#3a0a12}.vr.ko .tg2{color:var(--ko)}
+.vr.wait{opacity:.55}
 ol.how{text-align:left;color:var(--t2);font-size:.86rem;padding-left:20px;display:grid;gap:5px;width:100%}ol.how b{color:var(--t)}
 .toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,24px) scale(.94);background:rgba(28,28,36,.9);border:1px solid var(--bx);border-radius:var(--r);padding:12px 22px;opacity:0;pointer-events:none;transition:all .45s var(--spring);z-index:99;font-size:.9rem;box-shadow:0 14px 40px rgba(0,0,0,.55)}.toast.show{opacity:1;transform:translate(-50%,0) scale(1)}
 footer{position:relative;z-index:1;display:grid;gap:8px;justify-items:start;margin-top:26px;font-size:.78rem;color:var(--t3);animation:up .6s .25s var(--ease) both}
@@ -159,6 +171,7 @@ function body(){
   h='<h1>'+(edit?'Tout est bon ?':'Dernière étape')+'</h1><p class="sub">Vérifie ton récapitulatif. Tu peux cliquer sur une étape en haut pour corriger quelque chose.</p><div class="sum">'+L.map((r,i)=>'<div style="animation-delay:'+(i*.04)+'s"><span>'+r[0]+'</span><b>'+esc(r[1])+'</b></div>').join('')+'</div>'
   +(edit?'<div class="why" style="margin-top:16px"><b>Enregistrer</b> met à jour ton addon <b>sans réinstallation</b> : relance simplement la chaîne dans Stremio.</div>':'<div class="why" style="margin-top:16px"><b>Ensuite ?</b> Tu obtiens un <b>lien à installer dans Stremio</b> (une seule fois) et un <b>identifiant</b> pour revenir modifier ton profil.</div>'+(persistent?'':'<div class="note w" style="margin-top:12px">Base de données non configurée : tu auras un lien classique, sans mot de passe, à réinstaller après chaque changement.</div>'))
   ;}
+ if(step===4&&result&&verify&&!verify.ok)return verifyHtml();
  if(step===4&&result)h='<div class="done"><div class="ck"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg></div><h1>'+(edit?'Configuration enregistrée':'Ton addon est prêt')+'</h1>'
   +(edit?'<p class="sub" style="margin:0">Les changements sont déjà actifs dans Stremio. Relance simplement la chaîne.</p>':'<p class="sub" style="margin:0">Il reste une étape : l\'installer dans Stremio.</p>')
   +(!edit&&result.link?'<ol class="how"><li>Clique sur <b>Installer dans Stremio</b> (ou copie le lien ci-dessous dans Stremio → Addons → coller l\'URL).</li><li>Confirme l\'installation dans Stremio.</li><li>Ouvre un live dans la catégorie TV et profite 🎉</li></ol>':'')
@@ -230,11 +243,60 @@ async function show(html,dir=1){
  if(h0){const h1=p.offsetHeight;stage.style.height=h0+'px';stage.offsetHeight;stage.style.height=h1+'px';setTimeout(()=>{stage.style.height=''},480)}
  steps();bind();swapping=false;
 }
+
+let verify=null;
+const VROWS=()=>[['link','Lecture du lien','En attente…'],['srv','Connexion au serveur','En attente…'],['cfg','Lecture de ta configuration','En attente…'],['tw','Accès à Twitch','En attente…']].concat(st.relay?[['rel','Relais sans publicité','En attente…']]:[],st.tok?[['acc','Compte Twitch lié','En attente…']]:[],[['cat','Catalogues Stremio','En attente…']]);
+function verifyHtml(){
+ const rows=verify.rows.map((r,i)=>'<div class="vr '+r.s+'" id="vr-'+r.k+'" style="animation-delay:'+(i*.05)+'s"><span class="ic">'+(r.s==='ok'?'✓':r.s==='ko'?'✕':r.s==='warn'?'!':r.s==='run'?'<span class="sp2"></span>':'·')+'</span><div class="tx"><b>'+r.t+'</b><span>'+esc(r.d)+'</span></div><span class="tg2">'+({wait:'',run:'EN COURS',ok:'OK',warn:'ATTENTION',ko:'ÉCHEC'})[r.s]+'</span></div>').join('');
+ const fin=verify.done,ko=verify.rows.some(r=>r.s==='ko');
+ return '<div class="pane"><div class="eyebrow">Vérification</div><h1>Analyse de ton lien 🛰️</h1><p class="sub">On vérifie que <b>tout fonctionne</b> avant l\'installation. Ne bouge pas, ça prend quelques secondes.</p>'
+  +'<div class="vf"><div class="vh"><span>▸ '+(fin?(ko?'Problème détecté':'Diagnostic terminé'):'Diagnostic en cours')+'</span><b id="vpct">'+verify.pct+'%</b></div><div class="vb"><i id="vbar" style="width:'+verify.pct+'%"></i></div>'+rows+'</div>'
+  +(fin&&!ko?'<div class="why" style="margin-top:14px">✅ Tout est bon : ton lien est prêt à être installé.</div>':'')+(fin&&ko?'<div class="note w" style="margin-top:14px">Un contrôle a échoué : ton lien est enregistré mais il peut ne pas fonctionner. Relance l\'analyse ; si ça persiste, préviens le propriétaire de l\'addon.</div>':'')
+  +'<div class="nav"><button class="btn" id="vback">← Retour</button><span style="flex:1"></span><button class="btn" id="vretry"'+(fin?'':' disabled')+'>Relancer 🔄</button><button class="btn pr" id="vnext"'+(fin?'':' disabled')+'>Continuer →</button></div></div>';
+}
+function vset(k,s,d){const r=verify.rows.find(x=>x.k===k);if(!r)return;r.s=s;if(d!==undefined)r.d=d;const el=$('#vr-'+k);if(el){el.className='vr '+s;el.querySelector('.ic').innerHTML=s==='ok'?'✓':s==='ko'?'✕':s==='warn'?'!':s==='run'?'<span class="sp2"></span>':'·';el.querySelector('.tx span').textContent=r.d;el.querySelector('.tg2').textContent=({wait:'',run:'EN COURS',ok:'OK',warn:'ATTENTION',ko:'ÉCHEC'})[s]}
+ verify.pct=Math.round(verify.rows.filter(x=>x.s!=='wait'&&x.s!=='run').length/verify.rows.length*100);const b=$('#vbar');if(b){b.style.width=verify.pct+'%';$('#vpct').textContent=verify.pct+'%'}}
+async function runVerify(){
+ const v=verify={rows:VROWS().map(([k,t,d])=>({k,t,d,s:'wait'})),pct:0,done:false};
+ await show(verifyHtml(),1);const alive=()=>verify===v;
+ const nap=()=>wait(350);
+ const link=result.link;let man=null,chk=null;
+ vset('link','run','Contrôle du format…');await nap();
+ try{const u=new URL(link);if(!/manifest\.json$/.test(u.pathname))throw 0;vset('link','ok','Lien reconnu, format valide.')}catch{vset('link','ko','Le lien est invalide.')}
+ if(!alive())return;
+ vset('srv','run','Appel du serveur…');const t0=performance.now();
+ try{const r=await fetch(link,{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);man=await r.json();vset('srv','ok',(man.name||'Addon')+' v'+(man.version||'?')+' répond ('+Math.round(performance.now()-t0)+' ms).')}catch(e){vset('srv','ko','Le serveur ne répond pas ('+e.message+').')}
+ await nap();if(!alive())return;
+ vset('cfg','run','Lecture du profil…');await nap();
+ if(man&&Array.isArray(man.catalogs)){vset('cfg','ok','Profil « '+(st.pseudo||'?')+' » · qualité '+(st.cap?st.cap+'p max':'maximum')+' · '+(st.relay?'relais actifs':'flux officiel')+(st.pc?' · mode ordinateur':'')+'.')}else vset('cfg','ko','Manifeste illisible.');
+ if(!alive())return;
+ vset('tw','run','Interrogation de Twitch…');
+ try{const r=await fetch(link.replace(/manifest\.json$/,'check'),{cache:'no-store'});chk=await r.json()}catch(e){chk=null}
+ if(!alive())return;
+ if(!chk)vset('tw','ko','Vérification impossible (serveur injoignable).');
+ else if(chk.maint)vset('tw','warn','L\'addon est en maintenance : les lives sont suspendus.');
+ else if(chk.twitch&&chk.twitch.ok)vset('tw','ok','Twitch répond ('+chk.twitch.ms+' ms) · '+chk.twitch.n+' lives lus.');
+ else vset('tw','ko','Twitch ne répond pas : '+((chk.twitch&&chk.twitch.err)||'erreur inconnue')+'.');
+ await nap();if(!alive())return;
+ if(st.relay){vset('rel','run','Test des relais…');await nap();
+  if(!chk||!chk.relais)vset('rel','warn','Relais coupés par le propriétaire : flux officiel (avec pubs).');
+  else if(chk.relais.ok)vset('rel','ok','Relais « '+chk.relais.nom+' » opérationnel ('+chk.relais.ms+' ms, '+chk.relais.total+' disponibles).');
+  else vset('rel','warn','Aucun relais ne répond : l\'addon utilisera le flux officiel.');
+  if(!alive())return}
+ if(st.tok){vset('acc','run','Test de ton compte…');await nap();
+  if(chk&&chk.compte&&chk.compte.ok)vset('acc','ok','Compte reconnu · qualité accordée : '+chk.compte.resolution+'.');
+  else vset('acc','warn',(chk&&chk.compte&&chk.compte.err)||'Compte non vérifié : relie-le à nouveau à l\'étape Compte.');
+  if(!alive())return}
+ vset('cat','run','Lecture du manifeste…');await nap();
+ if(man&&man.catalogs&&man.catalogs.length)vset('cat','ok',man.catalogs.map(c=>c.name.replace(/^Twitch · /,'')).join(' · '));else vset('cat','warn','Aucun catalogue : seuls les liens directs fonctionneront.');
+ v.pct=100;v.done=true;await wait(300);if(!alive())return;
+ const b=$('#vbar');if(b)b.style.width='100%';$('#vpct').textContent='100%';await show(verifyHtml(),1);
+}
 async function go(n,force){
  if(swapping)return;
  n=Math.max(0,Math.min(4,n));if(n===step&&!force)return;
  if(n>step&&!validate(step))return;
- const dir=n>=step?1:-1;step=n;result=null;
+ const dir=n>=step?1:-1;step=n;result=null;verify=null;
  await show(body(),dir);
  if(n>0||true)scrollTo({top:0,behavior:'smooth'});
  const f=$('#pseudo');if(step===0&&f&&!st.pseudo)f.focus({preventScroll:true});
@@ -261,11 +323,12 @@ async function save(){
    const o=location.origin;result={link:o+'/u/'+id+'/manifest.json',stremio:'stremio://'+location.host+'/u/'+id+'/manifest.json',cfgLink:o+'/u/'+id+'/configure'};
   }else return save2();
  }catch(e){toast('Erreur : '+e.message);busy=false;g.disabled=false;return}
- busy=false;await show(body(),1);scrollTo({top:0,behavior:'smooth'});
+ busy=false;await runVerify();scrollTo({top:0,behavior:'smooth'});
 }
-function save2(){const u=location.origin+'/c/'+st.pseudo+'/'+b64(opts())+'/manifest.json';result={link:u,stremio:'stremio://'+u.replace(/^https?:\/\//,'')};busy=false;show(body(),1)}
+function save2(){const u=location.origin+'/c/'+st.pseudo+'/'+b64(opts())+'/manifest.json';result={link:u,stremio:'stremio://'+u.replace(/^https?:\/\//,'')};busy=false;runVerify()}
 function bind(){
  const $$=(s,f)=>document.querySelectorAll(s).forEach(f);
+ $('#vback')&&($('#vback').onclick=()=>go(4,true));$('#vretry')&&($('#vretry').onclick=()=>runVerify());$('#vnext')&&($('#vnext').onclick=async()=>{verify.ok=true;await show(body(),1)});
  $('#back')&&($('#back').onclick=()=>go(step-1));$('#next')&&($('#next').onclick=()=>go(step+1));$('#go')&&($('#go').onclick=save);
  $$('[data-t]',el=>{const t=()=>setSw(el.dataset.t,!st[el.dataset.t]);el.onclick=t;el.onkeydown=e=>{if(e.key===' '||e.key==='Enter'){e.preventDefault();t()}}});
  $$('[data-eye]',b=>b.onclick=()=>{const i=$('#'+b.dataset.eye);i.type=i.type==='password'?'text':'password'});

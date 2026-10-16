@@ -688,6 +688,16 @@ async function handler(req, res) {
       return json(res, pseudo ? { ...mf, name: S.name + ' · ' + pseudo, description: MANIFEST.description + ' — profil de ' + pseudo } : mf);
     }
 
+    if (seg[0] === 'check') { // vérification d'un profil (page de configuration) : serveur, Twitch, relais, compte lié
+      const out = { v: require('./package.json').version, maint: !!F.maint, stockage: store.persistent, catalogues: ['Lives par jeu'].concat(F.vods ? ['Rediffusions'] : [], auth && F.followed ? ['Mes chaînes suivies'] : []) };
+      const timed = async f => { const t = Date.now(); try { return { ok: true, ms: Date.now() - t, ...(await f()) }; } catch (e) { return { ok: false, ms: Date.now() - t, err: String(e.message).slice(0, 120) }; } };
+      let sample = null;
+      out.twitch = await timed(async () => { const L = await liveStreams(''); if (!L || !L.length) throw new Error('aucun live renvoyé'); sample = L[0].login; return { n: L.length }; });
+      if (cfg.relay && F.relays && sample) out.relais = await timed(async () => { const b = await Promise.race([bestProxy(sample, false), new Promise((_, r) => setTimeout(() => r(new Error('aucun relais ne répond')), 7000))]); if (!b) throw new Error('aucun relais ne répond'); return { nom: b.name, total: proxyList().length }; });
+      if (cfg.tok && auth && sample) out.compte = await timed(async () => { const t = await accessToken(sample, 'site', GQL_CLIENT_ID, { oauth: auth }), j = JSON.parse(t.value); if (!j.user_id) throw new Error('compte non reconnu par Twitch (jeton expiré ?)'); return { resolution: j.maximum_resolution || '?' }; });
+      return json(res, out, { 'Cache-Control': 'no-store' });
+    }
+
     if (seg[0] === 'test' && seg[1]) { // diagnostic lisible
       const login = seg[1].toLowerCase(), out = { chaine: login, vercel_peut_lire_twitch: false };
       if (!LOGIN_RE.test(login)) { out.erreur = 'nom de chaîne invalide'; return json(res, out); }
