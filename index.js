@@ -399,7 +399,20 @@ async function vodMaster(id) {
       return { url, text };
     } catch (e) { errs.push('essai ' + (i + 1) + ' ' + e.message); throw e; }
   };
-  try { return await Promise.any(VOD_TRIES.map(one)); } catch { throw new Error('Rediffusion indisponible — ' + errs.join(' ; ')); }
+  try { return await Promise.any(VOD_TRIES.map(one)); } catch { /* usher refuse (403) : lecture directe depuis le CDN de Twitch */ }
+  try { return await vodDirect(id); } catch (e) { errs.push('cdn ' + e.message); }
+  throw new Error('Rediffusion indisponible — ' + errs.join(' ; '));
+}
+// Repli : les rediffs publiques sont aussi sur le CDN de Twitch, à une adresse déduite de l'aperçu de la vidéo (…/<dossier>/storyboards/…).
+const CDN_Q = [['chunked', '1920x1080', 60, 8000000], ['720p60', '1280x720', 60, 3400000], ['480p30', '852x480', 30, 1400000], ['360p30', '640x360', 30, 750000], ['160p30', '284x160', 30, 300000]];
+async function vodDirect(id) {
+  const d = await gqlRaw('query { video(id: "' + id + '") { seekPreviewsURL } }'), sp = d.video && d.video.seekPreviewsURL, m = sp && /^(https:\/\/[^/]+\/[^/]+)\/storyboards\//.exec(sp);
+  if (!m) throw new Error('adresse introuvable');
+  const ok = await Promise.all(CDN_Q.map(async q => { try { const u = m[1] + '/' + q[0] + '/index-dvr.m3u8', r = await fetch(u, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(6000) }); if (!r.ok) throw new Error('HTTP ' + r.status); const t = await r.text(); if (!t.startsWith('#EXTM3U')) throw new Error('liste invalide'); return { q, u }; } catch { return null; } }));
+  const have = ok.filter(Boolean);
+  if (!have.length) throw new Error('aucune qualité accessible (rediff supprimée ou réservée aux abonnés ?)');
+  const text = '#EXTM3U\n' + have.map(o => '#EXT-X-STREAM-INF:BANDWIDTH=' + o.q[3] + ',RESOLUTION=' + o.q[1] + ',FRAME-RATE=' + o.q[2] + '.000\n' + o.u).join('\n') + '\n';
+  return { url: have[0].u, text };
 }
 
 /* ------------------------------------------------------------------ addon */
