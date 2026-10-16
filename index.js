@@ -347,10 +347,55 @@ async function liveStreams(game) { // game vide = les plus regardés de tout Twi
 const gameOf = q => { const k = q.toLowerCase().replace(/[^a-z0-9]/g, ''), a = ALIAS[k]; if (a) return a; const g = GAMES.find(x => x.toLowerCase().replace(/[^a-z0-9]/g, '').includes(k)); return k.length >= 3 && g ? g : q; };
 const catalogMeta = x => { const m = metaFromInfo(x.login, x.info); delete m.logo; return { ...m, background: undefined, name: '👁 ' + fmtN(x.info.viewers) + ' · ' + x.info.name, releaseInfo: '🔴 ' + fmtN(x.info.viewers) + ' 👁' }; };
 
+// Menu « Genre » : les catégories les plus regardées de Twitch (liste récupérée sans clé, gardée 6 h), complétées par la liste fixe.
+let gamesCache = { v: null, exp: 0 };
+async function gameList() {
+  if (gamesCache.v && gamesCache.exp > Date.now()) return gamesCache.v;
+  let names = [];
+  try { const d = await gqlRaw('query { games(first: 100) { edges { node { displayName } } } }'); names = ((d.games || {}).edges || []).map(e => e && e.node && e.node.displayName).filter(Boolean); } catch { /* liste fixe */ }
+  const v = [...new Set([...names, ...GAMES])].slice(0, 150);
+  gamesCache = { v: names.length ? v : null, exp: Date.now() + (names.length ? 6 * 3600e3 : 120e3) };
+  return names.length ? v : GAMES;
+}
+// Rediffusions (VOD) : une chaîne = une série, ses rediffs = les épisodes d'une saison.
+const VIDEO_NODE = 'id title publishedAt lengthSeconds viewCount previewThumbnailURL(width: 640, height: 360) game { displayName }';
+const vodCache = new Map();
+async function channelVods(login) {
+  const c = vodCache.get(login);
+  if (c && c.exp > Date.now()) return c.v;
+  const d = await gqlRaw('query { user(login: ' + JSON.stringify(login) + ') { displayName login description profileImageURL(width: 300) offlineImageURL a: videos(first: 40, type: ARCHIVE, sort: TIME) { edges { node { ' + VIDEO_NODE + ' } } } h: videos(first: 20, type: HIGHLIGHT, sort: TIME) { edges { node { ' + VIDEO_NODE + ' } } } } }');
+  const u = d.user, nodes = k => ((u && u[k] || {}).edges || []).map(e => e && e.node).filter(n => n && n.id);
+  const v = u ? { login: u.login || login, name: u.displayName || login, avatar: u.profileImageURL || '', banner: u.offlineImageURL || '', bio: u.description || '', archives: nodes('a'), highlights: nodes('h') } : null;
+  vodCache.set(login, { v, exp: Date.now() + 120000 });
+  if (vodCache.size > 100) vodCache.delete(vodCache.keys().next().value);
+  return v;
+}
+const dur = s => { s = Number(s) || 0; const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60); return h ? h + ' h ' + String(m).padStart(2, '0') : m + ' min'; };
+const vodMeta = (v, withVideos) => {
+  const m = { id: 'twitchvod:' + v.login, type: 'series', name: v.name, poster: v.avatar, posterShape: 'square', background: v.banner || undefined, description: v.bio || 'Rediffusions de ' + v.name, releaseInfo: v.archives.length ? v.archives.length + ' rediffs' : undefined };
+  if (!withVideos) return m;
+  const vid = (n, season, i, total) => ({ id: 'twitchvod:' + v.login + ':' + n.id, title: n.title || 'Rediffusion', season, episode: i + 1, released: n.publishedAt || new Date(0).toISOString(), thumbnail: n.previewThumbnailURL || undefined, overview: [new Date(n.publishedAt).toLocaleDateString('fr-FR'), dur(n.lengthSeconds), n.game ? '🎮 ' + n.game.displayName : '', '👁 ' + fmtN(n.viewCount)].filter(Boolean).join(' · ') });
+  m.videos = [...v.archives.map((n, i) => vid(n, 1, i)), ...v.highlights.map((n, i) => vid(n, 2, i))];
+  return m;
+};
+async function vodToken(id) {
+  const r = await fetch(GQL, { method: 'POST', headers: { 'Client-ID': GQL_CLIENT_ID, 'Content-Type': 'application/json', 'User-Agent': UA }, signal: AbortSignal.timeout(10000), body: JSON.stringify({ operationName: 'PlaybackAccessToken', variables: { isLive: false, login: '', isVod: true, vodID: id, playerType: 'site' }, query: TOKEN_QUERY }) });
+  if (!r.ok) throw new Error('Twitch (rediff) : HTTP ' + r.status);
+  const j = await r.json().catch(() => ({})), t = j && j.data && j.data.videoPlaybackAccessToken;
+  if (!t || !t.value || !t.signature) throw new Error('Rediffusion indisponible (supprimée ou réservée aux abonnés)');
+  return t;
+}
+async function vodMaster(id) {
+  const t = await vodToken(id), url = 'https://usher.ttvnw.net/vod/' + id + '.m3u8?' + new URLSearchParams({ nauth: t.value, nauthsig: t.signature, allow_source: 'true', allow_audio_only: 'true', allow_spectre: 'true', player: 'twitchweb', playlist_include_framerate: 'true', p: String(Math.floor(Math.random() * 1e7)) });
+  const r = await fetch(url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(8000) }), text = await r.text();
+  if (!r.ok || !text.startsWith('#EXTM3U')) throw new Error('Rediffusion indisponible (HTTP ' + r.status + ')');
+  return { url, text };
+}
+
 /* ------------------------------------------------------------------ addon */
 const MANIFEST = {
   id: 'community.twitch.lives', version: '0.1.0', name: 'Twitch', description: 'Lives Twitch dans Stremio',
-  resources: ['catalog', 'meta', 'stream'], types: ['tv'], idPrefixes: ['twitch:'],
+  resources: ['catalog', 'meta', 'stream'], types: ['tv', 'series'], idPrefixes: ['twitch:', 'twitchvod:'],
   behaviorHints: { configurable: true, configurationRequired: false },
   catalogs: [{ type: 'tv', id: 'twitch-top', name: 'Twitch · Lives par jeu', extra: [{ name: 'search', isRequired: false }, { name: 'genre', isRequired: false, options: GAMES }] }],
 };
@@ -636,8 +681,10 @@ async function handler(req, res) {
     if (seg[0] === 'api' && seg[1] === 'report' && req.method === 'POST') return json(res, await report(req, dev));
     if (seg[0] === 'manifest.json') {
       store.log({ k: 'install', u: pseudo || undefined, appareil: cfg.device || undefined, reglages: pseudo ? summary(cfg) : 'défaut', dev }); store.user(pseudo, { cfg: { ...cfg, tok: undefined, compte: !!cfg.tok }, dev: cfg.device });
-      const S = await siteLib.load(), mf = { ...MANIFEST, name: S.name, logo: originOf(req) + '/logo.png?v=' + S.logoV };
-      if (auth && S.feat.followed) mf.catalogs = [{ type: 'tv', id: 'twitch-followed', name: 'Twitch · Mes chaînes suivies', extra: [{ name: 'genre', isRequired: false, options: GAMES }] }, ...MANIFEST.catalogs];
+      const S = await siteLib.load(), mf = { ...MANIFEST, name: S.name, logo: originOf(req) + '/logo.png?v=' + S.logoV }, GL = await Promise.race([gameList(), new Promise(r => setTimeout(() => r(GAMES), 3000))]);
+      mf.catalogs = [{ type: 'tv', id: 'twitch-top', name: 'Twitch · Lives par jeu', extra: [{ name: 'search', isRequired: false }, { name: 'genre', isRequired: false, options: GL }] }];
+      if (S.feat.vods) mf.catalogs.push({ type: 'series', id: 'twitch-vods', name: 'Twitch · Rediffusions', extra: [{ name: 'search', isRequired: false }] });
+      if (auth && S.feat.followed) mf.catalogs = [{ type: 'tv', id: 'twitch-followed', name: 'Twitch · Mes chaînes suivies', extra: [{ name: 'genre', isRequired: false, options: GL }] }, ...mf.catalogs];
       return json(res, pseudo ? { ...mf, name: S.name + ' · ' + pseudo, description: MANIFEST.description + ' — profil de ' + pseudo } : mf);
     }
 
@@ -679,6 +726,42 @@ async function handler(req, res) {
       const login = seg[1].toLowerCase();
       if (!LOGIN_RE.test(login)) return json(res, { erreur: 'nom de chaîne invalide' });
       return json(res, await relayReport(login));
+    }
+    if (seg[1] === 'series' && F.vods) { // rediffusions : chaîne = série, rediffs = saison 1, temps forts = saison 2
+      try {
+        if (seg[0] === 'catalog') {
+          const q = (extraOf(seg[3]).get('search') || '').trim().toLowerCase().replace(/^@/, '');
+          let logins = [];
+          if (q) logins = LOGIN_RE.test(q) ? [q] : [];
+          else if (auth) logins = (await followedChannels(auth).catch(() => [])).slice(0, 24).map(x => x.login);
+          else logins = ((await liveStreams('').catch(() => [])) || []).slice(0, 24).map(x => x.login);
+          const vs = (await Promise.all(logins.map(l => channelVods(l).catch(() => null)))).filter(Boolean);
+          store.log({ k: 'catalog', u: pseudo || undefined, n: vs.length, rediffs: true, dev });
+          return json(res, { metas: vs.map(v => vodMeta(v)) }, { 'Cache-Control': 'public, s-maxage=60' });
+        }
+        if (seg[0] === 'meta') {
+          const login = strip(seg[2]).replace(/^twitchvod:/, '').toLowerCase();
+          const v = LOGIN_RE.test(login) ? await channelVods(login) : null;
+          return json(res, { meta: v ? vodMeta(v, true) : null });
+        }
+        if (seg[0] === 'stream') {
+          if (F.maint) return maint();
+          const m = /^twitchvod:([^:]+):(\d+)$/.exec(strip(seg[2]));
+          if (!m) return json(res, { streams: [] });
+          const vm = await vodMaster(m[2]), vars = variantsOf(vm.text), video = vars.filter(v => !v.audio && cfgLib.keepVariant(v, cfg)).sort(byQuality);
+          store.incr('vod'); store.user(pseudo, { ch: m[1], dev: cfg.device }); store.log({ k: 'stream', u: pseudo || undefined, ch: m[1], etat: 'rediff', ms: Date.now() - t0, dev });
+          const tier = h => h >= 1440 ? 'Ultra HD' : h >= 1080 ? 'Full HD' : h >= 720 ? 'HD' : h >= 480 ? 'SD' : 'Éco';
+          const fixed = video.slice(0, cfg.fixed).map(v => ({ name: 'Twitch\n' + (v.h ? v.h + 'p' + (v.fps > 30 ? v.fps : '') : v.name), title: '📼 Rediffusion\n📺 ' + tier(v.h) + (v.fps ? ' · ' + (v.fps > 30 ? v.fps : 30) + ' images/s' : ''), url: pcOn(cfg) ? pcUrl(originOf(req), base, v.url) : v.url }));
+          const auto = { name: 'Twitch\nAuto', title: '📼 Rediffusion\n✨ Auto' + (cfg.cap ? ' · max ' + cfg.cap + 'p' : ' · meilleure qualité'), url: originOf(req) + base + '/v/' + m[2] + '.m3u8' };
+          return json(res, { streams: [auto, ...fixed] });
+        }
+      } catch (e) { store.incr('err'); store.log({ k: 'erreur', u: pseudo || undefined, ou: 'rediffusions', msg: e.message }); return json(res, seg[0] === 'catalog' ? { metas: [] } : seg[0] === 'meta' ? { meta: null } : { streams: [] }); }
+    }
+    if (seg[0] === 'v' && seg[1] && F.vods) { // liste de lecture d'une rediffusion avec le plafond de qualité du profil
+      const id = strip(seg[1]).replace(/\.m3u8$/, '');
+      if (!/^\d+$/.test(id)) return send(res, 400, 'text/plain; charset=utf-8', 'Rediffusion invalide');
+      const vm = await vodMaster(id), fin = pcOn(cfg) ? pcMaster(vm.text, originOf(req), base) : vm.text;
+      return send(res, 200, 'application/vnd.apple.mpegurl', cfgLib.filterMaster(fin, cfg), { 'Cache-Control': 'no-store' });
     }
     if (seg[0] === 'catalog' && seg[1] === 'tv' && strip(seg[2]) === 'twitch-followed') {
       if (!auth || !F.followed) return json(res, { metas: [] });
