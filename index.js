@@ -378,18 +378,28 @@ const vodMeta = (v, withVideos) => {
   m.videos = [...v.archives.map((n, i) => vid(n, 1, i)), ...v.highlights.map((n, i) => vid(n, 2, i))];
   return m;
 };
-async function vodToken(id) {
-  const r = await fetch(GQL, { method: 'POST', headers: { 'Client-ID': GQL_CLIENT_ID, 'Content-Type': 'application/json', 'User-Agent': UA }, signal: AbortSignal.timeout(10000), body: JSON.stringify({ operationName: 'PlaybackAccessToken', variables: { isLive: false, login: '', isVod: true, vodID: id, playerType: 'site' }, query: TOKEN_QUERY }) });
-  if (!r.ok) throw new Error('Twitch (rediff) : HTTP ' + r.status);
+async function vodToken(id, cid = GQL_CLIENT_ID, playerType = 'site') {
+  const r = await fetch(GQL, { method: 'POST', headers: { 'Client-ID': cid, 'Content-Type': 'application/json', 'User-Agent': UA }, signal: AbortSignal.timeout(10000), body: JSON.stringify({ operationName: 'PlaybackAccessToken', variables: { isLive: false, login: '', isVod: true, vodID: id, playerType }, query: TOKEN_QUERY }) });
+  if (!r.ok) throw new Error('jeton : HTTP ' + r.status);
   const j = await r.json().catch(() => ({})), t = j && j.data && j.data.videoPlaybackAccessToken;
-  if (!t || !t.value || !t.signature) throw new Error('Rediffusion indisponible (supprimée ou réservée aux abonnés)');
+  if (!t || !t.value || !t.signature) throw new Error('jeton refusé' + (j && j.errors && j.errors[0] ? ' (' + String(j.errors[0].message).slice(0, 80) + ')' : ' (rediff supprimée ou réservée aux abonnés ?)'));
   return t;
 }
+// Plusieurs variantes en parallèle (identifiant client, type de lecteur, adresse usher) : on garde la première qui répond.
+const VOD_TRIES = [{ cid: GQL_CLIENT_ID, pt: 'site', path: '/vod/' }, { cid: GQL_CLIENT_ID, pt: 'site', path: '/vod/v2/' }, { cid: GQL_CLIENT_ID, pt: 'embed', path: '/vod/' }, { cid: TV_ID, pt: 'site', path: '/vod/' }, { cid: ANDROID_ID, pt: 'site', path: '/vod/' }];
 async function vodMaster(id) {
-  const t = await vodToken(id), url = 'https://usher.ttvnw.net/vod/' + id + '.m3u8?' + new URLSearchParams({ nauth: t.value, nauthsig: t.signature, allow_source: 'true', allow_audio_only: 'true', allow_spectre: 'true', player: 'twitchweb', playlist_include_framerate: 'true', p: String(Math.floor(Math.random() * 1e7)) });
-  const r = await fetch(url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(8000) }), text = await r.text();
-  if (!r.ok || !text.startsWith('#EXTM3U')) throw new Error('Rediffusion indisponible (HTTP ' + r.status + ')');
-  return { url, text };
+  const errs = [];
+  const one = async (t, i) => {
+    try {
+      const k = await vodToken(id, t.cid, t.pt);
+      const url = 'https://usher.ttvnw.net' + t.path + id + '.m3u8?' + new URLSearchParams({ nauth: k.value, nauthsig: k.signature, allow_source: 'true', allow_audio_only: 'true', allow_spectre: 'true', player: 'twitchweb', playlist_include_framerate: 'true', p: String(Math.floor(Math.random() * 1e7)) });
+      const r = await fetch(url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(8000) }), text = await r.text();
+      if (!r.ok || !text.startsWith('#EXTM3U')) throw new Error('usher : HTTP ' + r.status);
+      if (!variantsOf(text).length) throw new Error('liste vide');
+      return { url, text };
+    } catch (e) { errs.push('essai ' + (i + 1) + ' ' + e.message); throw e; }
+  };
+  try { return await Promise.any(VOD_TRIES.map(one)); } catch { throw new Error('Rediffusion indisponible — ' + errs.join(' ; ')); }
 }
 
 /* ------------------------------------------------------------------ addon */
