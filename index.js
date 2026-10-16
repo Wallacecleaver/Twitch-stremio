@@ -378,8 +378,10 @@ const vodMeta = (v, withVideos) => {
   m.videos = [...v.archives.map((n, i) => vid(n, 1, i)), ...v.highlights.map((n, i) => vid(n, 2, i))];
   return m;
 };
-async function vodToken(id, cid = GQL_CLIENT_ID, playerType = 'site') {
-  const r = await fetch(GQL, { method: 'POST', headers: { 'Client-ID': cid, 'Content-Type': 'application/json', 'User-Agent': UA }, signal: AbortSignal.timeout(10000), body: JSON.stringify({ operationName: 'PlaybackAccessToken', variables: { isLive: false, login: '', isVod: true, vodID: id, playerType }, query: TOKEN_QUERY }) });
+async function vodToken(id, cid = GQL_CLIENT_ID, playerType = 'site', oauth = null) {
+  const hd = { 'Client-ID': cid, 'Content-Type': 'application/json', 'User-Agent': UA };
+  if (oauth) { hd.Authorization = 'OAuth ' + oauth; hd['X-Device-Id'] = crypto.randomBytes(16).toString('hex'); }
+  const r = await fetch(GQL, { method: 'POST', headers: hd, signal: AbortSignal.timeout(10000), body: JSON.stringify({ operationName: 'PlaybackAccessToken', variables: { isLive: false, login: '', isVod: true, vodID: id, playerType }, query: TOKEN_QUERY }) });
   if (!r.ok) throw new Error('jeton : HTTP ' + r.status);
   const j = await r.json().catch(() => ({})), t = j && j.data && j.data.videoPlaybackAccessToken;
   if (!t || !t.value || !t.signature) throw new Error('jeton refusé' + (j && j.errors && j.errors[0] ? ' (' + String(j.errors[0].message).slice(0, 80) + ')' : ' (rediff supprimée ou réservée aux abonnés ?)'));
@@ -387,19 +389,19 @@ async function vodToken(id, cid = GQL_CLIENT_ID, playerType = 'site') {
 }
 // Plusieurs variantes en parallèle (identifiant client, type de lecteur, adresse usher) : on garde la première qui répond.
 const VOD_TRIES = [{ cid: GQL_CLIENT_ID, pt: 'site', path: '/vod/' }, { cid: GQL_CLIENT_ID, pt: 'site', path: '/vod/v2/' }, { cid: GQL_CLIENT_ID, pt: 'embed', path: '/vod/' }, { cid: TV_ID, pt: 'site', path: '/vod/' }, { cid: ANDROID_ID, pt: 'site', path: '/vod/' }];
-async function vodMaster(id) {
-  const errs = [];
+async function vodMaster(id, oauth) { // avec le compte Twitch lié : les rediffs réservées aux abonnés s'ouvrent si le compte est abonné
+  const errs = [], tries = oauth ? [{ cid: GQL_CLIENT_ID, pt: 'site', path: '/vod/', auth: 1 }, { cid: GQL_CLIENT_ID, pt: 'site', path: '/vod/v2/', auth: 1 }, ...VOD_TRIES] : VOD_TRIES;
   const one = async (t, i) => {
     try {
-      const k = await vodToken(id, t.cid, t.pt);
+      const k = await vodToken(id, t.cid, t.pt, t.auth ? oauth : null);
       const url = 'https://usher.ttvnw.net' + t.path + id + '.m3u8?' + new URLSearchParams({ nauth: k.value, nauthsig: k.signature, allow_source: 'true', allow_audio_only: 'true', allow_spectre: 'true', player: 'twitchweb', playlist_include_framerate: 'true', p: String(Math.floor(Math.random() * 1e7)) });
       const r = await fetch(url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(8000) }), text = await r.text();
       if (!r.ok || !text.startsWith('#EXTM3U')) throw new Error('usher : HTTP ' + r.status);
       if (!variantsOf(text).length) throw new Error('liste vide');
       return { url, text };
-    } catch (e) { errs.push('essai ' + (i + 1) + ' ' + e.message); throw e; }
+    } catch (e) { errs.push('essai ' + (i + 1) + (t.auth ? ' (compte)' : '') + ' ' + e.message); throw e; }
   };
-  try { return await Promise.any(VOD_TRIES.map(one)); } catch { /* usher refuse (403) : lecture directe depuis le CDN de Twitch */ }
+  try { return await Promise.any(tries.map(one)); } catch { /* usher refuse (403) : lecture directe depuis le CDN de Twitch */ }
   try { return await vodDirect(id); } catch (e) { errs.push('cdn ' + e.message); }
   throw new Error('Rediffusion indisponible — ' + errs.join(' ; '));
 }
@@ -787,19 +789,22 @@ async function handler(req, res) {
           if (F.maint) return maint();
           const m = /^twitchvod:([^:]+):(\d+)$/.exec(strip(seg[2]));
           if (!m) return json(res, { streams: [] });
-          const vm = await vodMaster(m[2]), vars = variantsOf(vm.text), video = vars.filter(v => !v.audio && cfgLib.keepVariant(v, cfg)).sort(byQuality);
+          const vm = await vodMaster(m[2], auth), vars = variantsOf(vm.text), video = vars.filter(v => !v.audio && cfgLib.keepVariant(v, cfg)).sort(byQuality);
           store.incr('vod'); store.user(pseudo, { ch: m[1], dev: cfg.device }); store.log({ k: 'stream', u: pseudo || undefined, ch: m[1], etat: 'rediff', ms: Date.now() - t0, dev });
           const tier = h => h >= 1440 ? 'Ultra HD' : h >= 1080 ? 'Full HD' : h >= 720 ? 'HD' : h >= 480 ? 'SD' : 'Éco';
           const fixed = video.slice(0, cfg.fixed).map(v => ({ name: 'Twitch\n' + (v.h ? v.h + 'p' + (v.fps > 30 ? v.fps : '') : v.name), title: '📼 Rediffusion\n📺 ' + tier(v.h) + (v.fps ? ' · ' + (v.fps > 30 ? v.fps : 30) + ' images/s' : ''), url: pcOn(cfg) ? pcUrl(originOf(req), base, v.url) : v.url }));
           const auto = { name: 'Twitch\nAuto', title: '📼 Rediffusion\n✨ Auto' + (cfg.cap ? ' · max ' + cfg.cap + 'p' : ' · meilleure qualité'), url: originOf(req) + base + '/v/' + m[2] + '.m3u8' };
           return json(res, { streams: [auto, ...fixed] });
         }
-      } catch (e) { store.incr('err'); store.log({ k: 'erreur', u: pseudo || undefined, ou: 'rediffusions', msg: e.message }); return json(res, seg[0] === 'catalog' ? { metas: [] } : seg[0] === 'meta' ? { meta: null } : { streams: [] }); }
+      } catch (e) { store.incr('err'); store.log({ k: 'erreur', u: pseudo || undefined, ou: 'rediffusions', msg: e.message });
+        const vm = seg[0] === 'stream' && /^twitchvod:[^:]+:(\d+)$/.exec(strip(seg[2])); // rediff illisible (souvent réservée aux abonnés) : lien vers Twitch
+        if (vm) return json(res, { streams: [{ name: 'Twitch\n🔒 Abonnés', title: '🔒 Rediff réservée\naux abonnés ou\nindisponible\n↗ Ouvrir sur Twitch', externalUrl: 'https://www.twitch.tv/videos/' + vm[1] }] });
+        return json(res, seg[0] === 'catalog' ? { metas: [] } : seg[0] === 'meta' ? { meta: null } : { streams: [] }); }
     }
     if (seg[0] === 'v' && seg[1] && F.vods) { // liste de lecture d'une rediffusion avec le plafond de qualité du profil
       const id = strip(seg[1]).replace(/\.m3u8$/, '');
       if (!/^\d+$/.test(id)) return send(res, 400, 'text/plain; charset=utf-8', 'Rediffusion invalide');
-      const vm = await vodMaster(id), fin = pcOn(cfg) ? pcMaster(vm.text, originOf(req), base) : vm.text;
+      const vm = await vodMaster(id, auth), fin = pcOn(cfg) ? pcMaster(vm.text, originOf(req), base) : vm.text;
       return send(res, 200, 'application/vnd.apple.mpegurl', cfgLib.filterMaster(fin, cfg), { 'Cache-Control': 'no-store' });
     }
     if (seg[0] === 'catalog' && seg[1] === 'tv' && strip(seg[2]) === 'twitch-followed') {
