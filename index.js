@@ -822,6 +822,7 @@ async function handler(req, res) {
       if (search) { // recherche d'une chaîne par son nom (sans clés Twitch) : la fiche s'ouvre, puis le live se lance
         if (!LOGIN_RE.test(search)) return json(res, { metas: [] });
         const info = await channelInfo(search);
+        if (info && !info.live) return json(res, { metas: [] }); // hors ligne : pas proposée dans les lives (ses rediffs restent dans « Rediffusions »)
         let meta = info ? metaFromInfo(search, info) : { id: 'twitch:' + search, type: 'tv', name: search, poster: 'https://static-cdn.jtvnw.net/previews-ttv/live_user_' + search + '-440x248.jpg', posterShape: 'landscape' };
         if (!info) { try { const s = (await helix('/streams', { user_login: search }))[0]; if (s) meta = metaOf(s); } catch { /* sans clés : fiche simple */ } }
         return json(res, { metas: [meta] });
