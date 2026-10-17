@@ -405,16 +405,25 @@ async function vodMaster(id, oauth) { // avec le compte Twitch lié : les rediff
   try { return await vodDirect(id); } catch (e) { errs.push('cdn ' + e.message); }
   throw new Error('Rediffusion indisponible — ' + errs.join(' ; '));
 }
-// Repli : les rediffs publiques sont aussi sur le CDN de Twitch, à une adresse déduite de l'aperçu de la vidéo (…/<dossier>/storyboards/…).
-const CDN_Q = [['chunked', '1920x1080', 60, 8000000], ['720p60', '1280x720', 60, 3400000], ['480p30', '852x480', 30, 1400000], ['360p30', '640x360', 30, 750000], ['160p30', '284x160', 30, 300000]];
+// Lecture directe sur le CDN de Twitch (méthode « TwitchNoSub ») : les rediffs, même réservées aux abonnés, sont servies par CloudFront à une adresse
+// déduite de l'aperçu de la vidéo (…/<dossier>/storyboards/…). Utilisé quand usher refuse (403).
+const CDN_Q = [['chunked', '1920x1080', 60, 8000000], ['1440p60', '2560x1440', 60, 6000000], ['1080p60', '1920x1080', 60, 5000000], ['720p60', '1280x720', 60, 3400000], ['480p30', '854x480', 30, 1400000], ['360p30', '640x360', 30, 750000], ['160p30', '284x160', 30, 300000]];
 async function vodDirect(id) {
-  const d = await gqlRaw('query { video(id: "' + id + '") { seekPreviewsURL } }'), sp = d.video && d.video.seekPreviewsURL, m = sp && /^(https:\/\/[^/]+\/[^/]+)\/storyboards\//.exec(sp);
-  if (!m) throw new Error('adresse introuvable');
-  const ok = await Promise.all(CDN_Q.map(async q => { try { const u = m[1] + '/' + q[0] + '/index-dvr.m3u8', r = await fetch(u, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(6000) }); if (!r.ok) throw new Error('HTTP ' + r.status); const t = await r.text(); if (!t.startsWith('#EXTM3U')) throw new Error('liste invalide'); return { q, u }; } catch { return null; } }));
-  const have = ok.filter(Boolean);
-  if (!have.length) throw new Error('aucune qualité accessible (rediff supprimée ou réservée aux abonnés ?)');
+  const d = await gqlRaw('query { video(id: "' + id + '") { broadcastType createdAt seekPreviewsURL owner { login } } }'), v = d.video;
+  if (!v || !v.seekPreviewsURL) throw new Error('adresse introuvable');
+  const u0 = new URL(v.seekPreviewsURL), parts = u0.pathname.split('/'), k = parts.findIndex(x => x.includes('storyboards'));
+  if (k < 1) throw new Error('adresse inattendue');
+  const host = u0.host, special = parts[k - 1], type = String(v.broadcastType || '').toLowerCase(), old = (Date.now() - new Date(v.createdAt).getTime()) / 864e5 > 7;
+  const urlOf = q => type === 'highlight' ? 'https://' + host + '/' + special + '/' + q + '/highlight-' + id + '.m3u8'
+    : type === 'upload' && old ? 'https://' + host + '/' + (v.owner && v.owner.login) + '/' + id + '/' + special + '/' + q + '/index-dvr.m3u8'
+      : 'https://' + host + '/' + special + '/' + q + '/index-dvr.m3u8';
+  const ok = await Promise.all(CDN_Q.map(async q => { try { const u = urlOf(q[0]), r = await fetch(u, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(6000) }); if (!r.ok) throw new Error('HTTP ' + r.status); const t = await r.text(); if (!t.startsWith('#EXTM3U')) throw new Error('liste invalide'); return { q, u }; } catch { return null; } }));
+  let have = ok.filter(Boolean);
+  if (have.some(o => /^(1080|1440)p60$/.test(o.q[0]))) have = have.filter(o => o.q[0] !== 'chunked'); // évite un doublon avec la source
+  if (!have.length) throw new Error('aucune qualité accessible (rediff supprimée ?)');
+  // « chunked » = qualité source : on ne la garde que si la 1080p60 n'existe pas déjà en doublon ; 1440p60 / 1080p60 explicites passent avant
   const text = '#EXTM3U\n' + have.map(o => '#EXT-X-STREAM-INF:BANDWIDTH=' + o.q[3] + ',RESOLUTION=' + o.q[1] + ',FRAME-RATE=' + o.q[2] + '.000\n' + o.u).join('\n') + '\n';
-  return { url: have[0].u, text };
+  return { url: have[0].u, text, direct: true };
 }
 
 /* ------------------------------------------------------------------ addon */
@@ -746,7 +755,8 @@ async function handler(req, res) {
       const r = await fetch(u, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(8000) });
       const t = await r.text();
       if (!r.ok || !t.startsWith('#EXTM3U')) return send(res, r.ok ? 502 : r.status, 'text/plain; charset=utf-8', 'Flux indisponible');
-      return send(res, 200, 'application/vnd.apple.mpegurl', cleanMedia(absolutize(t, u)), { 'Cache-Control': 'no-store' });
+      const body = cleanMedia(absolutize(t, u));
+      return send(res, 200, 'application/vnd.apple.mpegurl', /cloudfront/.test(u) ? body.replace(/-unmuted/g, '-muted') : body, { 'Cache-Control': 'no-store' }); // rediffs réservées aux abonnés : seuls les segments « muted » sont ouverts
     }
 
     if (seg[0] === 'p' && seg[1]) { // liste de lecture « sans pub » : récupérée côté serveur auprès d'un relais, puis servie au lecteur
@@ -792,7 +802,7 @@ async function handler(req, res) {
           const vm = await vodMaster(m[2], auth), vars = variantsOf(vm.text), video = vars.filter(v => !v.audio && cfgLib.keepVariant(v, cfg)).sort(byQuality);
           store.incr('vod'); store.user(pseudo, { ch: m[1], dev: cfg.device }); store.log({ k: 'stream', u: pseudo || undefined, ch: m[1], etat: 'rediff', ms: Date.now() - t0, dev });
           const tier = h => h >= 1440 ? 'Ultra HD' : h >= 1080 ? 'Full HD' : h >= 720 ? 'HD' : h >= 480 ? 'SD' : 'Éco';
-          const fixed = video.slice(0, cfg.fixed).map(v => ({ name: 'Twitch\n' + (v.h ? v.h + 'p' + (v.fps > 30 ? v.fps : '') : v.name), title: '📼 Rediffusion\n📺 ' + tier(v.h) + (v.fps ? ' · ' + (v.fps > 30 ? v.fps : 30) + ' images/s' : ''), url: pcOn(cfg) ? pcUrl(originOf(req), base, v.url) : v.url }));
+          const fixed = video.slice(0, cfg.fixed).map(v => ({ name: 'Twitch\n' + (v.h ? v.h + 'p' + (v.fps > 30 ? v.fps : '') : v.name), title: '📼 Rediffusion\n📺 ' + tier(v.h) + (v.fps ? ' · ' + (v.fps > 30 ? v.fps : 30) + ' images/s' : ''), url: pcOn(cfg) || (vm.direct && sealLib.available()) ? pcUrl(originOf(req), base, v.url) : v.url }));
           const auto = { name: 'Twitch\nAuto', title: '📼 Rediffusion\n✨ Auto' + (cfg.cap ? ' · max ' + cfg.cap + 'p' : ' · meilleure qualité'), url: originOf(req) + base + '/v/' + m[2] + '.m3u8' };
           return json(res, { streams: [auto, ...fixed] });
         }
@@ -804,7 +814,7 @@ async function handler(req, res) {
     if (seg[0] === 'v' && seg[1] && F.vods) { // liste de lecture d'une rediffusion avec le plafond de qualité du profil
       const id = strip(seg[1]).replace(/\.m3u8$/, '');
       if (!/^\d+$/.test(id)) return send(res, 400, 'text/plain; charset=utf-8', 'Rediffusion invalide');
-      const vm = await vodMaster(id, auth), fin = pcOn(cfg) ? pcMaster(vm.text, originOf(req), base) : vm.text;
+      const vm = await vodMaster(id, auth), fin = pcOn(cfg) || (vm.direct && sealLib.available()) ? pcMaster(vm.text, originOf(req), base) : vm.text;
       return send(res, 200, 'application/vnd.apple.mpegurl', cfgLib.filterMaster(fin, cfg), { 'Cache-Control': 'no-store' });
     }
     if (seg[0] === 'catalog' && seg[1] === 'tv' && strip(seg[2]) === 'twitch-followed') {
