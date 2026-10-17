@@ -337,14 +337,17 @@ async function liveStreams(game) { // game vide = les plus regardés de tout Twi
   let edges, v;
   if (!game) edges = ((await gqlRaw('query { streams(first: 60) { edges { node { ' + STREAM_NODE + ' } } } }')).streams || {}).edges;
   else {
-    for (const name of [...new Set([game, game.toLowerCase(), game.toUpperCase()])]) { const g = (await gqlRaw('query { game(name: ' + JSON.stringify(name) + ') { streams(first: 60) { edges { node { ' + STREAM_NODE + ' } } } } }')).game; if (g) { edges = (g.streams || {}).edges || []; break; } }
+    const rs = await Promise.all([...new Set([game, game.toLowerCase(), game.toUpperCase()])].map(name => gqlRaw('query { game(name: ' + JSON.stringify(name) + ') { streams(first: 60) { edges { node { ' + STREAM_NODE + ' } } } } }').catch(() => ({}))));
+    const g = rs.map(r => r.game).find(Boolean); if (g) edges = (g.streams || {}).edges || [];
   }
   v = edges ? edges.map(e => toLive(e && e.node)).filter(Boolean).sort((a, b) => b.info.viewers - a.info.viewers) : null;
   streamsCache.set(k, { v, exp: Date.now() + 30000 });
   if (streamsCache.size > 80) streamsCache.delete(streamsCache.keys().next().value);
   return v;
 }
-const gameOf = q => { const k = q.toLowerCase().replace(/[^a-z0-9]/g, ''), a = ALIAS[k]; if (a) return a; const g = GAMES.find(x => x.toLowerCase().replace(/[^a-z0-9]/g, '').includes(k)); return k.length >= 3 && g ? g : q; };
+const norm = t => String(t).toLowerCase().replace(/[^a-z0-9]/g, '');
+const gameOf = async q => { const k = norm(q); if (k.length < 3) return null; if (ALIAS[k]) return ALIAS[k]; const L = await Promise.race([gameList(), new Promise(r => setTimeout(() => r(GAMES), 2500))]); return L.find(x => norm(x) === k) || L.find(x => norm(x).includes(k)) || null; }; // null : ce n'est pas un jeu connu → recherche de chaîne
+const withTimeout = (p, ms, fb) => Promise.race([p, new Promise(r => setTimeout(() => r(fb), ms))]);
 const catalogMeta = x => { const m = metaFromInfo(x.login, x.info); delete m.logo; return { ...m, background: undefined, name: '👁 ' + fmtN(x.info.viewers) + ' · ' + x.info.name, releaseInfo: '🔴 ' + fmtN(x.info.viewers) + ' 👁' }; };
 
 // Menu « Genre » : les catégories les plus regardées de Twitch (liste récupérée sans clé, gardée 6 h), complétées par la liste fixe.
@@ -363,7 +366,7 @@ const vodCache = new Map();
 async function channelVods(login) {
   const c = vodCache.get(login);
   if (c && c.exp > Date.now()) return c.v;
-  const d = await gqlRaw('query { user(login: ' + JSON.stringify(login) + ') { displayName login description profileImageURL(width: 300) offlineImageURL a: videos(first: 40, type: ARCHIVE, sort: TIME) { edges { node { ' + VIDEO_NODE + ' } } } h: videos(first: 20, type: HIGHLIGHT, sort: TIME) { edges { node { ' + VIDEO_NODE + ' } } } } }');
+  const d = await gqlRaw('query { user(login: ' + JSON.stringify(login) + ') { displayName login description profileImageURL(width: 300) offlineImageURL a: videos(first: 30, type: ARCHIVE, sort: TIME) { edges { node { ' + VIDEO_NODE + ' } } } h: videos(first: 10, type: HIGHLIGHT, sort: TIME) { edges { node { ' + VIDEO_NODE + ' } } } } }');
   const u = d.user, nodes = k => ((u && u[k] || {}).edges || []).map(e => e && e.node).filter(n => n && n.id);
   const v = u ? { login: u.login || login, name: u.displayName || login, avatar: u.profileImageURL || '', banner: u.offlineImageURL || '', bio: u.description || '', archives: nodes('a'), highlights: nodes('h') } : null;
   vodCache.set(login, { v, exp: Date.now() + 120000 });
@@ -786,7 +789,7 @@ async function handler(req, res) {
           if (q) logins = LOGIN_RE.test(q) ? [q] : [];
           else if (auth) logins = (await followedChannels(auth).catch(() => [])).slice(0, 24).map(x => x.login);
           else logins = ((await liveStreams('').catch(() => [])) || []).slice(0, 24).map(x => x.login);
-          const vs = (await Promise.all(logins.map(l => channelVods(l).catch(() => null)))).filter(Boolean);
+          const vs = (await withTimeout(Promise.all(logins.map(l => withTimeout(channelVods(l), 6000, null).catch(() => null))), 7000, [])).filter(Boolean);
           store.log({ k: 'catalog', u: pseudo || undefined, n: vs.length, rediffs: true, dev });
           return json(res, { metas: vs.map(v => vodMeta(v)) }, { 'Cache-Control': 'public, s-maxage=60' });
         }
@@ -829,7 +832,8 @@ async function handler(req, res) {
       const ex = extraOf(seg[3]), genre = ex.get('genre'), q = (ex.get('search') || '').trim();
       try {
         if (genre || !q) { const L = await liveStreams(genre || ''); store.log({ k: 'catalog', u: pseudo || undefined, n: L ? L.length : 0, jeu: genre || 'populaires', dev }); return json(res, { metas: (L || []).map(catalogMeta) }, { 'Cache-Control': 'public, s-maxage=30' }); }
-        if (q.length >= 3) { const L = await liveStreams(gameOf(q)); if (L && L.length) { store.log({ k: 'catalog', u: pseudo || undefined, n: L.length, jeu: gameOf(q), dev }); return json(res, { metas: L.map(catalogMeta) }, { 'Cache-Control': 'public, s-maxage=30' }); } }
+        const gm = q.length >= 3 ? await gameOf(q) : null;
+        if (gm) { const L = await withTimeout(liveStreams(gm), 6000, null); if (L && L.length) { store.log({ k: 'catalog', u: pseudo || undefined, n: L.length, jeu: gm, dev }); return json(res, { metas: L.map(catalogMeta) }, { 'Cache-Control': 'public, s-maxage=30' }); } }
       } catch (e) { store.incr('err'); store.log({ k: 'erreur', u: pseudo || undefined, ou: 'catalogue des lives par jeu', msg: e.message }); }
     }
     if (seg[0] === 'catalog' && seg[1] === 'tv') {
