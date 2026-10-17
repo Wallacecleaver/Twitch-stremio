@@ -320,6 +320,20 @@ async function followedChannels(oauth) {
   return v;
 }
 
+// Toutes les chaînes suivies (en ligne ou non), pour le catalogue « Mes rediffusions » : live d'abord (par spectateurs), puis ordre alphabétique.
+const followAllCache = new Map();
+async function followedAll(oauth) {
+  const key = crypto.createHash('sha1').update(oauth).digest('hex').slice(0, 10), c = followAllCache.get(key);
+  if (c && c.exp > Date.now()) return c.v;
+  const nodes = []; let after = '';
+  for (let i = 0; i < 12; i++) { const pg = await followPage(oauth, 'follows', after); nodes.push(...pg.edges.map(e => e.node)); if (!pg.more || !pg.edges.length) break; after = pg.edges[pg.edges.length - 1].cursor; if (!after) break; }
+  const v = nodes.map(n => ({ login: n.login, name: n.displayName || n.login, avatar: n.profileImageURL || '', live: !!n.stream, viewers: n.stream ? Number(n.stream.viewersCount) || 0 : 0 }))
+    .sort((a, b) => (b.live - a.live) || (b.viewers - a.viewers) || a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
+  followAllCache.set(key, { v, exp: Date.now() + 300000 });
+  if (followAllCache.size > 50) followAllCache.delete(followAllCache.keys().next().value);
+  return v;
+}
+
 // Lives populaires et lives d'un jeu, via l'API publique du site web de Twitch (aucune clé nécessaire).
 const STREAM_NODE = 'title viewersCount previewImageURL(width: 640, height: 360) game { displayName } broadcaster { login displayName profileImageURL(width: 300) }';
 const streamsCache = new Map();
@@ -721,6 +735,7 @@ async function handler(req, res) {
       const S = await siteLib.load(), mf = { ...MANIFEST, name: S.name, logo: originOf(req) + '/logo.png?v=' + S.logoV }, GL = await Promise.race([gameList(), new Promise(r => setTimeout(() => r(GAMES), 3000))]);
       mf.catalogs = [{ type: 'tv', id: 'twitch-top', name: 'Twitch · Lives par jeu', extra: [{ name: 'search', isRequired: false }, { name: 'genre', isRequired: false, options: GL }] }];
       if (S.feat.vods) mf.catalogs.push({ type: 'series', id: 'twitch-vods', name: 'Twitch · Rediffusions', extra: [{ name: 'search', isRequired: false }] });
+      if (S.feat.vods && S.feat.followed && auth) mf.catalogs.unshift({ type: 'series', id: 'twitch-myvods', name: 'Twitch · Mes rediffusions', extra: [{ name: 'search', isRequired: false }, { name: 'skip', isRequired: false }] });
       if (auth && S.feat.followed) mf.catalogs = [{ type: 'tv', id: 'twitch-followed', name: 'Twitch · Mes chaînes suivies', extra: [{ name: 'genre', isRequired: false, options: GL }] }, ...mf.catalogs];
       return json(res, pseudo ? { ...mf, name: S.name + ' · ' + pseudo, description: MANIFEST.description + ' — profil de ' + pseudo } : mf);
     }
@@ -783,6 +798,13 @@ async function handler(req, res) {
     }
     if (seg[1] === 'series' && F.vods) { // rediffusions : chaîne = série, rediffs = saison 1, temps forts = saison 2
       try {
+        if (seg[0] === 'catalog' && strip(seg[2]) === 'twitch-myvods') { // toutes mes chaînes suivies, en ligne ou non : on ouvre une chaîne pour voir ses rediffs
+          if (!auth || !F.followed) return json(res, { metas: [] });
+          const ex = extraOf(seg[3]), q = (ex.get('search') || '').trim().toLowerCase(), skip = Math.max(0, parseInt(ex.get('skip'), 10) || 0);
+          const all = (await followedAll(auth)).filter(x => !q || x.name.toLowerCase().includes(q) || x.login.includes(q));
+          store.log({ k: 'catalog', u: pseudo || undefined, n: all.length, mesRediffs: true, dev });
+          return json(res, { metas: all.slice(skip, skip + 100).map(x => ({ id: 'twitchvod:' + x.login, type: 'series', name: x.name, poster: x.avatar, posterShape: 'square', description: x.live ? '🔴 En direct · ' + fmtN(x.viewers) + ' 👁' : 'Rediffusions de ' + x.name, releaseInfo: x.live ? '🔴 En direct' : undefined })) }, { 'Cache-Control': 'no-store' });
+        }
         if (seg[0] === 'catalog') {
           const q = (extraOf(seg[3]).get('search') || '').trim().toLowerCase().replace(/^@/, '');
           let logins = [];
