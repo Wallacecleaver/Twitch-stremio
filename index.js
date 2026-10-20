@@ -231,6 +231,7 @@ function pcMaster(text, origin, base) {
 function cleanMedia(text) {
   return text.split(/\r?\n/).filter(l => !/^#EXT-X-(TWITCH-PREFETCH|DATERANGE|TWITCH-INFO|TWITCH-ELAPSED-SECS|TWITCH-TOTAL-SECS|SCTE35)/.test(l) && !/^#EXT-X-PROGRAM-DATE-TIME/.test(l)).join('\n');
 }
+const mediaLast = new Map(); // dernière liste de lecture valide par qualité (mode ordinateur)
 const originOf = req => 'https://' + String(req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0].trim();
 
 /* ------------------------------------------------------------------ API officielle (catalogues) */
@@ -770,9 +771,19 @@ async function handler(req, res) {
     if (seg[0] === 'm' && seg[1]) { // liste de lecture d'une qualité, nettoyée (mode ordinateur)
       const u = sealLib.open(strip(seg[1]).replace(/\.m3u8$/, ''));
       if (!u || !/^https:\/\//.test(u)) return send(res, 400, 'text/plain; charset=utf-8', 'Lien invalide');
-      const r = await fetch(u, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(8000) });
-      const t = await r.text();
-      if (!r.ok || !t.startsWith('#EXTM3U')) return send(res, r.ok ? 502 : r.status, 'text/plain; charset=utf-8', 'Flux indisponible');
+      // Le lecteur recharge cette liste toutes les ~2 s : un échec ou une lenteur ponctuelle (démarrage à froid, CDN) la vide
+      // et fige la lecture après quelques secondes (« chargement en boucle »). On réessaie une fois, puis on resert la dernière liste valide.
+      let t = null, st = 0;
+      for (let k = 0; k < 2 && t === null; k++) {
+        try {
+          const r = await fetch(u, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(k ? 3000 : 4000) });
+          const x = await r.text(); st = r.status;
+          if (r.ok && x.startsWith('#EXTM3U')) t = x;
+        } catch { /* nouvel essai, puis repli sur la dernière liste valide */ }
+      }
+      if (t !== null) { mediaLast.set(u, { t, at: Date.now() }); if (mediaLast.size > 300) mediaLast.delete(mediaLast.keys().next().value); }
+      else { const old = mediaLast.get(u); if (old && Date.now() - old.at < 15000) t = old.t; }
+      if (t === null) return send(res, st && st !== 200 ? st : 502, 'text/plain; charset=utf-8', 'Flux indisponible');
       const body = cleanMedia(absolutize(t, u));
       return send(res, 200, 'application/vnd.apple.mpegurl', /cloudfront/.test(u) ? body.replace(/-unmuted/g, '-muted') : body, { 'Cache-Control': 'no-store' }); // rediffs réservées aux abonnés : seuls les segments « muted » sont ouverts
     }
