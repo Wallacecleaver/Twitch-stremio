@@ -231,6 +231,16 @@ function pcMaster(text, origin, base) {
 function cleanMedia(text) {
   return text.split(/\r?\n/).filter(l => !/^#EXT-X-(TWITCH-PREFETCH|DATERANGE|TWITCH-INFO|TWITCH-ELAPSED-SECS|TWITCH-TOTAL-SECS|SCTE35)/.test(l) && !/^#EXT-X-PROGRAM-DATE-TIME/.test(l)).join('\n');
 }
+// Mode ordinateur : on sert la liste en retrait de quelques segments (≈ 2 s chacun) pour donner de la marge au lecteur de Stremio PC.
+// PC_DELAY (variable d'environnement) : nombre de segments retirés en fin de liste, 2 par défaut, 0 pour désactiver.
+const PC_DELAY = Math.max(0, parseInt(process.env.PC_DELAY ?? '2', 10) || 0);
+function holdBack(text, k) {
+  if (!k || /^#EXT-X-ENDLIST/m.test(text) || /^#EXT-X-PLAYLIST-TYPE:VOD/m.test(text)) return text; // rediffusions : inchangées
+  const L = text.split(/\r?\n/), idx = [];
+  L.forEach((l, i) => { if (l && !l.startsWith('#')) idx.push(i); });
+  if (idx.length < k + 3) return text; // liste trop courte : on ne touche à rien
+  return L.slice(0, idx[idx.length - k - 1] + 1).join('\n');
+}
 const mediaLast = new Map(); // dernière liste de lecture valide par qualité (mode ordinateur)
 const originOf = req => 'https://' + String(req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0].trim();
 
@@ -791,7 +801,7 @@ async function handler(req, res) {
           'endlist=' + L.some(l => l.startsWith('#EXT-X-ENDLIST')), 'map=' + L.some(l => l.startsWith('#EXT-X-MAP')), 'disc=' + L.filter(l => l.startsWith('#EXT-X-DISCONTINUITY')).length,
           'ext=' + ((segs[0] || '').split('?')[0].split('.').pop()), 'segHost=' + sh, 'range=' + (req.headers.range || '-'), 'ua=' + String(req.headers['user-agent'] || '-').slice(0, 70));
       } catch {}
-      const body = cleanMedia(absolutize(t, u));
+      const body = holdBack(cleanMedia(absolutize(t, u)), PC_DELAY);
       return send(res, 200, 'application/vnd.apple.mpegurl', /cloudfront/.test(u) ? body.replace(/-unmuted/g, '-muted') : body, { 'Cache-Control': 'no-store' }); // rediffs réservées aux abonnés : seuls les segments « muted » sont ouverts
     }
 
