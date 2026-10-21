@@ -782,7 +782,7 @@ async function handler(req, res) {
         } catch { /* nouvel essai, puis repli sur la dernière liste valide */ }
       }
       if (t !== null) { mediaLast.set(u, { t, at: Date.now() }); if (mediaLast.size > 300) mediaLast.delete(mediaLast.keys().next().value); }
-      else { const old = mediaLast.get(u); if (old && Date.now() - old.at < 15000) t = old.t; }
+      else { const old = mediaLast.get(u); if (old && Date.now() - old.at < 15000) { t = old.t; console.warn('[m3u8] échec du rechargement (HTTP ' + (st || 'réseau') + '), dernière liste valide renvoyée'); } else console.warn('[m3u8] échec du rechargement (HTTP ' + (st || 'réseau') + '), aucune liste de secours'); }
       if (t === null) return send(res, st && st !== 200 ? st : 502, 'text/plain; charset=utf-8', 'Flux indisponible');
       const body = cleanMedia(absolutize(t, u));
       return send(res, 200, 'application/vnd.apple.mpegurl', /cloudfront/.test(u) ? body.replace(/-unmuted/g, '-muted') : body, { 'Cache-Control': 'no-store' }); // rediffs réservées aux abonnés : seuls les segments « muted » sont ouverts
