@@ -784,6 +784,13 @@ async function handler(req, res) {
       if (t !== null) { mediaLast.set(u, { t, at: Date.now() }); if (mediaLast.size > 300) mediaLast.delete(mediaLast.keys().next().value); }
       else { const old = mediaLast.get(u); if (old && Date.now() - old.at < 15000) { t = old.t; console.warn('[m3u8] échec du rechargement (HTTP ' + (st || 'réseau') + '), dernière liste valide renvoyée'); } else console.warn('[m3u8] échec du rechargement (HTTP ' + (st || 'réseau') + '), aucune liste de secours'); }
       if (t === null) return send(res, st && st !== 200 ? st : 502, 'text/plain; charset=utf-8', 'Flux indisponible');
+      try { // diagnostic : qui demande la liste, et à quoi ressemble-t-elle ? (visible dans les logs Vercel)
+        const L = t.split(/\r?\n/), segs = L.filter(l => l && !l.startsWith('#')), tag = n => (L.find(l => l.startsWith(n)) || '').split(':').slice(1).join(':') || '-';
+        let sh = '-'; try { sh = new URL(new URL(segs[0], u).href).host; } catch {}
+        console.log('[m3u8]', req.method, 'seq=' + tag('#EXT-X-MEDIA-SEQUENCE'), 'segs=' + segs.length, 'target=' + tag('#EXT-X-TARGETDURATION'), 'v=' + tag('#EXT-X-VERSION'), 'type=' + tag('#EXT-X-PLAYLIST-TYPE'),
+          'endlist=' + L.some(l => l.startsWith('#EXT-X-ENDLIST')), 'map=' + L.some(l => l.startsWith('#EXT-X-MAP')), 'disc=' + L.filter(l => l.startsWith('#EXT-X-DISCONTINUITY')).length,
+          'ext=' + ((segs[0] || '').split('?')[0].split('.').pop()), 'segHost=' + sh, 'range=' + (req.headers.range || '-'), 'ua=' + String(req.headers['user-agent'] || '-').slice(0, 70));
+      } catch {}
       const body = cleanMedia(absolutize(t, u));
       return send(res, 200, 'application/vnd.apple.mpegurl', /cloudfront/.test(u) ? body.replace(/-unmuted/g, '-muted') : body, { 'Cache-Control': 'no-store' }); // rediffs réservées aux abonnés : seuls les segments « muted » sont ouverts
     }
