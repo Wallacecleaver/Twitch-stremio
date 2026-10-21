@@ -232,16 +232,6 @@ function pcMaster(text, origin, base) {
 function cleanMedia(text) {
   return text.split(/\r?\n/).filter(l => !/^#EXT-X-(TWITCH-PREFETCH|DATERANGE|TWITCH-INFO|TWITCH-ELAPSED-SECS|TWITCH-TOTAL-SECS|SCTE35)/.test(l) && !/^#EXT-X-PROGRAM-DATE-TIME/.test(l)).join('\n');
 }
-// Mode ordinateur : on sert la liste en retrait de quelques segments (≈ 2 s chacun) pour donner de la marge au lecteur de Stremio PC.
-// Réglage « Marge de lecture » du dashboard (Paramètres) : nombre de segments retirés en fin de liste, 0 pour désactiver.
-function holdBack(text, k) {
-  if (!k || /^#EXT-X-ENDLIST/m.test(text) || /^#EXT-X-PLAYLIST-TYPE:VOD/m.test(text)) return text; // rediffusions : inchangées
-  const L = text.split(/\r?\n/), idx = [];
-  L.forEach((l, i) => { if (l && !l.startsWith('#')) idx.push(i); });
-  if (idx.length < k + 3) return text; // liste trop courte : on ne touche à rien
-  return L.slice(0, idx[idx.length - k - 1] + 1).join('\n');
-}
-const mediaLast = new Map(); // dernière liste de lecture valide par qualité (mode ordinateur)
 const originOf = req => 'https://' + String(req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0].trim();
 
 /* ------------------------------------------------------------------ API officielle (catalogues) */
@@ -781,27 +771,10 @@ async function handler(req, res) {
     if (seg[0] === 'm' && seg[1]) { // liste de lecture d'une qualité, nettoyée (mode ordinateur)
       const u = sealLib.open(strip(seg[1]).replace(/\.m3u8$/, ''));
       if (!u || !/^https:\/\//.test(u)) return send(res, 400, 'text/plain; charset=utf-8', 'Lien invalide');
-      // Le lecteur recharge cette liste toutes les ~2 s : un échec ou une lenteur ponctuelle (démarrage à froid, CDN) la vide
-      // et fige la lecture après quelques secondes (« chargement en boucle »). On réessaie une fois, puis on resert la dernière liste valide.
-      let t = null, st = 0;
-      for (let k = 0; k < 2 && t === null; k++) {
-        try {
-          const r = await fetch(u, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(k ? 3000 : 4000) });
-          const x = await r.text(); st = r.status;
-          if (r.ok && x.startsWith('#EXTM3U')) t = x;
-        } catch { /* nouvel essai, puis repli sur la dernière liste valide */ }
-      }
-      if (t !== null) { mediaLast.set(u, { t, at: Date.now() }); if (mediaLast.size > 300) mediaLast.delete(mediaLast.keys().next().value); }
-      else { const old = mediaLast.get(u); if (old && Date.now() - old.at < 15000) { t = old.t; console.warn('[m3u8] échec du rechargement (HTTP ' + (st || 'réseau') + '), dernière liste valide renvoyée'); } else console.warn('[m3u8] échec du rechargement (HTTP ' + (st || 'réseau') + '), aucune liste de secours'); }
-      if (t === null) return send(res, st && st !== 200 ? st : 502, 'text/plain; charset=utf-8', 'Flux indisponible');
-      try { // diagnostic : qui demande la liste, et à quoi ressemble-t-elle ? (visible dans les logs Vercel)
-        const L = t.split(/\r?\n/), segs = L.filter(l => l && !l.startsWith('#')), tag = n => (L.find(l => l.startsWith(n)) || '').split(':').slice(1).join(':') || '-';
-        let sh = '-'; try { sh = new URL(new URL(segs[0], u).href).host; } catch {}
-        console.log('[m3u8]', req.method, 'seq=' + tag('#EXT-X-MEDIA-SEQUENCE'), 'segs=' + segs.length, 'target=' + tag('#EXT-X-TARGETDURATION'), 'v=' + tag('#EXT-X-VERSION'), 'type=' + tag('#EXT-X-PLAYLIST-TYPE'),
-          'endlist=' + L.some(l => l.startsWith('#EXT-X-ENDLIST')), 'map=' + L.some(l => l.startsWith('#EXT-X-MAP')), 'disc=' + L.filter(l => l.startsWith('#EXT-X-DISCONTINUITY')).length,
-          'ext=' + ((segs[0] || '').split('?')[0].split('.').pop()), 'segHost=' + sh, 'range=' + (req.headers.range || '-'), 'ua=' + String(req.headers['user-agent'] || '-').slice(0, 70));
-      } catch {}
-      const body = holdBack(cleanMedia(absolutize(t, u)), F.pcDelay);
+      const r = await fetch(u, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(8000) });
+      const t = await r.text();
+      if (!r.ok || !t.startsWith('#EXTM3U')) return send(res, r.ok ? 502 : r.status, 'text/plain; charset=utf-8', 'Flux indisponible');
+      const body = cleanMedia(absolutize(t, u));
       return send(res, 200, 'application/vnd.apple.mpegurl', /cloudfront/.test(u) ? body.replace(/-unmuted/g, '-muted') : body, { 'Cache-Control': 'no-store' }); // rediffs réservées aux abonnés : seuls les segments « muted » sont ouverts
     }
 
