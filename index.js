@@ -24,6 +24,7 @@ const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,
 let FEAT = siteLib.DEF.feat; // interrupteurs du dashboard (Paramètres), rafraîchis à chaque requête
 const LOGIN_RE = /^[a-z0-9_]{3,25}$/;
 
+const BLANK = '<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title></title></head><body style="margin:0;background:#0b0b10"></body></html>'; // accueil et chemins inconnus : rien à voir
 const send = (res, code, type, body, h = {}) => { res.writeHead(code, { 'Content-Type': type, ...h }); res.end(body); };
 const json = (res, o, h) => send(res, 200, 'application/json; charset=utf-8', JSON.stringify(o), { 'Cache-Control': 'no-store', ...h });
 
@@ -729,7 +730,7 @@ async function handler(req, res) {
     store.incr('req'); store.incr('d:' + store.day() + ':req');
     if (['stream', 'catalog', 'p', 'manifest.json'].includes(seg[0])) store.uniq(dev);
 
-    if (!seg.length) return send(res, 302, 'text/plain', '', { Location: '/config' });
+    if (!seg.length) return send(res, 200, 'text/html; charset=utf-8', BLANK, { 'Cache-Control': 'no-cache' }); // accueil : page vide (la config est sur /config)
     if (seg[0] === 'logo.png') {
       const S = await siteLib.load(); let buf = null, type = 'image/png';
       if (S.logoV) { try { const m = /^data:(image\/(?:png|jpeg|webp));base64,(.+)$/.exec((await store.getKey('logo')) || ''); if (m) { type = m[1]; buf = Buffer.from(m[2], 'base64'); } } catch { /* logo par défaut */ } }
@@ -944,7 +945,7 @@ async function handler(req, res) {
         return json(res, { streams: [{ name: 'Twitch', title: 'En direct · qualité automatique' + (b ? ' · sans pub' : ''), url: originOf(req) + base + '/p/' + login + '.m3u8' }, ...plain] });
       }
     }
-    send(res, 404, 'text/plain; charset=utf-8', 'Introuvable');
+    send(res, 404, 'text/html; charset=utf-8', BLANK);
   } catch (e) {
     console.error('requête :', e.message);
     store.incr('err'); store.incr('d:' + store.day() + ':err'); store.log({ k: 'erreur', u: pseudo || undefined, ou: String(req.url).split('?')[0].slice(0, 60), msg: e.message });
