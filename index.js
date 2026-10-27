@@ -1,23 +1,74 @@
 'use strict';
 /*
- * Twitch pour Stremio — étape 1 : base de l'addon + test de lecture depuis Vercel.
+ * Twitch pour Stremio — version locale (hébergée sur ton PC, données dans data/data.json).
  *   /manifest.json            manifeste de l'addon
  *   /catalog/tv/<id>.json     « Lives populaires » (nécessite TWITCH_CLIENT_ID et TWITCH_CLIENT_SECRET)
  *   /meta/tv/twitch:<nom>.json  fiche d'une chaîne
  *   /stream/tv/twitch:<nom>.json  lien de lecture du live
- *   /test/<nom>               diagnostic : Vercel obtient-il bien le flux de cette chaîne ?
+ *   /test/<nom>               diagnostic : ce serveur obtient-il bien le flux de cette chaîne ?
  */
 const http = require('http');
+const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
+
+// Configuration : fichier .env à côté de index.js. Il est créé au premier lancement (mot de passe du dashboard et clé de chiffrement générés).
+(function loadEnv() {
+  const file = path.join(__dirname, '.env');
+  if (!fs.existsSync(file)) {
+    const pw = crypto.randomBytes(12).toString('base64url'), secret = crypto.randomBytes(32).toString('base64url');
+    try {
+      fs.writeFileSync(file, [
+        '# Configuration de l\'addon (relis ce fichier en redémarrant l\'addon)',
+        '',
+        '# Mot de passe du dashboard /admin',
+        'ADMIN_PASSWORD=' + pw,
+        '',
+        '# Clé de chiffrement des jetons Twitch placés dans les liens d\'installation.',
+        '# Changer cette valeur invalide tous les liens avec un compte lié. Pour garder les anciens liens, remets l\'ancienne valeur de SECRET (ou d\'ADMIN_PASSWORD) utilisée sur Vercel.',
+        'SECRET=' + secret,
+        '',
+        '# Clés de l\'API Twitch (facultatif) : https://dev.twitch.tv/console',
+        '#TWITCH_CLIENT_ID=',
+        '#TWITCH_CLIENT_SECRET=',
+        '',
+        '# Adresse publique de l\'addon (tunnel ou nom de domaine, en https). Vide : déduite de la requête (http://localhost:7000 en local).',
+        '#PUBLIC_URL=https://exemple.trycloudflare.com',
+        '',
+        '# Port et interface d\'écoute (0.0.0.0 = accessible depuis le réseau local, 127.0.0.1 = ce PC uniquement)',
+        '#PORT=7000',
+        '#HOST=0.0.0.0',
+        '',
+        '# Dossier du fichier data.json (stats, journal, profils, réglages)',
+        '#DATA_DIR=./data',
+        '',
+        '# Facultatif : jeton auth-token du compte Twitch de l\'administrateur, et liste de relais (séparés par \\n, « Nom | adresse avec {channel} »)',
+        '#TWITCH_AUTH_TOKEN=',
+        '#PROXIES=',
+        '',
+      ].join('\n'));
+      console.log('Fichier .env créé. Mot de passe du dashboard (/admin) : ' + pw);
+    } catch (e) { console.error('Impossible de créer le fichier .env :', e.message); }
+  }
+  let txt = '';
+  try { txt = fs.readFileSync(file, 'utf8'); } catch { return; }
+  for (const line of txt.split(/\r?\n/)) {
+    if (/^\s*#/.test(line)) continue;
+    const m = /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/.exec(line);
+    if (!m) continue;
+    let v = m[2]; if (/^(["']).*\1$/.test(v)) v = v.slice(1, -1);
+    if (process.env[m[1]] === undefined && v !== '') process.env[m[1]] = v.replace(/\\n/g, '\n');
+  }
+})();
+
 const store = require('./lib/store');
 const makeAdmin = require('./lib/admin');
 const cfgLib = require('./lib/settings');
 const sealLib = require('./lib/seal');
 const siteLib = require('./lib/site');
-const crypto = require('crypto');
-const fs = require('fs');
-const path = require('path');
 
 const PORT = process.env.PORT || 7000;
+const HOST = process.env.HOST || '0.0.0.0';
 const GQL = 'https://gql.twitch.tv/gql';
 const GQL_CLIENT_ID = 'kimne78kx3ncx6brgo4mv6wki5h1ko'; // identifiant public du lecteur web de Twitch
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
@@ -232,7 +283,14 @@ function pcMaster(text, origin, base) {
 function cleanMedia(text) {
   return text.split(/\r?\n/).filter(l => !/^#EXT-X-(TWITCH-PREFETCH|DATERANGE|TWITCH-INFO|TWITCH-ELAPSED-SECS|TWITCH-TOTAL-SECS|SCTE35)/.test(l) && !/^#EXT-X-PROGRAM-DATE-TIME/.test(l)).join('\n');
 }
-const originOf = req => 'https://' + String(req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0].trim();
+// Adresse publique de l'addon : PUBLIC_URL si définie, sinon déduite de la requête (http en local, https derrière un tunnel)
+const originOf = req => {
+  if (process.env.PUBLIC_URL) return process.env.PUBLIC_URL.replace(/\/+$/, '');
+  const host = String(req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0].trim();
+  const local = /^(localhost|127\.|\[::1\]|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/i.test(host);
+  const proto = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim() || (req.socket && req.socket.encrypted ? 'https' : local ? 'http' : 'https');
+  return proto + '://' + host;
+};
 
 /* ------------------------------------------------------------------ API officielle (catalogues) */
 let app = null;
@@ -480,7 +538,7 @@ function mergedMaster(b, live, cfg) {
 }
 const byQuality = (a, b) => (b.h - a.h) || (b.fps - a.fps);
 
-// compte Twitch du propriétaire, lié depuis le dashboard (chiffré, stocké dans Upstash) ou variable TWITCH_AUTH_TOKEN
+// compte Twitch du propriétaire, lié depuis le dashboard (chiffré, stocké dans data.json) ou variable TWITCH_AUTH_TOKEN
 let acctCache = { v: null, exp: 0 };
 async function ownerToken() {
   if (acctCache.exp > Date.now()) return acctCache.v;
@@ -504,13 +562,12 @@ const account = {
     return out;
   },
   async link(token) {
-    if (!sealLib.available()) return { ok: false, error: 'Ajoute la variable SECRET (ou ADMIN_PASSWORD) dans Vercel.' };
+    if (!sealLib.available()) return { ok: false, error: 'Ajoute la variable SECRET (ou ADMIN_PASSWORD) dans le fichier .env, puis redémarre l\'addon.' };
     const tok = String(token || '').trim().replace(/^oauth:?\s*/i, '');
     if (!/^[A-Za-z0-9]{20,64}$/.test(tok)) return { ok: false, error: 'Jeton non reconnu : colle la valeur du cookie auth-token, sans guillemets.' };
     const r = await fetch('https://id.twitch.tv/oauth2/validate', { headers: { Authorization: 'OAuth ' + tok, 'User-Agent': UA }, signal: AbortSignal.timeout(8000) });
     if (r.status === 401) return { ok: false, error: 'Twitch refuse ce jeton (expiré ou incorrect). Reconnecte-toi sur twitch.tv et recopie-le.' };
     if (!r.ok) return { ok: false, error: 'Twitch ne répond pas (HTTP ' + r.status + ')' };
-    if (!store.persistent) return { ok: false, error: 'Il faut la base Upstash pour garder le compte. Sinon, mets le jeton dans la variable Vercel TWITCH_AUTH_TOKEN.' };
     await store.setKey('acct', sealLib.seal(tok)); acctCache = { v: null, exp: 0 };
     const j = await r.json(); return { ok: true, login: j.login };
   },
@@ -532,7 +589,7 @@ const summary = c => [c.cap ? 'max ' + c.cap + 'p' : 'qualité max', c.fps60 ? '
 const readBody = req => new Promise(r => { let b = ''; req.on('data', c => { b += c; if (b.length > 8000) req.destroy(); }); req.on('end', () => r(b)); req.on('error', () => r(b)); });
 const text = (v, n) => String(v ?? '').replace(/[\u0000-\u001f]/g, ' ').slice(0, n);
 const hits = new Map(); // limite : 40 signalements / test par minute et par adresse
-const tooMany = req => { const ip = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || 'x', n = (hits.get(ip) || 0) + 1; hits.set(ip, n); if (hits.size > 500) hits.clear(); setTimeout(() => hits.delete(ip), 60000).unref?.(); return n > 40; };
+const tooMany = req => { const ip = store.ipOf(req), n = (hits.get(ip) || 0) + 1; hits.set(ip, n); if (hits.size > 500) hits.clear(); setTimeout(() => hits.delete(ip), 60000).unref?.(); return n > 40; };
 
 // lie le compte Twitch d'une personne : vérifie le jeton, le chiffre, renvoie la version chiffrée (qui ira dans SON lien ; rien n'est stocké)
 async function sealToken(req) {
@@ -631,7 +688,7 @@ const adminRoute = makeAdmin({ send, json, relayReport, probe, check: async (log
   relais: allProxies(),
   rows: [
     ['Version', require('./package.json').version, null],
-    ['Stockage persistant (Upstash)', store.persistent ? 'actif' : 'mémoire temporaire', store.persistent],
+    ['Stockage persistant (fichier JSON)', store.file, store.persistent],
     ['TWITCH_CLIENT_ID', mask(process.env.TWITCH_CLIENT_ID), !!process.env.TWITCH_CLIENT_ID],
     ['TWITCH_CLIENT_SECRET', mask(process.env.TWITCH_CLIENT_SECRET), !!process.env.TWITCH_CLIENT_SECRET],
     ['Catalogue « Lives populaires »', process.env.TWITCH_CLIENT_ID && process.env.TWITCH_CLIENT_SECRET ? 'disponible' : 'vide (clés Twitch manquantes)', !!(process.env.TWITCH_CLIENT_ID && process.env.TWITCH_CLIENT_SECRET)],
@@ -713,9 +770,6 @@ async function handler(req, res) {
     cfg = { ...cfg, relay: cfg.relay && F.relays, pc: cfg.pc && F.pc, hevc: cfg.hevc && F.hevc, audio: cfg.audio && F.audio, cap: F.capMax && (!cfg.cap || cfg.cap > F.capMax) ? F.capMax : cfg.cap };
     if (!cfg.hevc) auth = null;
     const maint = () => json(res, { streams: [{ name: '⚠️ Maintenance', title: F.maintMsg || 'Addon en maintenance, réessaie un peu plus tard.', externalUrl: originOf(req) + '/config' }] });
-    // statistiques : on attend leur enregistrement avant de répondre (Vercel coupe le travail après la réponse)
-    const end = res.end.bind(res);
-    res.end = (...a) => { store.flush().finally(() => end(...a)); return res; };
     const t0 = Date.now(), dev = store.deviceId(req);
     store.incr('req'); store.incr('d:' + store.day() + ':req');
     if (['stream', 'catalog', 'p', 'manifest.json'].includes(seg[0])) store.uniq(dev);
@@ -758,12 +812,12 @@ async function handler(req, res) {
     }
 
     if (seg[0] === 'test' && seg[1]) { // diagnostic lisible
-      const login = seg[1].toLowerCase(), out = { chaine: login, vercel_peut_lire_twitch: false };
+      const login = seg[1].toLowerCase(), out = { chaine: login, serveur_peut_lire_twitch: false };
       if (!LOGIN_RE.test(login)) { out.erreur = 'nom de chaîne invalide'; return json(res, out); }
       try {
         const s = await liveStream(login);
-        if (s.offline) { out.resultat = 'La chaîne est hors ligne (le test doit se faire sur un streamer en direct).'; out.vercel_peut_lire_twitch = null; }
-        else { out.vercel_peut_lire_twitch = true; out.resultat = 'OK : Twitch fournit le flux à ce serveur.'; out.qualites = s.qualities; out.lien_de_lecture = s.url; }
+        if (s.offline) { out.resultat = 'La chaîne est hors ligne (le test doit se faire sur un streamer en direct).'; out.serveur_peut_lire_twitch = null; }
+        else { out.serveur_peut_lire_twitch = true; out.resultat = 'OK : Twitch fournit le flux à ce serveur.'; out.qualites = s.qualities; out.lien_de_lecture = s.url; }
       } catch (e) { out.erreur = e.message; }
       return json(res, out);
     }
@@ -792,7 +846,7 @@ async function handler(req, res) {
       const o = await fetch(s.url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(8000) }).then(r => r.text());
       return send(res, 200, 'application/vnd.apple.mpegurl', fin(cfgLib.filterMaster(o, cfg)), { 'Cache-Control': 'no-store' });
     }
-    if (seg[0] === 'relais' && seg[1]) { // diagnostic : quels relais répondent depuis Vercel ?
+    if (seg[0] === 'relais' && seg[1]) { // diagnostic : quels relais répondent depuis ce PC ?
       const login = seg[1].toLowerCase();
       if (!LOGIN_RE.test(login)) return json(res, { erreur: 'nom de chaîne invalide' });
       return json(res, await relayReport(login));
@@ -929,4 +983,10 @@ async function handler(req, res) {
 module.exports = handler;
 module.exports.handler = handler;
 module.exports._t = { variantsOf, liveStream, usherUrl, metaOf, MANIFEST, absolutize, proxyList, bestProxy };
-if (require.main === module) http.createServer(handler).listen(PORT, () => console.log('Twitch pour Stremio sur http://localhost:' + PORT));
+process.on('unhandledRejection', e => console.error('erreur non gérée :', e && e.message || e));
+if (require.main === module) {
+  http.createServer(handler).listen(PORT, HOST, () => {
+    console.log('Twitch pour Stremio sur http://localhost:' + PORT + (process.env.PUBLIC_URL ? '  (adresse publique : ' + process.env.PUBLIC_URL + ')' : ''));
+    console.log('Données : ' + store.file + '  ·  Dashboard : http://localhost:' + PORT + '/admin  ·  Configuration : http://localhost:' + PORT + '/config');
+  });
+}

@@ -1,44 +1,51 @@
 # Twitch pour Stremio
 
-Addon Stremio hébergé sur Vercel : regarder des lives Twitch dans Stremio.
+Addon Stremio hébergé sur ton PC : regarder des lives Twitch dans Stremio. Aucune dépendance à installer, seulement [Node.js](https://nodejs.org) 18 ou plus.
 
-## Étape 1 (actuelle) — test de lecture
+## Lancer l'addon
+
+1. Double-clique sur `start.bat` (ou `node index.js` dans un terminal).
+2. Au premier lancement, un fichier `.env` est créé à côté de `index.js` avec un mot de passe pour le dashboard et une clé de chiffrement. Le mot de passe est aussi affiché dans la console.
+3. Ouvre `http://localhost:7000/config`, choisis tes réglages, puis installe le lien obtenu dans Stremio.
+
+Sur le même PC, Stremio accepte `http://localhost:7000`. Pour tes amis (ou Stremio sur un autre appareil), il faut une adresse **https** publique : un tunnel (Cloudflare Tunnel, ngrok, Tailscale Funnel…) vers le port 7000. Mets cette adresse dans `PUBLIC_URL` du fichier `.env`, puis redémarre.
+
+## Données (fichier JSON)
+
+Tout est enregistré dans `data/data.json` : statistiques, journal, utilisateurs, profils (`/u/<id>`), réglages du site, logo et compte lié. Le fichier est relu à chaque démarrage, donc rien n'est perdu quand l'addon ou le PC redémarre.
+
+- Écriture atomique (fichier temporaire puis renommage), 2 secondes après le dernier changement, et à l'arrêt de l'addon.
+- Copie de secours `data/data.bak.json` toutes les 10 minutes ; si `data.json` est illisible, la copie est restaurée.
+- Pour changer de dossier : variable `DATA_DIR` dans `.env`.
+- Pour sauvegarder ou déplacer l'addon : copie le dossier `data` et le fichier `.env`.
+
+## Variables (`.env`)
+
+| Variable | Rôle |
+|---|---|
+| `ADMIN_PASSWORD` | mot de passe du dashboard `/admin` |
+| `SECRET` | clé de chiffrement des jetons Twitch placés dans les liens (la changer invalide ces liens) |
+| `PUBLIC_URL` | adresse publique de l'addon (https) |
+| `PORT`, `HOST` | port (7000) et interface d'écoute (`0.0.0.0` ; `127.0.0.1` pour ce PC uniquement) |
+| `DATA_DIR` | dossier de `data.json` |
+| `TWITCH_CLIENT_ID`, `TWITCH_CLIENT_SECRET` | facultatif : catalogue « Lives populaires » via l'API officielle |
+| `TWITCH_AUTH_TOKEN` | facultatif : compte Twitch de l'administrateur (sinon à lier dans le dashboard) |
+| `PROXIES` | facultatif : relais, un par ligne (séparés par `\n` dans `.env`), `Nom \| adresse` avec `{channel}` |
+
+## Pages
+
 - `/manifest.json` : manifeste de l'addon
-- `/test/<nom d'un streamer en direct>` : indique si Vercel obtient bien le flux du live
-- Le catalogue « Lives populaires » apparaît quand `TWITCH_CLIENT_ID` et `TWITCH_CLIENT_SECRET` sont définies dans Vercel
-  (application créée sur https://dev.twitch.tv/console)
+- `/config` : chaque personne choisit un pseudo et ses réglages (qualité maximale, 60 i/s, relais sans pub, nombre de qualités fixes, audio seul, nom d'appareil) et obtient son lien d'installation. Elle peut aussi tester le serveur et lier son compte Twitch.
+- `/admin` : dashboard (lectures, part sans pub, appareils, incidents, graphique 7 jours, utilisateurs, relais, journal avec export CSV, diagnostic, réglages du site, compte Twitch lié)
+- `/test/<nom d'un streamer en direct>` : indique si ce serveur obtient bien le flux du live
+- `/relais/<nom d'un streamer en direct>` : indique quels relais répondent
 
-## Suite prévue
-Connexion par compte Twitch (suivis de chacun), catalogue des jeux, streamers par jeu.
+## Fonctionnement
 
 La lecture des lives utilise l'interface interne de Twitch : méthode non officielle, qui peut cesser de fonctionner.
 
-## Flux « sans pub » (relais)
-Les flux « Twitch » passent par des relais : la liste de lecture est récupérée la liste de lecture auprès de relais tiers (même liste que le script Twitch HLS Proxy),
-côté serveur : le lecteur ne contacte jamais le relais. Si aucun relais ne répond, repli sur le flux officiel.
-- `/relais/<nom d'un streamer en direct>` : indique quels relais répondent depuis Vercel
-- Variable `PROXIES` (facultative) : une adresse par ligne contenant `{channel}`, avec nom optionnel (`Nom | adresse`)
+Les flux « sans pub » passent par des relais tiers (même liste que le script Twitch HLS Proxy), interrogés côté serveur : le lecteur ne contacte jamais le relais. Si aucun relais ne répond, repli sur le flux officiel.
 
-## Page de configuration (`/config`)
+### 1440p (compte Twitch lié)
 
-Chaque personne choisit un pseudo et ses réglages (qualité maximale, 60 i/s, relais sans pub, nombre de qualités fixes, audio seul, nom d'appareil). Elle obtient un lien d'installation personnel `/c/<pseudo>/<réglages>/manifest.json` : pas de compte, la configuration est dans l'adresse. Le pseudo apparaît dans le journal.
-
-La page propose aussi un **test serveur** (la liste de lecture avance-t-elle, les segments arrivent-ils assez vite, y a-t-il des pubs) et un **lecteur de test** dans le navigateur qui envoie les blocages au journal.
-
-## Dashboard d'administration (`/admin`)
-
-Mot de passe dans la variable Vercel `ADMIN_PASSWORD`.
-
-- Dashboard : lectures, part sans pub, appareils, incidents, graphique 7 jours, chaînes populaires, derniers incidents, système.
-- Utilisateurs : pseudos, appareil, lectures, incidents, réglages, accès direct à leur journal.
-- Relais : santé de chacun et test en direct.
-- Journal : niveaux, contextes, filtre par utilisateur, recherche, pause, export CSV.
-- Diagnostic : test de flux avec les réglages d'un utilisateur, sonde rapide.
-
-Pour conserver stats, journal et utilisateurs, ajoute une base Upstash Redis (`UPSTASH_REDIS_REST_URL` et `UPSTASH_REDIS_REST_TOKEN`, ou `KV_REST_API_URL` et `KV_REST_API_TOKEN`). Sans elle, tout est gardé en mémoire et se vide régulièrement.
-
-## 1440p (compte Twitch lié)
-
-Twitch ne donne le 1440p qu'au site web avec un compte connecté. Sur `/config`, la personne colle la valeur de son cookie `auth-token` (twitch.tv) : elle est vérifiée auprès de Twitch, chiffrée en AES-256-GCM (clé : variable `SECRET`, sinon `ADMIN_PASSWORD`) et placée dans son lien d'installation. Rien n'est stocké côté serveur. Changer `SECRET` invalide tous les liens. Activer aussi « Autoriser le 1440p ».
-
-**Comptes :** chaque personne lie son propre compte Twitch sur `/config` (jeton chiffré dans son lien d'installation, rien n'est stocké). Le compte lié dans le dashboard (onglet « Compte Twitch », stocké chiffré dans Upstash ou variable `TWITCH_AUTH_TOKEN`) ne sert qu'aux essais de l'administrateur. Les tests (test serveur, lecteur de test, signalement) sont dans l'onglet Diagnostic du dashboard.
+Twitch ne donne le 1440p qu'au site web avec un compte connecté. Sur `/config`, la personne colle la valeur de son cookie `auth-token` (twitch.tv) : elle est vérifiée auprès de Twitch, chiffrée en AES-256-GCM (clé `SECRET`, sinon `ADMIN_PASSWORD`) et placée dans son lien d'installation. Les profils enregistrés (`/u/<id>`) gardent aussi ce jeton chiffré dans `data.json`. Changer `SECRET` invalide tous les liens. Activer aussi « Autoriser le 1440p ».
