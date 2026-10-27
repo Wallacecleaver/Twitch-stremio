@@ -64,6 +64,7 @@ const crypto = require('crypto');
 const store = require('./lib/store');
 const makeAdmin = require('./lib/admin');
 const cfgLib = require('./lib/settings');
+const fmtLib = require('./lib/format');
 const sealLib = require('./lib/seal');
 const siteLib = require('./lib/site');
 
@@ -580,12 +581,12 @@ const page = rawPage;
 const escH = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const accentCss = hex => { const rgb = [1, 3, 5].map(k => parseInt(hex.slice(k, k + 2), 16)), dark = rgb.map(x => Math.round(x * .72).toString(16).padStart(2, '0')).join(''); return ':root{--a:' + hex + ';--ah:#' + dark + ';--as:rgba(' + rgb.join(',') + ',.15)}'; };
 async function configPage() { // page /config : nom, logo, couleur et textes viennent des réglages du site (dashboard)
-  const s = await siteLib.load(), pub = { name: s.name, color: s.color, title: s.title, text: s.text, banner: s.banner, open: s.open, needCode: !!s.code, def: s.def, v: s.logoV };
+  const s = await siteLib.load(), pub = { name: s.name, color: s.color, title: s.title, text: s.text, banner: s.banner, open: s.open, needCode: !!s.code, def: s.def, v: s.logoV, fmts: fmtLib.samples() };
   const credit = s.credit ? escH(s.credit) : 'Addon gratuit et non officiel · n\'héberge aucun contenu · créé par <b>Wallace</b>';
   return rawPage('config.html').replace(/\{\{NAME\}\}/g, () => escH(s.name)).replace(/\{\{COLOR\}\}/g, () => s.color).replace('{{ACCENT}}', () => accentCss(s.color)).replace('{{CREDIT}}', () => credit).replace(/\{\{V\}\}/g, () => String(s.logoV)).replace('{{SITE}}', () => JSON.stringify(pub).replace(/</g, '\\u003c'));
 }
 const asset = name => pageCache['a:' + name] ||= fs.readFileSync(path.join(__dirname, 'lib', 'assets', name));
-const summary = c => [c.cap ? 'max ' + c.cap + 'p' : 'qualité max', c.fps60 ? '60 i/s' : '30 i/s', c.relay ? 'relais' : 'sans relais', c.fixed + ' fixes', c.hevc ? '1440p' : '', c.tok ? 'compte lié' : '', c.audio ? 'audio' : ''].filter(Boolean).join(' · ');
+const summary = c => [c.cap ? 'max ' + c.cap + 'p' : 'qualité max', c.fps60 ? '60 i/s' : '30 i/s', c.relay ? 'relais' : 'sans relais', c.fixed + ' fixes', c.hevc ? '1440p' : '', c.tok ? 'compte lié' : '', c.audio ? 'audio' : '', c.fmt && c.fmt !== fmtLib.DEFAULT ? 'affichage ' + c.fmt : ''].filter(Boolean).join(' · ');
 const readBody = req => new Promise(r => { let b = ''; req.on('data', c => { b += c; if (b.length > 8000) req.destroy(); }); req.on('end', () => r(b)); req.on('error', () => r(b)); });
 const text = (v, n) => String(v ?? '').replace(/[\u0000-\u001f]/g, ' ').slice(0, n);
 const hits = new Map(); // limite : 40 signalements / test par minute et par adresse
@@ -881,9 +882,8 @@ async function handler(req, res) {
           if (!m) return json(res, { streams: [] });
           const vm = await vodMaster(m[2], auth), vars = variantsOf(vm.text), video = vars.filter(v => !v.audio && cfgLib.keepVariant(v, cfg)).sort(byQuality);
           store.incr('vod'); store.user(pseudo, { ch: m[1], dev: cfg.device }); store.log({ k: 'stream', u: pseudo || undefined, ch: m[1], etat: 'rediff', ms: Date.now() - t0, dev });
-          const tier = h => h >= 1440 ? 'Ultra HD' : h >= 1080 ? 'Full HD' : h >= 720 ? 'HD' : h >= 480 ? 'SD' : 'Éco';
-          const fixed = video.slice(0, cfg.fixed).map(v => ({ name: 'Twitch\n' + (v.h ? v.h + 'p' + (v.fps > 30 ? v.fps : '') : v.name), title: '📼 Rediffusion\n📺 ' + tier(v.h) + (v.fps ? ' · ' + (v.fps > 30 ? v.fps : 30) + ' images/s' : ''), url: pcOn(cfg) || (vm.direct && sealLib.available()) ? pcUrl(originOf(req), base, v.url) : v.url }));
-          const auto = { name: 'Twitch\nAuto', title: '📼 Rediffusion\n✨ Auto' + (cfg.cap ? ' · max ' + cfg.cap + 'p' : ' · meilleure qualité'), url: originOf(req) + base + '/v/' + m[2] + '.m3u8' };
+          const fixed = video.slice(0, cfg.fixed).map(v => ({ ...fmtLib.render(cfg.fmt, { kind: 'fixed', vod: true, h: v.h, fps: v.fps ? (v.fps > 30 ? v.fps : 30) : 0, short: v.h ? v.h + 'p' + (v.fps > 30 ? v.fps : '') : v.name, rawName: v.name }), url: pcOn(cfg) || (vm.direct && sealLib.available()) ? pcUrl(originOf(req), base, v.url) : v.url }));
+          const auto = { ...fmtLib.render(cfg.fmt, { kind: 'auto', vod: true, cap: cfg.cap }), url: originOf(req) + base + '/v/' + m[2] + '.m3u8' };
           return json(res, { streams: [auto, ...fixed] });
         }
       } catch (e) { store.incr('err'); store.log({ k: 'erreur', u: pseudo || undefined, ou: 'rediffusions', msg: e.message });
@@ -955,16 +955,12 @@ async function handler(req, res) {
       // Colonne de droite étroite dans Stremio : lignes courtes (≈ 24 caractères) pour ne rien couper.
       const cut = (t, n) => (t.length > n ? t.slice(0, n - 1).trimEnd() + '…' : t);
       const nb = info && info.viewers ? fmtN(info.viewers) : '';
-      const adLine = ok => ok ? '🚫 Sans pub' : '⚠️ Officiel · avec pubs';
-      const entry = (name, lines, url) => ({ name, title: lines.filter(Boolean).join('\n'), url });
-      const label = v => {
-        const m = /(\d{3,4})p(\d+)?/.exec(v.name) || [], h = Number(m[1] || v.h || 0), f = m[2] || (v.fps > 30 ? String(v.fps) : '30');
-        const tier = h >= 1440 ? 'Ultra HD' : h >= 1080 ? 'Full HD' : h >= 720 ? 'HD' : h >= 480 ? 'SD' : 'Éco';
-        return { short: h ? h + 'p' + (m[2] || (v.fps > 30 ? v.fps : '')) : v.name.replace(/ \(source\)/, ''), long: h ? '📺 ' + tier + ' · ' + f + ' images/s' : '📺 ' + v.name };
-      };
-      const fixed = video.slice(0, cfg.fixed).map(v => { const l = label(v); return entry('Twitch\n' + l.short, [l.long, adLine(!!relayUrls && relayUrls.has(v.url))], pcOn(cfg) ? pcUrl(originOf(req), base, v.url) : v.url); });
-      const auto = entry('Twitch\nAuto', ['🔴 En direct' + (nb ? ' · ' + nb + ' 👁' : ''), info && info.game ? '🎮 ' + cut(info.game, 22) : '', '✨ Auto' + (cfg.cap ? ' · max ' + cfg.cap + 'p' : ' · meilleure qualité'), adLine(!!b)], originOf(req) + base + '/p/' + login + '.m3u8');
-      const audio = cfg.audio ? vars.filter(v => v.audio).slice(0, 1).map(v => entry('Twitch\nAudio', ['🎧 Audio seul', adLine(!!b)], v.url)) : [];
+      // Mise en forme choisie par la personne (cfg.fmt) : voir lib/format.js
+      const gameTxt = info && info.game ? cut(info.game, 22) : '';
+      const dOf = v => { const m = /(\d{3,4})p(\d+)?/.exec(v.name) || [], h = Number(m[1] || v.h || 0), f = m[2] || (v.fps > 30 ? String(v.fps) : '30'); return { h, fps: Number(f), short: h ? h + 'p' + (m[2] || (v.fps > 30 ? v.fps : '')) : v.name.replace(/ \(source\)/, ''), rawName: v.name, viewers: nb, game: gameTxt, cap: cfg.cap }; };
+      const fixed = video.slice(0, cfg.fixed).map(v => ({ ...fmtLib.render(cfg.fmt, { kind: 'fixed', ...dOf(v), noAd: !!relayUrls && relayUrls.has(v.url) }), url: pcOn(cfg) ? pcUrl(originOf(req), base, v.url) : v.url }));
+      const auto = { ...fmtLib.render(cfg.fmt, { kind: 'auto', viewers: nb, game: gameTxt, cap: cfg.cap, noAd: !!b }), url: originOf(req) + base + '/p/' + login + '.m3u8' };
+      const audio = cfg.audio ? vars.filter(v => v.audio).slice(0, 1).map(v => ({ ...fmtLib.render(cfg.fmt, { kind: 'audio', noAd: !!b }), url: v.url })) : [];
       return json(res, { streams: [auto, ...fixed, ...audio] });
       } catch (e) { // mise en forme impossible : liste simple, pour ne jamais perdre les flux
         store.log({ k: 'erreur', u: pseudo || undefined, ou: 'mise en forme des sources', msg: e.message });
