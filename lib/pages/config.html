@@ -149,7 +149,7 @@ footer{position:relative;z-index:1;display:grid;gap:8px;justify-items:start;marg
 const SITE={{SITE}};
 const $=s=>document.querySelector(s),wait=ms=>new Promise(r=>setTimeout(r,ms));
 const CAPS=[[0,'Maximum'],[1440,'1440p'],[1080,'1080p'],[720,'720p'],[480,'480p'],[360,'360p']];
-const STEPS=['Profil','Qualité','Compte','Options','Terminer'];
+const STEPS=['Profil','Qualité','Compte','Affichage','Options','Terminer'];
 const EYE='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
 const st={pseudo:'',device:'',cap:0,fps60:true,relay:true,hevc:false,tok:'',acct:'',fixed:3,audio:false,pc:false,fmt:'classique'};
 Object.assign(st,SITE.def);
@@ -170,7 +170,7 @@ function steps(){
  const el=$('#steps');
  if(!el.firstElementChild)el.innerHTML='<div class="trk"><div class="fill" id="fill"></div></div>'+STEPS.map((n,i)=>'<button class="sp" data-s="'+i+'"><i></i><span>'+n+'</span></button>').join('');
  el.querySelectorAll('.sp').forEach((b,i)=>{b.className='sp'+(i<step?' done':'')+(i===step?' cur':'');b.firstElementChild.textContent=i<step?'✓':i+1});
- $('#fill').style.width=(step/4*100)+'%';
+ $('#fill').style.width=(step/5*100)+'%';
 }
 function body(){
  const edit=!!id&&!fresh;let h='';
@@ -197,23 +197,25 @@ function body(){
   +'<details class="help"><summary>Où trouver mon auth-token ?</summary><ol><li>Sur Chrome ou Brave, ouvre twitch.tv et connecte-toi.</li><li>Appuie sur F12, puis ouvre l\'onglet « Application ».</li><li>À gauche : Cookies → https://www.twitch.tv.</li><li>Copie la valeur de la ligne <b>auth-token</b> et colle-la ci-dessus.</li></ol></details>'
   +sw('hevc','Autoriser le 1440p (HEVC / AV1)','Demande à Twitch les qualités au-delà du 1080p. Il faut un compte lié, une chaîne qui diffuse en 1440p et un lecteur qui sait lire ce format. En cas de souci, coupe-le.')
   +'<span class="hint">🔒 Le jeton est vérifié auprès de Twitch, puis chiffré : il n\'est jamais affiché ni stocké en clair, et reste protégé par ton mot de passe. Il donne accès à ton compte : ne le partage avec personne.</span></div>';
- if(step===3)h='<h1>Options</h1><p class="sub">Réglages avancés. Les valeurs par défaut conviennent à la plupart des gens : change-les seulement si tu as un problème précis.</p><div class="grid">'
-  +'<div class="row"><span class="lab">Affichage des sources</span><div class="seg" id="fmt">'+SITE.fmts.map(f=>'<button data-v="'+f.id+'" aria-pressed="'+(st.fmt===f.id)+'" class="'+(st.fmt===f.id?'on':'')+'">'+esc(f.label)+'</button>').join('')+'</div><span class="hint" id="fmtDesc"></span><div class="prev" id="fmtPrev" aria-label="Aperçu dans Stremio"></div></div>'
+ if(step===3)h='<h1>Affichage des sources</h1><p class="sub">Choisis comment les sources apparaissent dans la liste de Stremio quand tu ouvres un live. Tu pourras changer ça quand tu veux, sans réinstaller.</p><div class="grid">'
+  +'<div class="row"><span class="lab">Style</span><div class="seg" id="fmt">'+SITE.fmts.map(f=>'<button data-v="'+f.id+'" aria-pressed="'+(st.fmt===f.id)+'" class="'+(st.fmt===f.id?'on':'')+'">'+esc(f.label)+'</button>').join('')+'</div><span class="hint" id="fmtDesc"></span><div class="prev" id="fmtPrev" aria-label="Aperçu dans Stremio"></div></div>'
+  +'<div class="why"><b>Aperçu :</b> les deux cartes ci-dessus montrent la source « Auto » et une source à qualité fixe, comme dans Stremio.</div></div>';
+ if(step===4)h='<h1>Options</h1><p class="sub">Réglages avancés. Les valeurs par défaut conviennent à la plupart des gens : change-les seulement si tu as un problème précis.</p><div class="grid">'
   +sw('relay','Relais sans publicité','Twitch insère des pubs selon ta région. Le relais récupère le flux depuis un serveur d\'une autre région où il y en a moins, puis te le renvoie. Si un relais est en panne, l\'addon retombe tout seul sur le flux officiel.')
   +sw('audio','Proposer « Audio seul »','Ajoute une source qui joue uniquement le son, sans la vidéo : pratique pour écouter un live en travaillant, ou pour économiser la connexion.')
   +sw('pc','Mode ordinateur (Stremio PC)','À activer si Stremio sur ton ordinateur charge sans fin ou se fige. L\'addon nettoie les listes de lecture avant de les donner au lecteur du PC. Inutile sur TV et téléphone.')+'</div>';
- if(step===4&&!result){const L=[['Pseudo',st.pseudo||'—'],['Appareil',st.device||'—'],['Qualité max',st.cap?st.cap+'p':'Maximum'],['60 images/s',st.fps60?'Oui':'Non'],['Compte Twitch',st.tok?(st.acct||'Lié'):'Non'],['1440p',st.hevc?'Oui':'Non'],['Relais sans pub',st.relay?'Oui':'Non'],['Mode ordinateur',st.pc?'Oui':'Non'],['Affichage des sources',(SITE.fmts.find(x=>x.id===st.fmt)||{}).label||'Classique'],['Mot de passe',newPw?'Défini':(edit?'Inchangé':'—')]];
+ if(step===5&&!result){const L=[['Pseudo',st.pseudo||'—'],['Appareil',st.device||'—'],['Qualité max',st.cap?st.cap+'p':'Maximum'],['60 images/s',st.fps60?'Oui':'Non'],['Compte Twitch',st.tok?(st.acct||'Lié'):'Non'],['1440p',st.hevc?'Oui':'Non'],['Relais sans pub',st.relay?'Oui':'Non'],['Mode ordinateur',st.pc?'Oui':'Non'],['Affichage des sources',(SITE.fmts.find(x=>x.id===st.fmt)||{}).label||'Classique'],['Mot de passe',newPw?'Défini':(edit?'Inchangé':'—')]];
   h='<h1>'+(edit?'Tout est bon ?':'Dernière étape')+'</h1><p class="sub">Vérifie ton récapitulatif. Tu peux cliquer sur une étape en haut pour corriger quelque chose.</p><div class="sum">'+L.map((r,i)=>'<div style="animation-delay:'+(i*.04)+'s"><span>'+r[0]+'</span><b>'+esc(r[1])+'</b></div>').join('')+'</div>'
   +(edit?'<div class="why" style="margin-top:16px"><b>Enregistrer</b> met à jour ton addon <b>sans réinstallation</b> : relance simplement la chaîne dans Stremio.</div>':'<div class="why" style="margin-top:16px"><b>Ensuite ?</b> Tu obtiens un <b>lien à installer dans Stremio</b> (une seule fois) et un <b>identifiant</b> pour revenir modifier ton profil.</div>'+(persistent?'':'<div class="note w" style="margin-top:12px">Base de données non configurée : tu auras un lien classique, sans mot de passe, à réinstaller après chaque changement.</div>'))
   ;}
- if(step===4&&result&&verify&&!verify.ok)return verifyHtml();
- if(step===4&&result)h='<div class="done"><div class="ck"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg></div><h1>'+(edit?'Configuration enregistrée':'Ton addon est prêt')+'</h1>'
+ if(step===5&&result&&verify&&!verify.ok)return verifyHtml();
+ if(step===5&&result)h='<div class="done"><div class="ck"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg></div><h1>'+(edit?'Configuration enregistrée':'Ton addon est prêt')+'</h1>'
   +(edit?'<p class="sub" style="margin:0">Les changements sont déjà actifs dans Stremio. Relance simplement la chaîne.</p>':'<p class="sub" style="margin:0">Il reste une étape : l\'installer dans Stremio.</p>')
   +(!edit&&result.link?'<ol class="how"><li>Clique sur <b>Installer dans Stremio</b> (ou copie le lien ci-dessous dans Stremio → Addons → coller l\'URL).</li><li>Confirme l\'installation dans Stremio.</li><li>Ouvre un live dans la catégorie TV et profite 🎉</li></ol>':'')
   +(result.link?'<div class="url" style="width:100%"><input type="text" id="link" readonly value="'+esc(result.link)+'"><button class="btn" id="copy">Copier</button></div><div class="acts"><a class="btn pr big" href="'+esc(result.stremio)+'">Installer dans Stremio</a></div>':'')
   +(result.cfgLink?'<div class="idbox"><span class="lab">🔑 Ton identifiant de profil</span><div class="url"><input type="text" id="idv" readonly value="'+esc(id)+'"><button class="btn" id="copyid">Copier</button></div><span class="hint">Garde-le avec ton mot de passe. Pour modifier ton profil plus tard : roue ⚙ de l\'addon dans Stremio, ou cette page → onglet <b>Se connecter</b> → identifiant + mot de passe.</span></div>':'')+'</div>';
- if(!(step===4&&result))h='<div class="eyebrow">Étape '+(step+1)+' / 5 · '+STEPS[step]+'</div>'+h; let nav='';
- if(!(step===4&&result))nav='<div class="nav"><button class="btn" id="back"'+(step?'':' disabled')+'>← Retour</button>'+(step<4?'<button class="btn pr" id="next">Continuer →</button>':'<button class="btn pr big" id="go">'+(edit?'Enregistrer':'Créer mon lien')+'</button>')+'</div>';
+ if(!(step===5&&result))h='<div class="eyebrow">Étape '+(step+1)+' / 6 · '+STEPS[step]+'</div>'+h; let nav='';
+ if(!(step===5&&result))nav='<div class="nav"><button class="btn" id="back"'+(step?'':' disabled')+'>← Retour</button>'+(step<5?'<button class="btn pr" id="next">Continuer →</button>':'<button class="btn pr big" id="go">'+(edit?'Enregistrer':'Créer mon lien')+'</button>')+'</div>';
  return '<div class="pane">'+h+nav+'</div>';
 }
 function loginHtml(){
@@ -233,7 +235,7 @@ const sessBanner=()=>{const o=SS.get();return o?'<div class="note ok">Session ac
 function welcomeHtml(){
  return '<div class="pane"><div class="eyebrow">Bienvenue</div><h1>'+esc(SITE.title)+' 👋</h1><div class="grid"><p style="color:var(--t2)">'+(SITE.text?esc(SITE.text):'Cet addon ajoute les <b>lives Twitch</b> dans Stremio. Tu choisis une chaîne en direct, elle se lance sur PC, TV ou téléphone, avec la qualité que tu veux (jusqu\'au 1440p) et <b>sans publicité</b> quand c\'est possible.')+'</p>'
  +'<div class="feat"><div class="spot"><b>📺 Dans Stremio</b>Un catalogue de lives, comme un film ou une série.</div><div class="spot"><b>🚫 Sans pub</b>Le flux est récupéré ailleurs pour éviter les écrans de pub.</div><div class="spot"><b>⚙️ À ta façon</b>Chaque personne a son profil et ses propres réglages.</div></div>'
- +'<div class="why"><b>Comment ça marche ?</b> Tu crées ton profil en 5 étapes (environ 2 minutes), tu l\'installes <b>une seule fois</b> dans Stremio, puis tu pourras toujours modifier tes réglages sans réinstaller.</div>'+(SITE.open?'':'<div class="note w">Les inscriptions sont fermées pour le moment. Si tu as déjà un profil, utilise l\'onglet <b>Se connecter</b>.</div>')+sessBanner()+'</div>'
+ +'<div class="why"><b>Comment ça marche ?</b> Tu crées ton profil en 6 étapes (environ 2 minutes), tu l\'installes <b>une seule fois</b> dans Stremio, puis tu pourras toujours modifier tes réglages sans réinstaller.</div>'+(SITE.open?'':'<div class="note w">Les inscriptions sont fermées pour le moment. Si tu as déjà un profil, utilise l\'onglet <b>Se connecter</b>.</div>')+sessBanner()+'</div>'
  +'<div class="nav" style="justify-content:flex-end">'+(SITE.open?'<button class="btn pr big" id="start">Commencer →</button>':'')+'</div></div>';
 }
 async function enter(i,pw,r){
@@ -335,7 +337,7 @@ async function runVerify(){
 }
 async function go(n,force){
  if(swapping)return;
- n=Math.max(0,Math.min(4,n));if(n===step&&!force)return;
+ n=Math.max(0,Math.min(5,n));if(n===step&&!force)return;
  if(n>step&&!validate(step))return;
  const dir=n>=step?1:-1;step=n;result=null;verify=null;
  await show(body(),dir);
@@ -369,7 +371,7 @@ async function save(){
 function save2(){const u=location.origin+'/c/'+st.pseudo+'/'+b64(opts())+'/manifest.json';result={link:u,stremio:'stremio://'+u.replace(/^https?:\/\//,'')};busy=false;runVerify()}
 function bind(){
  const $$=(s,f)=>document.querySelectorAll(s).forEach(f);
- $('#vback')&&($('#vback').onclick=()=>go(4,true));$('#vretry')&&($('#vretry').onclick=()=>runVerify());$('#vnext')&&($('#vnext').onclick=async()=>{verify.ok=true;await show(body(),1)});
+ $('#vback')&&($('#vback').onclick=()=>go(5,true));$('#vretry')&&($('#vretry').onclick=()=>runVerify());$('#vnext')&&($('#vnext').onclick=async()=>{verify.ok=true;await show(body(),1)});
  $('#back')&&($('#back').onclick=()=>go(step-1));$('#next')&&($('#next').onclick=()=>go(step+1));$('#go')&&($('#go').onclick=save);
  $$('[data-t]',el=>{const t=()=>setSw(el.dataset.t,!st[el.dataset.t]);el.onclick=t;el.onkeydown=e=>{if(e.key===' '||e.key==='Enter'){e.preventDefault();t()}}});
  $$('[data-eye]',b=>b.onclick=()=>{const i=$('#'+b.dataset.eye);i.type=i.type==='password'?'text':'password'});
