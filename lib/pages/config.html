@@ -11,7 +11,7 @@
 <style>
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
 [hidden]{display:none!important}
-:root{--bg:#07070a;--bg3:rgba(20,20,26,.62);--el:rgba(255,255,255,.045);--el2:rgba(255,255,255,.075);--hv:#2a2a31;--bs:rgba(255,255,255,.07);--bd:rgba(255,255,255,.12);--bx:rgba(255,255,255,.24);--t:#f6f6f8;--t2:#a8a8b3;--t3:#74747f;--a:#9d5cff;--a2:#38bdf8;--ah:#7c3aed;--as:rgba(157,92,255,.15);--ok:#34d399;--oks:rgba(52,211,153,.12);--ko:#fb7185;--kos:rgba(251,113,133,.12);--r:14px;--rl:26px;--mono:'JetBrains Mono',Consolas,monospace;--ease:cubic-bezier(.22,1,.36,1);--spring:cubic-bezier(.34,1.56,.64,1)}
+:root{--bg:#07070a;--bg3:rgba(20,20,26,.62);--el:rgba(255,255,255,.045);--el2:rgba(255,255,255,.075);--hv:#2a2a31;--bs:rgba(255,255,255,.07);--bd:rgba(255,255,255,.12);--bx:rgba(255,255,255,.24);--t:#f6f6f8;--t2:#a8a8b3;--t3:#8c8c98;--a:#9d5cff;--a2:#38bdf8;--ah:#7c3aed;--as:rgba(157,92,255,.15);--ok:#34d399;--oks:rgba(52,211,153,.12);--ko:#fb7185;--kos:rgba(251,113,133,.12);--r:14px;--rl:26px;--mono:'JetBrains Mono',Consolas,monospace;--ease:cubic-bezier(.22,1,.36,1);--spring:cubic-bezier(.34,1.56,.64,1)}
 html{font-size:15px;-webkit-font-smoothing:antialiased;color-scheme:dark;scroll-behavior:smooth}
 body{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;background:radial-gradient(900px 420px at 50% -120px,rgba(145,71,255,.2),transparent 70%) no-repeat,var(--bg);color:var(--t);min-height:100vh;line-height:1.6;overflow-x:hidden}
 .wrap{position:relative;z-index:1;max-width:740px;margin:0 auto;padding:30px 18px 70px}
@@ -31,7 +31,7 @@ body{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;background:radial-g
 .sp.done i{background:linear-gradient(135deg,var(--a),var(--ah));border-color:transparent;color:#fff;box-shadow:0 0 18px -2px var(--a)}
 .sp.cur i{background:#14141a;border-color:var(--a);color:#fff;transform:scale(1.15);box-shadow:0 0 0 5px var(--as),0 0 24px var(--a)}
 .sp.cur,.sp.done{color:var(--t)}
-@media(max-width:520px){.sp span{display:none}}
+@media(max-width:520px){.sp span{display:none}#fmt{grid-template-columns:repeat(2,1fr)}}
 .stage{position:relative;background:#121217;border:1px solid var(--bd);border-radius:var(--rl);overflow:hidden;box-shadow:0 20px 50px -24px rgba(0,0,0,.8);transition:height .45s var(--ease);animation:up .6s .12s var(--ease) both}
 .spot{position:relative}
 .pane{padding:30px}@media(max-width:520px){.pane{padding:20px}}
@@ -41,6 +41,7 @@ body{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;background:radial-g
 @keyframes xl{to{opacity:0;transform:translate3d(-24px,0,0)}}@keyframes xr{to{opacity:0;transform:translate3d(24px,0,0)}}
 @keyframes up{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
 .eyebrow{display:inline-flex;align-items:center;gap:8px;font-family:'Space Grotesk',sans-serif;font-size:.72rem;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--a2);margin-bottom:10px}.eyebrow::before{content:'';width:22px;height:2px;border-radius:2px;background:linear-gradient(90deg,var(--a2),transparent)}
+.pane h1 .hint{font-family:'Inter',sans-serif;font-size:.8rem;font-weight:500;letter-spacing:0;margin-left:8px;vertical-align:middle}.cap{font-size:.7rem;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--t3);margin-top:6px}
 .pane h1{font-family:'Space Grotesk','Inter',sans-serif;font-size:1.75rem;line-height:1.2;letter-spacing:-.025em;margin-bottom:6px;color:#fff}
 .sub{color:var(--t2);margin-bottom:24px}
 .grid{display:grid;gap:18px}.grid>*{animation:up .5s var(--ease) both}.grid>*:nth-child(1){animation-delay:.08s}.grid>*:nth-child(2){animation-delay:.14s}.grid>*:nth-child(3){animation-delay:.2s}.grid>*:nth-child(4){animation-delay:.26s}.grid>*:nth-child(5){animation-delay:.32s}.grid>*:nth-child(6){animation-delay:.38s}
@@ -70,7 +71,7 @@ input.bad{border-color:var(--ko);box-shadow:0 0 0 4px var(--kos);animation:shake
 .url{display:flex;gap:8px}.url input{font-family:var(--mono);font-size:.76rem}
 .help{background:var(--el);border:1px solid var(--bs);border-radius:var(--r);padding:2px 18px;transition:border-color .3s}.help:hover{border-color:var(--bd)}.help summary{cursor:pointer;padding:13px 0;font-weight:600;font-size:.88rem}.help[open] ol{animation:up .45s var(--ease)}.help ol{padding:0 0 14px 20px;color:var(--t2);font-size:.85rem;display:grid;gap:6px}
 .sum{border:1px solid var(--bs);border-radius:var(--r);overflow:hidden;background:var(--el)}.sum div{display:flex;justify-content:space-between;gap:12px;padding:12px 18px;border-bottom:1px solid var(--bs);font-size:.88rem;animation:up .6s var(--ease) both}.sum div:last-child{border:0}.sum span{color:var(--t3)}.sum b{text-align:right}
-.done{text-align:center;display:grid;gap:15px;justify-items:center}
+div.done{text-align:center;display:grid;gap:15px;justify-items:center}
 .ck{width:84px;height:84px;border-radius:50%;background:radial-gradient(circle,rgba(52,211,153,.25),rgba(52,211,153,.06));border:1px solid rgba(52,211,153,.4);display:grid;place-items:center;box-shadow:0 0 50px -6px var(--ok);animation:pop .8s var(--spring) both}.ck svg{width:42px;height:42px;stroke:var(--ok);fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:40;stroke-dashoffset:40;animation:draw .6s .4s ease forwards}
 @keyframes pop{from{transform:scale(.3) rotate(-20deg);opacity:0}to{transform:none;opacity:1}}@keyframes draw{to{stroke-dashoffset:0}}
 .lock{display:grid;gap:18px;justify-items:center;text-align:center}.lock .ico{width:72px;height:72px;border-radius:50%;background:var(--as);border:1px solid rgba(157,92,255,.35);display:grid;place-items:center;box-shadow:0 0 40px -8px var(--a);animation:pop .7s var(--spring) both}.lock .ico svg{width:32px;height:32px;stroke:var(--a);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}.lock .row{width:100%;text-align:left}
@@ -198,8 +199,8 @@ function body(){
   +sw('hevc','Autoriser le 1440p (HEVC / AV1)','Demande à Twitch les qualités au-delà du 1080p. Il faut un compte lié, une chaîne qui diffuse en 1440p et un lecteur qui sait lire ce format. En cas de souci, coupe-le.')
   +'<span class="hint">🔒 Le jeton est vérifié auprès de Twitch, puis chiffré : il n\'est jamais affiché ni stocké en clair, et reste protégé par ton mot de passe. Il donne accès à ton compte : ne le partage avec personne.</span></div>';
  if(step===3)h='<h1>Affichage des sources</h1><p class="sub">Choisis comment les sources apparaissent dans la liste de Stremio quand tu ouvres un live. Tu pourras changer ça quand tu veux, sans réinstaller.</p><div class="grid">'
-  +'<div class="row"><span class="lab">Style</span><div class="seg" id="fmt">'+SITE.fmts.map(f=>'<button data-v="'+f.id+'" aria-pressed="'+(st.fmt===f.id)+'" class="'+(st.fmt===f.id?'on':'')+'">'+esc(f.label)+'</button>').join('')+'</div><span class="hint" id="fmtDesc"></span><div class="prev" id="fmtPrev" aria-label="Aperçu dans Stremio"></div></div>'
-  +'<div class="why"><b>Aperçu :</b> les deux cartes ci-dessus montrent la source « Auto » et une source à qualité fixe, comme dans Stremio.</div></div>';
+  +'<div class="row"><span class="lab">Style</span><div class="seg" id="fmt">'+SITE.fmts.map(f=>'<button data-v="'+f.id+'" aria-pressed="'+(st.fmt===f.id)+'" class="'+(st.fmt===f.id?'on':'')+'">'+esc(f.label)+'</button>').join('')+'</div><span class="hint" id="fmtDesc"></span><span class="cap">Aperçu dans Stremio</span><div class="prev" id="fmtPrev" aria-label="Aperçu dans Stremio"></div></div>'
+  +'</div>';
  if(step===4)h='<h1>Options</h1><p class="sub">Réglages avancés. Les valeurs par défaut conviennent à la plupart des gens : change-les seulement si tu as un problème précis.</p><div class="grid">'
   +sw('relay','Relais sans publicité','Twitch insère des pubs selon ta région. Le relais récupère le flux depuis un serveur d\'une autre région où il y en a moins, puis te le renvoie. Si un relais est en panne, l\'addon retombe tout seul sur le flux officiel.')
   +sw('audio','Proposer « Audio seul »','Ajoute une source qui joue uniquement le son, sans la vidéo : pratique pour écouter un live en travaillant, ou pour économiser la connexion.')
