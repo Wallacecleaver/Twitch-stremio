@@ -1,6 +1,6 @@
 'use strict';
 /*
- * Twitch pour Stremio — version locale (hébergée sur ton PC, données dans data/data.json).
+ * TwitchIO — version locale (hébergée sur ton PC, données dans data/data.json).
  *   /manifest.json            manifeste de l'addon
  *   /catalog/tv/<id>.json     « Lives populaires » (nécessite TWITCH_CLIENT_ID et TWITCH_CLIENT_SECRET)
  *   /meta/tv/twitch:<nom>.json  fiche d'une chaîne
@@ -505,10 +505,10 @@ async function vodDirect(id) {
 
 /* ------------------------------------------------------------------ addon */
 const MANIFEST = {
-  id: 'community.twitch.lives', version: '0.1.0', name: 'Twitch', description: 'Lives Twitch dans Stremio',
+  id: 'community.twitch.lives', version: '0.1.0', name: 'TwitchIO', description: 'Lives Twitch dans Stremio',
   resources: ['catalog', 'meta', 'stream'], types: ['tv', 'series'], idPrefixes: ['twitch:', 'twitchvod:'],
   behaviorHints: { configurable: true, configurationRequired: false },
-  catalogs: [{ type: 'tv', id: 'twitch-top', name: 'Twitch · Lives par jeu', extra: [{ name: 'search', isRequired: false }, { name: 'genre', isRequired: false, options: GAMES }] }],
+  catalogs: [{ type: 'tv', id: 'twitch-top', name: 'TwitchIO · Lives par jeu', extra: [{ name: 'search', isRequired: false }, { name: 'genre', isRequired: false, options: GAMES }] }],
 };
 
 async function probe(login) { // diagnostic d'une chaîne pour le dashboard
@@ -769,7 +769,7 @@ async function handler(req, res) {
     res.setHeader('Access-Control-Allow-Origin', '*');
     if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
     if (await adminRoute(req, res, seg)) return;
-    const SS = await siteLib.load(), F = FEAT = SS.feat; store.setLog(F.logs);
+    const SS = await siteLib.load(), F = FEAT = SS.feat, BR = SS.name.slice(0, 14); store.setLog(F.logs);
     cfg = { ...cfg, relay: cfg.relay && F.relays, pc: cfg.pc && F.pc, hevc: cfg.hevc && F.hevc, audio: cfg.audio && F.audio, cap: F.capMax && (!cfg.cap || cfg.cap > F.capMax) ? F.capMax : cfg.cap };
     if (!cfg.hevc) auth = null;
     const maint = () => json(res, { streams: [{ name: '⚠️ Maintenance', title: F.maintMsg || 'Addon en maintenance, réessaie un peu plus tard.', externalUrl: originOf(req) + '/config' }] });
@@ -791,10 +791,10 @@ async function handler(req, res) {
     if (seg[0] === 'manifest.json') {
       store.log({ k: 'install', u: pseudo || undefined, appareil: cfg.device || undefined, reglages: pseudo ? summary(cfg) : 'défaut', dev }); store.user(pseudo, { cfg: { ...cfg, tok: undefined, compte: !!cfg.tok }, dev: cfg.device });
       const S = await siteLib.load(), mf = { ...MANIFEST, name: S.name, logo: originOf(req) + '/logo.png?v=' + S.logoV }, GL = await Promise.race([gameList(), new Promise(r => setTimeout(() => r(GAMES), 3000))]);
-      mf.catalogs = [{ type: 'tv', id: 'twitch-top', name: 'Twitch · Lives par jeu', extra: [{ name: 'search', isRequired: false }, { name: 'genre', isRequired: false, options: GL }] }];
-      if (S.feat.vods) mf.catalogs.push({ type: 'series', id: 'twitch-vods', name: 'Twitch · Rediffusions', extra: [{ name: 'search', isRequired: false }] });
-      if (S.feat.vods && S.feat.followed && auth) mf.catalogs.unshift({ type: 'series', id: 'twitch-myvods', name: 'Twitch · Mes rediffusions', extra: [{ name: 'search', isRequired: false }, { name: 'skip', isRequired: false }] });
-      if (auth && S.feat.followed) mf.catalogs = [{ type: 'tv', id: 'twitch-followed', name: 'Twitch · Mes chaînes suivies', extra: [{ name: 'genre', isRequired: false, options: GL }] }, ...mf.catalogs];
+      mf.catalogs = [{ type: 'tv', id: 'twitch-top', name: S.name + ' · Lives par jeu', extra: [{ name: 'search', isRequired: false }, { name: 'genre', isRequired: false, options: GL }] }];
+      if (S.feat.vods) mf.catalogs.push({ type: 'series', id: 'twitch-vods', name: S.name + ' · Rediffusions', extra: [{ name: 'search', isRequired: false }] });
+      if (S.feat.vods && S.feat.followed && auth) mf.catalogs.unshift({ type: 'series', id: 'twitch-myvods', name: S.name + ' · Mes rediffusions', extra: [{ name: 'search', isRequired: false }, { name: 'skip', isRequired: false }] });
+      if (auth && S.feat.followed) mf.catalogs = [{ type: 'tv', id: 'twitch-followed', name: S.name + ' · Mes chaînes suivies', extra: [{ name: 'genre', isRequired: false, options: GL }] }, ...mf.catalogs];
       return json(res, pseudo ? { ...mf, name: S.name + ' · ' + pseudo, description: MANIFEST.description + ' — profil de ' + pseudo } : mf);
     }
 
@@ -884,13 +884,13 @@ async function handler(req, res) {
           if (!m) return json(res, { streams: [] });
           const vm = await vodMaster(m[2], auth), vars = variantsOf(vm.text), video = vars.filter(v => !v.audio && cfgLib.keepVariant(v, cfg)).sort(byQuality);
           store.incr('vod'); store.user(pseudo, { ch: m[1], dev: cfg.device }); store.log({ k: 'stream', u: pseudo || undefined, ch: m[1], etat: 'rediff', ms: Date.now() - t0, dev });
-          const fixed = video.slice(0, cfg.fixed).map(v => ({ ...fmtLib.render(cfg.fmt, { kind: 'fixed', vod: true, h: v.h, fps: v.fps ? (v.fps > 30 ? v.fps : 30) : 0, short: v.h ? v.h + 'p' + (v.fps > 30 ? v.fps : '') : v.name, rawName: v.name }), url: pcOn(cfg) || (vm.direct && sealLib.available()) ? pcUrl(originOf(req), base, v.url) : v.url }));
-          const auto = { ...fmtLib.render(cfg.fmt, { kind: 'auto', vod: true, cap: cfg.cap }), url: originOf(req) + base + '/v/' + m[2] + '.m3u8' };
+          const fixed = video.slice(0, cfg.fixed).map(v => ({ ...fmtLib.render(cfg.fmt, { brand: BR, kind: 'fixed', vod: true, h: v.h, fps: v.fps ? (v.fps > 30 ? v.fps : 30) : 0, short: v.h ? v.h + 'p' + (v.fps > 30 ? v.fps : '') : v.name, rawName: v.name }), url: pcOn(cfg) || (vm.direct && sealLib.available()) ? pcUrl(originOf(req), base, v.url) : v.url }));
+          const auto = { ...fmtLib.render(cfg.fmt, { brand: BR, kind: 'auto', vod: true, cap: cfg.cap }), url: originOf(req) + base + '/v/' + m[2] + '.m3u8' };
           return json(res, { streams: [auto, ...fixed] });
         }
       } catch (e) { store.incr('err'); store.log({ k: 'erreur', u: pseudo || undefined, ou: 'rediffusions', msg: e.message });
         const vm = seg[0] === 'stream' && /^twitchvod:[^:]+:(\d+)$/.exec(strip(seg[2])); // rediff illisible (souvent réservée aux abonnés) : lien vers Twitch
-        if (vm) return json(res, { streams: [{ name: 'Twitch\n🔒 Abonnés', title: '🔒 Rediff réservée\naux abonnés ou\nindisponible\n↗ Ouvrir sur Twitch', externalUrl: 'https://www.twitch.tv/videos/' + vm[1] }] });
+        if (vm) return json(res, { streams: [{ name: BR + '\n🔒 Abonnés', title: '🔒 Rediff réservée\naux abonnés ou\nindisponible\n↗ Ouvrir sur Twitch', externalUrl: 'https://www.twitch.tv/videos/' + vm[1] }] });
         return json(res, seg[0] === 'catalog' ? { metas: [] } : seg[0] === 'meta' ? { meta: null } : { streams: [] }); }
     }
     if (seg[0] === 'v' && seg[1] && F.vods) { // liste de lecture d'une rediffusion avec le plafond de qualité du profil
@@ -960,13 +960,13 @@ async function handler(req, res) {
       // Mise en forme choisie par la personne (cfg.fmt) : voir lib/format.js
       const gameTxt = info && info.game ? cut(info.game, 22) : '';
       const dOf = v => { const m = /(\d{3,4})p(\d+)?/.exec(v.name) || [], h = Number(m[1] || v.h || 0), f = m[2] || (v.fps > 30 ? String(v.fps) : '30'); return { h, fps: Number(f), short: h ? h + 'p' + (m[2] || (v.fps > 30 ? v.fps : '')) : v.name.replace(/ \(source\)/, ''), rawName: v.name, viewers: nb, game: gameTxt, cap: cfg.cap }; };
-      const fixed = video.slice(0, cfg.fixed).map(v => ({ ...fmtLib.render(cfg.fmt, { kind: 'fixed', ...dOf(v), noAd: !!relayUrls && relayUrls.has(v.url) }), url: pcOn(cfg) ? pcUrl(originOf(req), base, v.url) : v.url }));
-      const auto = { ...fmtLib.render(cfg.fmt, { kind: 'auto', viewers: nb, game: gameTxt, cap: cfg.cap, noAd: !!b }), url: originOf(req) + base + '/p/' + login + '.m3u8' };
-      const audio = cfg.audio ? vars.filter(v => v.audio).slice(0, 1).map(v => ({ ...fmtLib.render(cfg.fmt, { kind: 'audio', noAd: !!b }), url: v.url })) : [];
+      const fixed = video.slice(0, cfg.fixed).map(v => ({ ...fmtLib.render(cfg.fmt, { brand: BR, kind: 'fixed', ...dOf(v), noAd: !!relayUrls && relayUrls.has(v.url) }), url: pcOn(cfg) ? pcUrl(originOf(req), base, v.url) : v.url }));
+      const auto = { ...fmtLib.render(cfg.fmt, { brand: BR, kind: 'auto', viewers: nb, game: gameTxt, cap: cfg.cap, noAd: !!b }), url: originOf(req) + base + '/p/' + login + '.m3u8' };
+      const audio = cfg.audio ? vars.filter(v => v.audio).slice(0, 1).map(v => ({ ...fmtLib.render(cfg.fmt, { brand: BR, kind: 'audio', noAd: !!b }), url: v.url })) : [];
       return json(res, { streams: [auto, ...fixed, ...audio] });
       } catch (e) { // mise en forme impossible : liste simple, pour ne jamais perdre les flux
         store.log({ k: 'erreur', u: pseudo || undefined, ou: 'mise en forme des sources', msg: e.message });
-        const plain = video.slice(0, cfg.fixed).map(v => ({ name: 'Twitch ' + v.name.replace(/ \(source\)/, ''), title: 'En direct · qualité fixe' + (b ? ' · sans pub' : ''), url: pcOn(cfg) ? pcUrl(originOf(req), base, v.url) : v.url }));
+        const plain = video.slice(0, cfg.fixed).map(v => ({ name: BR + ' ' + v.name.replace(/ \(source\)/, ''), title: 'En direct · qualité fixe' + (b ? ' · sans pub' : ''), url: pcOn(cfg) ? pcUrl(originOf(req), base, v.url) : v.url }));
         return json(res, { streams: [{ name: 'Twitch', title: 'En direct · qualité automatique' + (b ? ' · sans pub' : ''), url: originOf(req) + base + '/p/' + login + '.m3u8' }, ...plain] });
       }
     }
@@ -984,7 +984,7 @@ module.exports._t = { variantsOf, liveStream, usherUrl, metaOf, MANIFEST, absolu
 process.on('unhandledRejection', e => console.error('erreur non gérée :', e && e.message || e));
 if (require.main === module) {
   http.createServer(handler).listen(PORT, HOST, () => {
-    console.log('Twitch pour Stremio sur http://localhost:' + PORT + (process.env.PUBLIC_URL ? '  (adresse publique : ' + process.env.PUBLIC_URL + ')' : ''));
+    console.log('TwitchIO sur http://localhost:' + PORT + (process.env.PUBLIC_URL ? '  (adresse publique : ' + process.env.PUBLIC_URL + ')' : ''));
     console.log('Données : ' + store.file + '  ·  Dashboard : http://localhost:' + PORT + '/admin  ·  Configuration : http://localhost:' + PORT + '/config');
   });
 }

@@ -1,5 +1,5 @@
 @echo off
-title Twitch pour Stremio
+title TwitchIO
 cd /d "%~dp0"
 :boucle
 node index.js

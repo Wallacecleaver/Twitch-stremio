@@ -1,4 +1,4 @@
-# Twitch pour Stremio
+# TwitchIO
 
 Addon Stremio hébergé sur ton PC : regarder des lives Twitch dans Stremio. Aucune dépendance à installer, seulement [Node.js](https://nodejs.org) 18 ou plus.
 

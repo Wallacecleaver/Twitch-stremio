@@ -1,5 +1,5 @@
 {
-  "name": "twitch-stremio",
+  "name": "twitchio",
   "version": "0.2.0",
   "private": true,
   "description": "Addon Stremio : lives Twitch, suivis par compte, jeux et streamers (hébergé en local)",

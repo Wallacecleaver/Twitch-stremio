@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Twitch · Dashboard admin</title>
+<title>TwitchIO · Admin</title>
 <meta name="theme-color" content="#9147ff">
 <meta name="robots" content="noindex">
 <link rel="icon" type="image/png" href="/logo.png">
@@ -131,7 +131,7 @@ pre{background:var(--bg2);border:1px solid var(--bs);border-radius:var(--r);padd
 <body>
 <header class="app-header">
  <div class="ht">
-  <div class="logo"><img id="hLogo" src="/logo.png" alt="" width="32" height="32"><b>Twitch · Stremio</b><span class="lb">Admin</span><span class="up" title="Temps depuis le dernier démarrage du serveur"><svg viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg><span id="upt">--</span></span></div>
+  <div class="logo"><img id="hLogo" src="/logo.png" alt="" width="32" height="32"><b id="hName">TwitchIO</b><span class="lb">Admin</span><span class="up" title="Temps depuis le dernier démarrage du serveur"><svg viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg><span id="upt">--</span></span></div>
   <div class="ha"><a class="hb" href="/config" target="_blank" aria-label="Ouvrir la page config" title="Ouvrir la page config"><svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58a.5.5 0 0 0 .12-.61l-1.92-3.32a.5.5 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.5.5 0 0 0-.48-.41h-3.84a.5.5 0 0 0-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.5.5 0 0 0-.59.22L2.74 8.87a.5.5 0 0 0 .12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.5.5 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.5.5 0 0 0-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z"/></svg><span>Page config</span></a><a class="hb d" href="/admin/logout" aria-label="Déconnexion" title="Déconnexion"><svg viewBox="0 0 24 24"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg><span>Déconnexion</span></a></div>
  </div>
  <nav class="tabs" id="tabs"></nav>
@@ -304,8 +304,8 @@ function go(k){cur=k;try{localStorage.admtab=k}catch{}$$('.page').forEach(p=>p.c
 
 let SITE0=null,SITE_OK=false;const dirty=v=>{const e=$('#sSt');e.textContent=v?'Modifications non enregistrées':'';e.classList.toggle('dirty',!!v)};const SWC=['#9d5cff','#6366f1','#0ea5e9','#10b981','#f59e0b','#ef4444','#ec4899'];let sCol='#9d5cff';
 const DEFLEGAL='Addon gratuit et non officiel · n\'héberge aucun contenu';
-function setBrand(v){const u='/logo.png?v='+(v||0);$('#hLogo').src=u;document.querySelector('link[rel=icon]').href=u}
-function sFill(S){SITE0=S;SITE_OK=true;setBrand(S.logoV);$('#sName').value=S.name;$('#sTitle').value=S.title;$('#sText').value=S.text;$('#sBanner').value=S.banner;$('#sCredit').value=S.credit;$('#sLegal').value=S.legal===DEFLEGAL?'':S.legal;$('#sDcOn').checked=S.dcOn;$('#sDcUrl').value=S.dcUrl;$('#sDcTitle').value=S.dcTitle;$('#sDcText').value=S.dcText;$('#sOpen').checked=S.open;$('#sCode').value=S.code;
+function setBrand(v,nm){if(nm){$('#hName').textContent=nm;document.title=nm+' · Admin'}const u='/logo.png?v='+(v||0);$('#hLogo').src=u;document.querySelector('link[rel=icon]').href=u}
+function sFill(S){SITE0=S;SITE_OK=true;setBrand(S.logoV,S.name);$('#sName').value=S.name;$('#sTitle').value=S.title;$('#sText').value=S.text;$('#sBanner').value=S.banner;$('#sCredit').value=S.credit;$('#sLegal').value=S.legal===DEFLEGAL?'':S.legal;$('#sDcOn').checked=S.dcOn;$('#sDcUrl').value=S.dcUrl;$('#sDcTitle').value=S.dcTitle;$('#sDcText').value=S.dcText;$('#sOpen').checked=S.open;$('#sCode').value=S.code;
  $('#sCap').value=String(S.def.cap||0);$('#sFmt').value=S.def.fmt||'classique';$('#sFps').checked=!!S.def.fps60;$('#sRel').checked=!!S.def.relay;$('#sPc').checked=!!S.def.pc;sColor(S.color);$('#sLogo').src='/logo.png?v='+S.logoV+'&t='+Date.now();dirty(false)}
 function sColor(c){sCol=c;$('#sSw').innerHTML=SWC.map(x=>'<button type="button" class="swc'+(x===c?' on':'')+'" style="background:'+x+'" data-c="'+x+'" aria-label="'+x+'"></button>').join('')+'<input type="color" id="sPick" value="'+c+'" aria-label="Couleur personnalisée">'}
 async function loadSite(){try{sFill(await api('site'))}catch{toast('Chargement impossible',1)}}
@@ -317,7 +317,7 @@ $('#cnav').onclick=e=>{const b=e.target.closest('.cn[data-c]');if(b)cPane(b.data
 {let k='id';try{k=localStorage.admsite||'id'}catch{}cPane($('.cpane[data-c="'+k+'"]')?k:'id')}
 ;['input','change'].forEach(ev=>$('#p-site').addEventListener(ev,e=>{if(e.target.id!=='sFile')dirty(true)}));$('#sSw').addEventListener('click',e=>{if(e.target.closest('.swc'))dirty(true)});
 $('#sSave').onclick=async()=>{const b=$('#sSave');if($('#sDcOn').checked&&!/^https:\/\/(discord\.gg|discord\.com\/invite)\/[A-Za-z0-9_-]{2,40}$/.test($('#sDcUrl').value.trim())){cPane('dc');$('#sDcUrl').focus();toast('Lien Discord invalide (https://discord.gg/…)',1);return}b.disabled=1;try{const r=await api('site',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name:$('#sName').value,color:sCol,title:$('#sTitle').value,text:$('#sText').value,banner:$('#sBanner').value,credit:$('#sCredit').value,legal:$('#sLegal').value,dcOn:$('#sDcOn').checked,dcUrl:$('#sDcUrl').value.trim(),dcTitle:$('#sDcTitle').value,dcText:$('#sDcText').value,open:$('#sOpen').checked,code:$('#sCode').value,def:{fmt:$('#sFmt').value,cap:+$('#sCap').value,fps60:$('#sFps').checked,relay:$('#sRel').checked,pc:$('#sPc').checked}})});if(r.ok){sFill(r.site);toast('Page config enregistrée')}else toast('Erreur',1)}catch{toast('Erreur réseau',1)}b.disabled=0};
-async function sLogo(data){const r=await api('site/logo',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({data})});if(r.ok){SITE0=r.site;setBrand(r.site.logoV);$('#sLogo').src='/logo.png?v='+r.site.logoV+'&t='+Date.now();toast(data?'Logo mis à jour':'Logo par défaut rétabli')}else toast(r.error||'Erreur',1)}
+async function sLogo(data){const r=await api('site/logo',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({data})});if(r.ok){SITE0=r.site;setBrand(r.site.logoV,r.site.name);$('#sLogo').src='/logo.png?v='+r.site.logoV+'&t='+Date.now();toast(data?'Logo mis à jour':'Logo par défaut rétabli')}else toast(r.error||'Erreur',1)}
 $('#sFile').onchange=e=>{const f=e.target.files[0];e.target.value='';if(!f)return;const im=new Image(),u=URL.createObjectURL(f);im.onload=()=>{const c=document.createElement('canvas');c.width=c.height=256;const x=c.getContext('2d'),m=Math.min(im.width,im.height);x.drawImage(im,(im.width-m)/2,(im.height-m)/2,m,m,0,0,256,256);URL.revokeObjectURL(u);sLogo(c.toDataURL('image/png'))};im.onerror=()=>toast('Image illisible',1);im.src=u};
 $('#sLogoDel').onclick=()=>sLogo('');
 
@@ -331,7 +331,7 @@ function renderRl(){const off=FT?FT.offRelays:[];$('#rlN').textContent=(RLS.leng
  const h='<table><thead><tr><th>Actif</th><th>Nom</th><th>Adresse</th></tr></thead><tbody>'+RLS.map(r=>'<tr class="rrow'+(off.includes(r.name)?' off':'')+'"><td><label class="tg"><input type="checkbox" data-r="'+esc(r.name)+'"'+(off.includes(r.name)?'':' checked')+'><i></i></label></td><td>'+esc(r.name)+'</td><td class="mono dim">'+esc(r.url)+'</td></tr>').join('')+'</tbody></table>';if(h!==rlH){rlH=h;$('#rlist').innerHTML=h}}
 function fFill(F){FT=F;$$('#p-set [data-f]').forEach(i=>i.checked=!!F[i.dataset.f]);$('#capMax').value=String(F.capMax);$('#tmo').value=String(F.timeout);if(document.activeElement!==$('#maintMsg'))$('#maintMsg').value=F.maintMsg;$('#maintBox').classList.toggle('mon',F.maint);$('#sdM').hidden=!F.maint;$('#maintSt').textContent=F.maint?'ACTIF':'inactif';$('#maintSt').className='pill'+(F.maint?' wa':'');renderRl()}
 async function fSave(part){try{const r=await api('site',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({feat:part})});if(r.ok){SITE0=r.site;fFill(r.site.feat);toast('Paramètre enregistré')}else toast('Erreur',1)}catch{toast('Erreur réseau',1);if(FT)fFill(FT)}}
-async function loadFeat(){try{const S=await api('site');SITE0=SITE0||S;setBrand(S.logoV);fFill(S.feat)}catch{}}
+async function loadFeat(){try{const S=await api('site');SITE0=SITE0||S;setBrand(S.logoV,S.name);fFill(S.feat)}catch{}}
 $('#p-set').addEventListener('change',e=>{const t=e.target;if(t.dataset.f)fSave({[t.dataset.f]:t.checked});else if(t.id==='capMax')fSave({capMax:+t.value});else if(t.id==='tmo')fSave({timeout:+t.value});else if(t.id==='maintMsg')fSave({maintMsg:t.value});else if(t.dataset.r){const o=new Set(FT.offRelays);t.checked?o.delete(t.dataset.r):o.add(t.dataset.r);fSave({offRelays:[...o]})}});
 $('#rlAll').onclick=()=>fSave({offRelays:[]});
 loadFeat();
