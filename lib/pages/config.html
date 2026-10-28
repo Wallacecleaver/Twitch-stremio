@@ -127,6 +127,13 @@ div.done{text-align:center;display:grid;gap:15px;justify-items:center}
 @media(prefers-reduced-motion:reduce){.vf.scan::after,.vr.run::before,.vlog::after{animation:none}}
 ol.how{text-align:left;color:var(--t2);font-size:.86rem;padding-left:20px;display:grid;gap:5px;width:100%}ol.how b{color:var(--t)}
 .toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,24px) scale(.94);background:rgba(28,28,36,.9);border:1px solid var(--bx);border-radius:var(--r);padding:12px 22px;opacity:0;pointer-events:none;transition:all .45s var(--spring);z-index:99;font-size:.9rem;box-shadow:0 14px 40px rgba(0,0,0,.55)}.toast.show{opacity:1;transform:translate(-50%,0) scale(1)}
+@keyframes dcsh{to{background-position:200% 0}}
+.dc{display:flex;align-items:center;gap:14px;margin-top:22px;padding:14px 16px;border-radius:18px;text-decoration:none;color:var(--t);background:linear-gradient(120deg,rgba(88,101,242,.18),rgba(88,101,242,.04) 65%),var(--el);border:1px solid rgba(88,101,242,.38);transition:transform .35s var(--ease),border-color .3s,box-shadow .3s;animation:up .6s .2s var(--ease) both}
+.dc:hover{transform:translateY(-2px);border-color:#5865f2;box-shadow:0 16px 36px -16px rgba(88,101,242,.8)}
+.dci{flex:none;width:44px;height:44px;border-radius:13px;display:grid;place-items:center;background:#5865f2;color:#fff;box-shadow:0 8px 20px -8px #5865f2}.dci svg{width:24px;height:24px;fill:currentColor}
+.dct{display:grid;gap:2px;min-width:0}.dct b{font-size:.95rem;font-weight:600}.dct small{color:var(--t2);font-size:.8rem;line-height:1.4}
+.dcg{margin-left:auto;flex:none;display:inline-flex;align-items:center;gap:6px;font-size:.84rem;font-weight:600;color:#c4c9ff}.dcg svg{width:17px;height:17px;transition:transform .3s var(--ease)}.dc:hover .dcg svg{transform:translateX(4px)}
+@media(max-width:520px){.dcg span{display:none}.dc{padding:12px 14px}}
 footer{position:relative;z-index:1;display:grid;gap:10px;justify-items:center;text-align:center;margin-top:34px;padding-top:22px;border-top:1px solid var(--bs);font-size:.78rem;color:var(--t3);animation:up .6s .25s var(--ease) both}
 .credit{display:inline-flex;align-items:center;gap:9px;font-size:.88rem;color:var(--t2)}.credit img{border-radius:6px}.credit b{color:var(--t)}.legal{font-size:.74rem;color:var(--t3);max-width:420px;line-height:1.5}
 .lnk{color:var(--a);cursor:pointer;text-decoration:none;background:none;border:0;font:inherit;text-align:left;transition:.2s}.lnk:hover{color:#c4a1ff;text-decoration:underline}
@@ -143,6 +150,7 @@ footer{position:relative;z-index:1;display:grid;gap:10px;justify-items:center;te
 <div class="tabs" id="tabs"><i class="ind" id="ind"></i><button class="tab on" data-tab="create">Créer un profil</button><button class="tab" data-tab="login">Se connecter</button></div>
 <div class="steps off" id="steps"></div>
 <div class="stage" id="stage"></div>
+{{DISCORD}}
 <footer><div id="foot"></div><div class="credit"><img src="/logo.png?v={{V}}" alt="" width="20" height="20"><span>{{CREDIT}}</span></div>{{LEGAL}}</footer>
 </div>
 <div class="toast" id="toast"></div>
