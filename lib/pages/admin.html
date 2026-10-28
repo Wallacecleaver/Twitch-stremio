@@ -217,7 +217,12 @@ pre{background:var(--bg2);border:1px solid var(--bs);border-radius:var(--r);padd
   <div class="sf"><label for="sTitle">Titre de l'écran d'accueil</label><input type="text" id="sTitle" maxlength="80"></div>
   <div class="sf w"><label for="sText">Texte d'accueil</label><textarea id="sText" maxlength="400" placeholder="Laisse vide pour garder la présentation par défaut."></textarea><small>Remplace le paragraphe qui explique ce que fait l'addon.</small></div>
   <div class="sf"><label for="sBanner">Annonce (bandeau en haut)</label><input type="text" id="sBanner" maxlength="200" placeholder="Ex : maintenance ce soir, relais lents…"><small>Laisse vide pour ne rien afficher. Pratique pour prévenir tout le monde.</small></div>
-  <div class="sf"><label for="sCredit">Texte en bas à gauche</label><input type="text" id="sCredit" maxlength="120" placeholder="Par défaut : Addon gratuit et non officiel · créé par Wallace"><small>Laisse vide pour le texte par défaut.</small></div>
+  <div class="sf"><label for="sCredit">Texte en bas à gauche</label><input type="text" id="sCredit" maxlength="120" placeholder="Par défaut : Créé par Wallace"><small>Laisse vide pour le texte par défaut.</small></div>
+  <div class="sf"><label for="sLegal">Mention en petit (sous le crédit)</label><input type="text" id="sLegal" maxlength="140" placeholder="Addon gratuit et non officiel · n'héberge aucun contenu"><small>Laisse vide pour la mention par défaut. Elle est masquée si tu as mis un texte personnalisé ci-dessus.</small></div>
+  <label class="chk sf"><input type="checkbox" id="sDcOn"><span><b>Afficher la carte Discord</b><small>Une carte « Rejoindre » sous le formulaire de la page config.</small></span></label>
+  <div class="sf"><label for="sDcUrl">Lien d'invitation Discord</label><input type="text" id="sDcUrl" maxlength="100" placeholder="https://discord.gg/xxxxxxx"><small>Doit commencer par https://discord.gg/ ou https://discord.com/invite/.</small></div>
+  <div class="sf"><label for="sDcTitle">Titre de la carte</label><input type="text" id="sDcTitle" maxlength="50" placeholder="Rejoins Stremio FR"></div>
+  <div class="sf"><label for="sDcText">Sous-titre de la carte</label><input type="text" id="sDcText" maxlength="100" placeholder="Entraide, nouveautés et idées pour l'addon"><small>Laisse vide pour ne pas afficher de sous-titre.</small></div>
  </div></div></div>
  <div class="sec"><div class="sh"><div class="stt"><svg viewBox="0 0 24 24"><path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-1 15-4-4 1.4-1.4L11 13.2l4.6-4.6L17 10l-6 6z"/></svg>Accès</div></div>
  <div class="sb"><div class="sform">
@@ -275,15 +280,16 @@ const dur=s=>s<3600?Math.max(1,Math.round(s/60))+' min':s<86400?(s/3600).toFixed
 const toast=(m,e)=>{const d=document.createElement('div');d.className='tt'+(e?' e':'');d.textContent=m;$('#toast').append(d);setTimeout(()=>d.remove(),3200)};
 function go(k){cur=k;try{localStorage.admtab=k}catch{}$$('.page').forEach(p=>p.classList.toggle('on',p.id==='p-'+k));$$('.tab').forEach(t=>t.classList.toggle('on',t.dataset.k===k))}
 
-let SITE0=null;const SWC=['#9d5cff','#6366f1','#0ea5e9','#10b981','#f59e0b','#ef4444','#ec4899'];let sCol='#9d5cff';
-function sFill(S){SITE0=S;$('#sName').value=S.name;$('#sTitle').value=S.title;$('#sText').value=S.text;$('#sBanner').value=S.banner;$('#sCredit').value=S.credit;$('#sOpen').checked=S.open;$('#sCode').value=S.code;
+let SITE0=null,SITE_OK=false;const SWC=['#9d5cff','#6366f1','#0ea5e9','#10b981','#f59e0b','#ef4444','#ec4899'];let sCol='#9d5cff';
+const DEFLEGAL='Addon gratuit et non officiel · n\'héberge aucun contenu';
+function sFill(S){SITE0=S;SITE_OK=true;$('#sName').value=S.name;$('#sTitle').value=S.title;$('#sText').value=S.text;$('#sBanner').value=S.banner;$('#sCredit').value=S.credit;$('#sLegal').value=S.legal===DEFLEGAL?'':S.legal;$('#sDcOn').checked=S.dcOn;$('#sDcUrl').value=S.dcUrl;$('#sDcTitle').value=S.dcTitle;$('#sDcText').value=S.dcText;$('#sOpen').checked=S.open;$('#sCode').value=S.code;
  $('#sCap').value=String(S.def.cap||0);$('#sFps').checked=!!S.def.fps60;$('#sRel').checked=!!S.def.relay;$('#sPc').checked=!!S.def.pc;sColor(S.color);$('#sLogo').src='/logo.png?v='+S.logoV+'&t='+Date.now()}
 function sColor(c){sCol=c;$('#sSw').innerHTML=SWC.map(x=>'<button type="button" class="swc'+(x===c?' on':'')+'" style="background:'+x+'" data-c="'+x+'" aria-label="'+x+'"></button>').join('')+'<input type="color" id="sPick" value="'+c+'" aria-label="Couleur personnalisée">'}
 async function loadSite(){try{sFill(await api('site'))}catch{toast('Chargement impossible',1)}}
 $('#sSw').onclick=e=>{const b=e.target.closest('.swc');if(b)sColor(b.dataset.c)};$('#sSw').oninput=e=>{if(e.target.id==='sPick')sCol=e.target.value};
 $('#sGen').onclick=()=>{$('#sCode').value=Array.from(crypto.getRandomValues(new Uint8Array(6)),b=>'abcdefghjkmnpqrstuvwxyz23456789'[b%31]).join('')};
 $('#sReset').onclick=()=>SITE0&&sFill(SITE0);
-$('#sSave').onclick=async()=>{const b=$('#sSave');b.disabled=1;try{const r=await api('site',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name:$('#sName').value,color:sCol,title:$('#sTitle').value,text:$('#sText').value,banner:$('#sBanner').value,credit:$('#sCredit').value,open:$('#sOpen').checked,code:$('#sCode').value,def:{cap:+$('#sCap').value,fps60:$('#sFps').checked,relay:$('#sRel').checked,pc:$('#sPc').checked}})});if(r.ok){sFill(r.site);toast('Page config enregistrée')}else toast('Erreur',1)}catch{toast('Erreur réseau',1)}b.disabled=0};
+$('#sSave').onclick=async()=>{const b=$('#sSave');if($('#sDcOn').checked&&!/^https:\/\/(discord\.gg|discord\.com\/invite)\/[A-Za-z0-9_-]{2,40}$/.test($('#sDcUrl').value.trim())){toast('Lien Discord invalide (https://discord.gg/…)',1);return}b.disabled=1;try{const r=await api('site',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name:$('#sName').value,color:sCol,title:$('#sTitle').value,text:$('#sText').value,banner:$('#sBanner').value,credit:$('#sCredit').value,legal:$('#sLegal').value,dcOn:$('#sDcOn').checked,dcUrl:$('#sDcUrl').value.trim(),dcTitle:$('#sDcTitle').value,dcText:$('#sDcText').value,open:$('#sOpen').checked,code:$('#sCode').value,def:{cap:+$('#sCap').value,fps60:$('#sFps').checked,relay:$('#sRel').checked,pc:$('#sPc').checked}})});if(r.ok){sFill(r.site);toast('Page config enregistrée')}else toast('Erreur',1)}catch{toast('Erreur réseau',1)}b.disabled=0};
 async function sLogo(data){const r=await api('site/logo',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({data})});if(r.ok){SITE0=r.site;$('#sLogo').src='/logo.png?v='+r.site.logoV+'&t='+Date.now();toast(data?'Logo mis à jour':'Logo par défaut rétabli')}else toast(r.error||'Erreur',1)}
 $('#sFile').onchange=e=>{const f=e.target.files[0];e.target.value='';if(!f)return;const im=new Image(),u=URL.createObjectURL(f);im.onload=()=>{const c=document.createElement('canvas');c.width=c.height=256;const x=c.getContext('2d'),m=Math.min(im.width,im.height);x.drawImage(im,(im.width-m)/2,(im.height-m)/2,m,m,0,0,256,256);URL.revokeObjectURL(u);sLogo(c.toDataURL('image/png'))};im.onerror=()=>toast('Image illisible',1);im.src=u};
 $('#sLogoDel').onclick=()=>sLogo('');
@@ -302,7 +308,7 @@ async function loadFeat(){try{const S=await api('site');SITE0=SITE0||S;fFill(S.f
 $('#p-set').addEventListener('change',e=>{const t=e.target;if(t.dataset.f)fSave({[t.dataset.f]:t.checked});else if(t.id==='capMax')fSave({capMax:+t.value});else if(t.id==='tmo')fSave({timeout:+t.value});else if(t.id==='maintMsg')fSave({maintMsg:t.value});else if(t.dataset.r){const o=new Set(FT.offRelays);t.checked?o.delete(t.dataset.r):o.add(t.dataset.r);fSave({offRelays:[...o]})}});
 $('#rlAll').onclick=()=>fSave({offRelays:[]});
 loadFeat();
-const go0=go;go=function(k){go0(k);if(k==='site'&&!SITE0)loadSite()};
+const go0=go;go=function(k){go0(k);if(k==='site'&&!SITE_OK)loadSite()};
 $('#tabs').onclick=e=>{const b=e.target.closest('.tab');if(b)go(b.dataset.k)};go(cur);loadProf();
 async function api(p,o){const r=await fetch('/admin/api/'+p,o);if((r.headers.get('content-type')||'').includes('html')){location.reload();return{}}return r.json()}
 const card=(c,ic,l,v,s)=>'<div class="sc"><div class="si '+c+'"><svg viewBox="0 0 24 24"><path d="'+ic+'"/></svg></div><div class="sl">'+l+'</div><div class="sv">'+v+'</div><div class="ss">'+s+'</div></div>';
