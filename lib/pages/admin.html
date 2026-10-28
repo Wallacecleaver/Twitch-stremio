@@ -6,7 +6,7 @@
 <title>Twitch · Dashboard admin</title>
 <meta name="theme-color" content="#9147ff">
 <meta name="robots" content="noindex">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%239147ff' d='M4 2 2 6v14h5v3h3l3-3h4l5-5V2H4zm16 11-3 3h-5l-3 3v-3H6V4h14v9zm-3-6h-2v5h2V7zm-5 0h-2v5h2V7z'/%3E%3C/svg%3E">
+<link rel="icon" type="image/png" href="/logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
 <style>
@@ -19,12 +19,12 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
 svg{fill:currentColor}
 .app-header{position:sticky;top:0;z-index:100;background:rgba(9,9,11,.95);backdrop-filter:blur(12px);border-bottom:1px solid var(--bs)}
 .ht{max-width:1400px;margin:0 auto;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;gap:12px}
-.logo{display:flex;align-items:center;gap:10px}.logo>svg{width:28px;height:28px;color:var(--a)}.logo b{font-size:1.1rem;font-weight:700;letter-spacing:-.01em}
+.logo{display:flex;align-items:center;gap:10px}.logo>img{width:32px;height:32px;border-radius:9px;flex:none;box-shadow:0 4px 14px -6px var(--a)}.logo b{font-size:1.1rem;font-weight:700;letter-spacing:-.01em}
 .lb{font-size:.68rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--a);background:var(--as);padding:2px 8px;border-radius:99px}
 .up{display:inline-flex;align-items:center;gap:6px;font-size:.78rem;color:var(--t2);background:var(--el);border:1px solid var(--bs);padding:3px 10px;border-radius:99px}.up svg{width:13px;height:13px}
 .ha{display:flex;gap:8px;align-items:center}
 .hb{font:inherit;font-size:.85rem;color:var(--t2);background:transparent;border:1px solid var(--bd);border-radius:var(--r);padding:7px 12px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:.15s;text-decoration:none}.hb:hover{color:var(--t);background:var(--el)}.hb svg{width:16px;height:16px}.hb.d:hover{color:var(--ko);border-color:rgba(239,68,68,.4)}
-@media(max-width:620px){.ht{padding:11px 14px;gap:8px}.logo{gap:8px;min-width:0}.logo b{font-size:1rem;white-space:nowrap}.logo>svg{width:24px;height:24px}.up{display:none}.hb{padding:9px 11px}.hb span{display:none}.tabs{padding:0 10px}}
+@media(max-width:620px){.ht{padding:11px 14px;gap:8px}.logo{gap:8px;min-width:0}.logo b{font-size:1rem;white-space:nowrap}.logo>img{width:28px;height:28px}.up{display:none}.hb{padding:9px 11px}.hb span{display:none}.tabs{padding:0 10px}}
 .tabs{max-width:1400px;margin:0 auto;padding:0 24px;display:flex;gap:2px;overflow-x:auto}
 .tab{font:inherit;font-size:.88rem;font-weight:500;color:var(--t2);background:none;border:0;border-bottom:2px solid transparent;padding:11px 14px;cursor:pointer;display:flex;align-items:center;gap:8px;white-space:nowrap;transition:.15s}.tab svg{width:17px;height:17px;opacity:.8}.tab:hover{color:var(--t)}.tab.on{color:var(--t);border-color:var(--a)}.tab.on svg{color:var(--a);opacity:1}
 .tab .c{font-size:.7rem;background:var(--kos);color:#fca5a5;border-radius:99px;padding:0 7px;line-height:1.5}
@@ -124,7 +124,7 @@ pre{background:var(--bg2);border:1px solid var(--bs);border-radius:var(--r);padd
 <body>
 <header class="app-header">
  <div class="ht">
-  <div class="logo"><svg viewBox="0 0 24 24"><path d="M4 2 2 6v14h5v3h3l3-3h4l5-5V2H4zm16 11-3 3h-5l-3 3v-3H6V4h14v9zm-3-6h-2v5h2V7zm-5 0h-2v5h2V7z"/></svg><b>Twitch · Stremio</b><span class="lb">Admin</span><span class="up" title="Temps depuis le dernier démarrage du serveur"><svg viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg><span id="upt">--</span></span></div>
+  <div class="logo"><img id="hLogo" src="/logo.png" alt="" width="32" height="32"><b>Twitch · Stremio</b><span class="lb">Admin</span><span class="up" title="Temps depuis le dernier démarrage du serveur"><svg viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg><span id="upt">--</span></span></div>
   <div class="ha"><a class="hb" href="/config" target="_blank" aria-label="Ouvrir la page config" title="Ouvrir la page config"><svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58a.5.5 0 0 0 .12-.61l-1.92-3.32a.5.5 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.5.5 0 0 0-.48-.41h-3.84a.5.5 0 0 0-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.5.5 0 0 0-.59.22L2.74 8.87a.5.5 0 0 0 .12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.5.5 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.5.5 0 0 0-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z"/></svg><span>Page config</span></a><a class="hb d" href="/admin/logout" aria-label="Déconnexion" title="Déconnexion"><svg viewBox="0 0 24 24"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg><span>Déconnexion</span></a></div>
  </div>
  <nav class="tabs" id="tabs"></nav>
@@ -290,7 +290,8 @@ function go(k){cur=k;try{localStorage.admtab=k}catch{}$$('.page').forEach(p=>p.c
 
 let SITE0=null,SITE_OK=false;const SWC=['#9d5cff','#6366f1','#0ea5e9','#10b981','#f59e0b','#ef4444','#ec4899'];let sCol='#9d5cff';
 const DEFLEGAL='Addon gratuit et non officiel · n\'héberge aucun contenu';
-function sFill(S){SITE0=S;SITE_OK=true;$('#sName').value=S.name;$('#sTitle').value=S.title;$('#sText').value=S.text;$('#sBanner').value=S.banner;$('#sCredit').value=S.credit;$('#sLegal').value=S.legal===DEFLEGAL?'':S.legal;$('#sDcOn').checked=S.dcOn;$('#sDcUrl').value=S.dcUrl;$('#sDcTitle').value=S.dcTitle;$('#sDcText').value=S.dcText;$('#sOpen').checked=S.open;$('#sCode').value=S.code;
+function setBrand(v){const u='/logo.png?v='+(v||0);$('#hLogo').src=u;document.querySelector('link[rel=icon]').href=u}
+function sFill(S){SITE0=S;SITE_OK=true;setBrand(S.logoV);$('#sName').value=S.name;$('#sTitle').value=S.title;$('#sText').value=S.text;$('#sBanner').value=S.banner;$('#sCredit').value=S.credit;$('#sLegal').value=S.legal===DEFLEGAL?'':S.legal;$('#sDcOn').checked=S.dcOn;$('#sDcUrl').value=S.dcUrl;$('#sDcTitle').value=S.dcTitle;$('#sDcText').value=S.dcText;$('#sOpen').checked=S.open;$('#sCode').value=S.code;
  $('#sCap').value=String(S.def.cap||0);$('#sFmt').value=S.def.fmt||'classique';$('#sFps').checked=!!S.def.fps60;$('#sRel').checked=!!S.def.relay;$('#sPc').checked=!!S.def.pc;sColor(S.color);$('#sLogo').src='/logo.png?v='+S.logoV+'&t='+Date.now()}
 function sColor(c){sCol=c;$('#sSw').innerHTML=SWC.map(x=>'<button type="button" class="swc'+(x===c?' on':'')+'" style="background:'+x+'" data-c="'+x+'" aria-label="'+x+'"></button>').join('')+'<input type="color" id="sPick" value="'+c+'" aria-label="Couleur personnalisée">'}
 async function loadSite(){try{sFill(await api('site'))}catch{toast('Chargement impossible',1)}}
@@ -298,7 +299,7 @@ $('#sSw').onclick=e=>{const b=e.target.closest('.swc');if(b)sColor(b.dataset.c)}
 $('#sGen').onclick=()=>{$('#sCode').value=Array.from(crypto.getRandomValues(new Uint8Array(6)),b=>'abcdefghjkmnpqrstuvwxyz23456789'[b%31]).join('')};
 $('#sReset').onclick=()=>SITE0&&sFill(SITE0);
 $('#sSave').onclick=async()=>{const b=$('#sSave');if($('#sDcOn').checked&&!/^https:\/\/(discord\.gg|discord\.com\/invite)\/[A-Za-z0-9_-]{2,40}$/.test($('#sDcUrl').value.trim())){toast('Lien Discord invalide (https://discord.gg/…)',1);return}b.disabled=1;try{const r=await api('site',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name:$('#sName').value,color:sCol,title:$('#sTitle').value,text:$('#sText').value,banner:$('#sBanner').value,credit:$('#sCredit').value,legal:$('#sLegal').value,dcOn:$('#sDcOn').checked,dcUrl:$('#sDcUrl').value.trim(),dcTitle:$('#sDcTitle').value,dcText:$('#sDcText').value,open:$('#sOpen').checked,code:$('#sCode').value,def:{fmt:$('#sFmt').value,cap:+$('#sCap').value,fps60:$('#sFps').checked,relay:$('#sRel').checked,pc:$('#sPc').checked}})});if(r.ok){sFill(r.site);toast('Page config enregistrée')}else toast('Erreur',1)}catch{toast('Erreur réseau',1)}b.disabled=0};
-async function sLogo(data){const r=await api('site/logo',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({data})});if(r.ok){SITE0=r.site;$('#sLogo').src='/logo.png?v='+r.site.logoV+'&t='+Date.now();toast(data?'Logo mis à jour':'Logo par défaut rétabli')}else toast(r.error||'Erreur',1)}
+async function sLogo(data){const r=await api('site/logo',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({data})});if(r.ok){SITE0=r.site;setBrand(r.site.logoV);$('#sLogo').src='/logo.png?v='+r.site.logoV+'&t='+Date.now();toast(data?'Logo mis à jour':'Logo par défaut rétabli')}else toast(r.error||'Erreur',1)}
 $('#sFile').onchange=e=>{const f=e.target.files[0];e.target.value='';if(!f)return;const im=new Image(),u=URL.createObjectURL(f);im.onload=()=>{const c=document.createElement('canvas');c.width=c.height=256;const x=c.getContext('2d'),m=Math.min(im.width,im.height);x.drawImage(im,(im.width-m)/2,(im.height-m)/2,m,m,0,0,256,256);URL.revokeObjectURL(u);sLogo(c.toDataURL('image/png'))};im.onerror=()=>toast('Image illisible',1);im.src=u};
 $('#sLogoDel').onclick=()=>sLogo('');
 
@@ -312,7 +313,7 @@ function renderRl(){const off=FT?FT.offRelays:[];$('#rlN').textContent=(RLS.leng
  const h='<table><thead><tr><th>Actif</th><th>Nom</th><th>Adresse</th></tr></thead><tbody>'+RLS.map(r=>'<tr class="rrow'+(off.includes(r.name)?' off':'')+'"><td><label class="tg"><input type="checkbox" data-r="'+esc(r.name)+'"'+(off.includes(r.name)?'':' checked')+'><i></i></label></td><td>'+esc(r.name)+'</td><td class="mono dim">'+esc(r.url)+'</td></tr>').join('')+'</tbody></table>';if(h!==rlH){rlH=h;$('#rlist').innerHTML=h}}
 function fFill(F){FT=F;$$('#p-set [data-f]').forEach(i=>i.checked=!!F[i.dataset.f]);$('#capMax').value=String(F.capMax);$('#tmo').value=String(F.timeout);if(document.activeElement!==$('#maintMsg'))$('#maintMsg').value=F.maintMsg;$('#maintBox').classList.toggle('mon',F.maint);$('#sdM').hidden=!F.maint;$('#maintSt').textContent=F.maint?'ACTIF':'inactif';$('#maintSt').className='pill'+(F.maint?' wa':'');renderRl()}
 async function fSave(part){try{const r=await api('site',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({feat:part})});if(r.ok){SITE0=r.site;fFill(r.site.feat);toast('Paramètre enregistré')}else toast('Erreur',1)}catch{toast('Erreur réseau',1);if(FT)fFill(FT)}}
-async function loadFeat(){try{const S=await api('site');SITE0=SITE0||S;fFill(S.feat)}catch{}}
+async function loadFeat(){try{const S=await api('site');SITE0=SITE0||S;setBrand(S.logoV);fFill(S.feat)}catch{}}
 $('#p-set').addEventListener('change',e=>{const t=e.target;if(t.dataset.f)fSave({[t.dataset.f]:t.checked});else if(t.id==='capMax')fSave({capMax:+t.value});else if(t.id==='tmo')fSave({timeout:+t.value});else if(t.id==='maintMsg')fSave({maintMsg:t.value});else if(t.dataset.r){const o=new Set(FT.offRelays);t.checked?o.delete(t.dataset.r):o.add(t.dataset.r);fSave({offRelays:[...o]})}});
 $('#rlAll').onclick=()=>fSave({offRelays:[]});
 loadFeat();
