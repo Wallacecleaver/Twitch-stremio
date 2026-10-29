@@ -856,8 +856,10 @@ async function handler(req, res) {
       store.log({ k: 'install', u: pseudo || undefined, appareil: cfg.device || undefined, reglages: pseudo ? summary(cfg) : 'défaut', dev }); store.user(pseudo, { cfg: { ...cfg, tok: undefined, compte: !!cfg.tok }, dev: cfg.device });
       const S = await siteLib.load(), mf = { ...MANIFEST, name: S.name, logo: originOf(req) + '/logo.png?v=' + S.logoV }, GL = await Promise.race([gameList(), new Promise(r => setTimeout(() => r(GAMES), 3000))]);
       mf.catalogs = [{ type: 'tv', id: 'twitch-top', name: S.name + ' · Lives par jeu', extra: [{ name: 'search', isRequired: false }, { name: 'genre', isRequired: false, options: GL }] }];
-      if (S.feat.vods) mf.catalogs.push({ type: 'series', id: 'twitch-vods', name: S.name + ' · Rediffusions', extra: [{ name: 'search', isRequired: false }] });
-      if (S.feat.vods && S.feat.followed && auth) mf.catalogs.unshift({ type: 'series', id: 'twitch-myvods', name: S.name + ' · Mes rediffusions', extra: [{ name: 'search', isRequired: false }, { name: 'skip', isRequired: false }] });
+      // avec un compte lié, « Mes rediffusions » remplace « Rediffusions » à l'accueil (même contenu = doublon) : « Rediffusions » ne sert plus alors qu'à la recherche d'une chaîne quelconque (search obligatoire), et « Mes rediffusions » n'est pas proposée dans la recherche
+      const myVods = !!(S.feat.vods && S.feat.followed && auth);
+      if (S.feat.vods) mf.catalogs.push({ type: 'series', id: 'twitch-vods', name: S.name + ' · Rediffusions', extra: [{ name: 'search', isRequired: myVods }] });
+      if (myVods) mf.catalogs.unshift({ type: 'series', id: 'twitch-myvods', name: S.name + ' · Mes rediffusions', extra: [{ name: 'skip', isRequired: false }] });
       if (auth && S.feat.followed) mf.catalogs = [{ type: 'tv', id: 'twitch-followed', name: S.name + ' · Mes chaînes suivies', extra: [{ name: 'genre', isRequired: false, options: GL }] }, ...mf.catalogs];
       return json(res, pseudo ? { ...mf, name: S.name + ' · ' + pseudo, description: MANIFEST.description + ' — profil de ' + pseudo } : mf);
     }
