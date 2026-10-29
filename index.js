@@ -357,25 +357,6 @@ async function channelInfo(login) {
   if (infoCache.size > 300) infoCache.delete(infoCache.keys().next().value);
   return v;
 }
-// Recherche de chaînes par nom partiel (même recherche que le site de Twitch) : [{ login, name, live }], le pseudo exact en premier s'il existe.
-const searchCache = new Map();
-async function searchChannels(q) {
-  q = String(q || '').trim().toLowerCase().replace(/^@/, '');
-  if (q.length < 2) return [];
-  const c = searchCache.get(q);
-  if (c && c.exp > Date.now()) return c.v;
-  let out = [];
-  try {
-    const d = await gqlRaw('query { searchFor(userQuery: ' + JSON.stringify(q) + ', platform: "web", options: { targets: [{ index: CHANNEL }] }) { channels { edges { item { ... on User { login displayName stream { id } } } } } } }');
-    out = (((d.searchFor || {}).channels || {}).edges || []).map(e => e && e.item).filter(u => u && u.login && LOGIN_RE.test(String(u.login).toLowerCase())).map(u => ({ login: String(u.login).toLowerCase(), name: u.displayName || u.login, live: !!u.stream })).slice(0, 8);
-  } catch { /* recherche indisponible : on se rabat sur le pseudo exact */ }
-  const exact = q.replace(/\s+/g, '');
-  if (LOGIN_RE.test(exact) && !out.length) out.unshift({ login: exact, name: exact, live: null }); // recherche muette ou en panne : on tente le pseudo tel quel
-  else if (LOGIN_RE.test(exact)) out.sort((a, b) => (b.login === exact) - (a.login === exact)); // le pseudo exact d'abord
-  searchCache.set(q, { v: out, exp: Date.now() + 60000 });
-  if (searchCache.size > 200) searchCache.delete(searchCache.keys().next().value);
-  return out;
-}
 const metaFromInfo = (login, i) => {
   const nb = i.viewers.toLocaleString('fr-FR'), live = 'https://static-cdn.jtvnw.net/previews-ttv/live_user_' + login + '-1280x720.jpg';
   return {
@@ -471,19 +452,25 @@ async function gameList() {
 // Rediffusions (VOD) : une chaîne = une série, ses rediffs = les épisodes d'une saison.
 const VIDEO_NODE = 'id title publishedAt lengthSeconds viewCount previewThumbnailURL(width: 640, height: 360) game { displayName }';
 const vodCache = new Map();
+// première vignette de rediff qui s'affiche vraiment (celles des rediffs réservées aux abonnés ou expirées renvoient une erreur) ; '' si aucune
+const goodThumb = async nodes => {
+  const ok = await Promise.all(nodes.map(async n => { const u = n && n.previewThumbnailURL; if (!u) return false; try { const r = await fetch(u, { headers: { Range: 'bytes=0-0', 'User-Agent': UA }, signal: AbortSignal.timeout(2500) }); return r.ok && /^image\//.test(r.headers.get('content-type') || ''); } catch { return false; } }));
+  const i = ok.indexOf(true); return i >= 0 ? nodes[i].previewThumbnailURL : '';
+};
 async function channelVods(login) {
   const c = vodCache.get(login);
   if (c && c.exp > Date.now()) return c.v;
   const d = await gqlRaw('query { user(login: ' + JSON.stringify(login) + ') { displayName login description profileImageURL(width: 300) offlineImageURL a: videos(first: 30, type: ARCHIVE, sort: TIME) { edges { node { ' + VIDEO_NODE + ' } } } h: videos(first: 10, type: HIGHLIGHT, sort: TIME) { edges { node { ' + VIDEO_NODE + ' } } } } }');
   const u = d.user, nodes = k => ((u && u[k] || {}).edges || []).map(e => e && e.node).filter(n => n && n.id);
-  const v = u ? { login: u.login || login, name: u.displayName || login, avatar: u.profileImageURL || '', banner: u.offlineImageURL || '', bio: u.description || '', archives: nodes('a'), highlights: nodes('h') } : null;
+  const v = u ? { thumb: '', login: u.login || login, name: u.displayName || login, avatar: u.profileImageURL || '', banner: u.offlineImageURL || '', bio: u.description || '', archives: nodes('a'), highlights: nodes('h') } : null;
+  if (v) v.thumb = await goodThumb(v.archives.slice(0, 3));
   vodCache.set(login, { v, exp: Date.now() + 120000 });
   if (vodCache.size > 100) vodCache.delete(vodCache.keys().next().value);
   return v;
 }
 const dur = s => { s = Number(s) || 0; const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60); return h ? h + ' h ' + String(m).padStart(2, '0') : m + ' min'; };
 const vodMeta = (v, withVideos) => {
-  const last = v.archives[0], thumb = last && last.previewThumbnailURL; // dernière rediff en vignette : même format que les lives, et pas de fond en damier derrière les avatars transparents
+  const last = v.archives[0], thumb = v.thumb; // dernière rediff en vignette : même format que les lives, et pas de fond en damier derrière les avatars transparents
   const lastTxt = last ? '📼 Dernière rediff : ' + new Date(last.publishedAt).toLocaleDateString('fr-FR') + (last.title ? ' · ' + last.title : '') + '\n\n' : '';
   const m = { id: 'twitchvod:' + v.login, type: 'series', name: v.name, poster: thumb || v.avatar, posterShape: thumb ? 'landscape' : 'square', background: v.banner || thumb || undefined, ...(v.avatar ? { logo: v.avatar } : {}), description: lastTxt + (v.bio || 'Rediffusions de ' + v.name), releaseInfo: v.archives.length ? v.archives.length + ' rediffs' : undefined };
   if (!withVideos) return m;
@@ -953,7 +940,7 @@ async function handler(req, res) {
         if (seg[0] === 'catalog') {
           const q = (extraOf(seg[3]).get('search') || '').trim().toLowerCase().replace(/^@/, '');
           let logins = [];
-          if (q) logins = (await withTimeout(searchChannels(q), 5000, [])).slice(0, 6).map(x => x.login);
+          if (q) logins = LOGIN_RE.test(q) ? [q] : [];
           else if (auth) logins = (await followedChannels(auth).catch(() => [])).slice(0, 24).map(x => x.login);
           else logins = ((await liveStreams('').catch(() => [])) || []).slice(0, 24).map(x => x.login);
           const vs = (await withTimeout(Promise.all(logins.map(l => withTimeout(channelVods(l), 6000, null).catch(() => null))), 7000, [])).filter(Boolean);
@@ -1004,10 +991,7 @@ async function handler(req, res) {
     }
     if (seg[0] === 'catalog' && seg[1] === 'tv') {
       const search = seg[3] ? (new URLSearchParams(strip(seg[3])).get('search') || '').trim().toLowerCase().replace(/^@/, '') : '';
-      if (search) { // recherche de chaînes par nom (même partiel, sans clés Twitch) : seules celles en direct sont proposées, leurs rediffs sont dans « Rediffusions »
-        const found = await withTimeout(searchChannels(search), 5000, []);
-        const lives = (await Promise.all(found.filter(x => x.live !== false).slice(0, 6).map(async x => { const info = await channelInfo(x.login); return info && info.live ? metaFromInfo(x.login, info) : null; }))).filter(Boolean);
-        if (lives.length) return json(res, { metas: lives }, { 'Cache-Control': 'public, s-maxage=30' });
+      if (search) { // recherche d'une chaîne par son nom complet (pseudo Twitch) : seule la chaîne en direct est proposée, ses rediffs sont dans « Rediffusions »
         if (!LOGIN_RE.test(search)) return json(res, { metas: [] });
         const info = await channelInfo(search);
         if (info && !info.live) return json(res, { metas: [] }); // hors ligne : pas proposée dans les lives
