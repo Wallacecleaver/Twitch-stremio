@@ -1,0 +1,21 @@
+.ann{--ac:#38bdf8;--ac2:#818cf8;position:relative;display:flex;align-items:center;gap:16px;padding:16px 18px 16px 16px;margin:0 0 18px;border-radius:20px;overflow:hidden;isolation:isolate;color:var(--t,#fff);background:linear-gradient(135deg,color-mix(in srgb,var(--ac) 20%,transparent),transparent 62%),var(--bg3,#15151b);border:1px solid color-mix(in srgb,var(--ac) 42%,transparent);box-shadow:0 18px 50px -26px var(--ac),inset 0 1px 0 rgba(255,255,255,.06);animation:annIn .6s cubic-bezier(.2,.9,.25,1) both}
+.ann::before{content:"";position:absolute;inset:0 0 auto 0;height:3px;background:linear-gradient(90deg,transparent,var(--ac),var(--ac2),transparent);background-size:200% 100%;animation:annSh 3.2s linear infinite;z-index:-1}
+.ann::after{content:"";position:absolute;right:-70px;top:-70px;width:200px;height:200px;border-radius:50%;background:radial-gradient(circle,color-mix(in srgb,var(--ac) 38%,transparent),transparent 70%);filter:blur(6px);opacity:.75;z-index:-1;pointer-events:none}
+.ann-new{--ac:#c084fc;--ac2:#f472b6}.ann-warn{--ac:#fbbf24;--ac2:#f97316}
+.ann-maint{--ac:#fb7185;--ac2:#f43f5e;background:repeating-linear-gradient(135deg,rgba(251,113,133,.07) 0 14px,transparent 14px 28px),linear-gradient(135deg,color-mix(in srgb,var(--ac) 20%,transparent),transparent 62%),var(--bg3,#15151b)}
+.ann-ic{flex:none;position:relative;width:48px;height:48px;border-radius:15px;display:grid;place-items:center;color:#fff;background:linear-gradient(135deg,var(--ac),var(--ac2));box-shadow:0 8px 22px -8px var(--ac)}
+.ann-ic svg{width:24px;height:24px;fill:currentColor}
+.ann-ic::after{content:"";position:absolute;inset:-5px;border-radius:19px;border:2px solid var(--ac);opacity:0;animation:annPulse 2.4s ease-out infinite}
+.ann-b{min-width:0;flex:1;display:grid;gap:3px}
+.ann-k{font-size:.66rem;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--ac)}
+.ann-t{font-weight:700;font-size:1.04rem;line-height:1.3}
+.ann-m{margin:0;font-size:.9rem;line-height:1.55;color:var(--t2,#b4b4bf);overflow-wrap:anywhere}
+.ann-a{flex:none;display:inline-flex;align-items:center;gap:7px;font-weight:700;font-size:.84rem;text-decoration:none;color:#fff;background:linear-gradient(135deg,var(--ac),var(--ac2));padding:10px 16px;border-radius:12px;box-shadow:0 8px 20px -10px var(--ac);transition:transform .25s,box-shadow .25s}
+.ann-a svg{width:15px;height:15px;transition:transform .25s}.ann-a:hover{transform:translateY(-2px);box-shadow:0 14px 26px -10px var(--ac)}.ann-a:hover svg{transform:translateX(3px)}
+.ann-x{flex:none;align-self:flex-start;font:inherit;font-size:1.3rem;line-height:1;color:var(--t2,#b4b4bf);background:rgba(255,255,255,.06);border:0;border-radius:10px;width:30px;height:30px;cursor:pointer;transition:background .2s,color .2s}.ann-x:hover{background:rgba(255,255,255,.14);color:#fff}
+.ann.ann-lk{padding:22px 22px 22px 20px}.ann.ann-lk .ann-t{font-size:1.2rem}.ann.ann-lk .ann-ic{width:54px;height:54px}
+@media(max-width:560px){.ann{flex-wrap:wrap;padding:14px}.ann-a{width:100%;justify-content:center}.ann-b{flex-basis:calc(100% - 70px)}}
+@keyframes annIn{from{opacity:0;transform:translateY(-10px) scale(.98)}}
+@keyframes annSh{to{background-position:-200% 0}}
+@keyframes annPulse{0%{opacity:.7;transform:scale(.92)}100%{opacity:0;transform:scale(1.28)}}
+@media(prefers-reduced-motion:reduce){.ann,.ann::before,.ann-ic::after{animation:none}}
