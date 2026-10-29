@@ -357,13 +357,32 @@ async function channelInfo(login) {
   if (infoCache.size > 300) infoCache.delete(infoCache.keys().next().value);
   return v;
 }
+// Recherche de chaînes par nom partiel (même recherche que le site de Twitch) : [{ login, name, live }], le pseudo exact en premier s'il existe.
+const searchCache = new Map();
+async function searchChannels(q) {
+  q = String(q || '').trim().toLowerCase().replace(/^@/, '');
+  if (q.length < 2) return [];
+  const c = searchCache.get(q);
+  if (c && c.exp > Date.now()) return c.v;
+  let out = [];
+  try {
+    const d = await gqlRaw('query { searchFor(userQuery: ' + JSON.stringify(q) + ', platform: "web", options: { targets: [{ index: CHANNEL }] }) { channels { edges { item { ... on User { login displayName stream { id } } } } } } }');
+    out = (((d.searchFor || {}).channels || {}).edges || []).map(e => e && e.item).filter(u => u && u.login && LOGIN_RE.test(String(u.login).toLowerCase())).map(u => ({ login: String(u.login).toLowerCase(), name: u.displayName || u.login, live: !!u.stream })).slice(0, 8);
+  } catch { /* recherche indisponible : on se rabat sur le pseudo exact */ }
+  const exact = q.replace(/\s+/g, '');
+  if (LOGIN_RE.test(exact) && !out.length) out.unshift({ login: exact, name: exact, live: null }); // recherche muette ou en panne : on tente le pseudo tel quel
+  else if (LOGIN_RE.test(exact)) out.sort((a, b) => (b.login === exact) - (a.login === exact)); // le pseudo exact d'abord
+  searchCache.set(q, { v: out, exp: Date.now() + 60000 });
+  if (searchCache.size > 200) searchCache.delete(searchCache.keys().next().value);
+  return out;
+}
 const metaFromInfo = (login, i) => {
   const nb = i.viewers.toLocaleString('fr-FR'), live = 'https://static-cdn.jtvnw.net/previews-ttv/live_user_' + login + '-1280x720.jpg';
   return {
     id: 'twitch:' + login, type: 'tv', name: i.name, posterShape: 'landscape',
     poster: i.preview || i.avatar || live, background: i.preview || i.banner || i.avatar || undefined, ...(i.avatar ? { logo: i.avatar } : {}),
-    description: i.live ? ((i.game ? '🎮 ' + i.game + '\n\n' : '') + (i.title || '')).trim() : ('Hors ligne' + (i.bio ? '\n\n' + i.bio : '')),
-    genres: i.game ? [i.game] : [], releaseInfo: i.name,
+    description: i.live ? ((i.game ? '🎮 ' + i.game + ' · 👁 ' + nb + '\n\n' : '👁 ' + nb + '\n\n') + (i.title || '')).trim() : ('Hors ligne' + (i.bio ? '\n\n' + i.bio : '')),
+    genres: i.game ? [i.game] : [], releaseInfo: i.live ? '🔴 ' + fmtN(i.viewers) + ' 👁' : i.name,
   };
 };
 
@@ -464,7 +483,9 @@ async function channelVods(login) {
 }
 const dur = s => { s = Number(s) || 0; const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60); return h ? h + ' h ' + String(m).padStart(2, '0') : m + ' min'; };
 const vodMeta = (v, withVideos) => {
-  const m = { id: 'twitchvod:' + v.login, type: 'series', name: v.name, poster: v.avatar, posterShape: 'square', background: v.banner || undefined, description: v.bio || 'Rediffusions de ' + v.name, releaseInfo: v.archives.length ? v.archives.length + ' rediffs' : undefined };
+  const last = v.archives[0], thumb = last && last.previewThumbnailURL; // dernière rediff en vignette : même format que les lives, et pas de fond en damier derrière les avatars transparents
+  const lastTxt = last ? '📼 Dernière rediff : ' + new Date(last.publishedAt).toLocaleDateString('fr-FR') + (last.title ? ' · ' + last.title : '') + '\n\n' : '';
+  const m = { id: 'twitchvod:' + v.login, type: 'series', name: v.name, poster: thumb || v.avatar, posterShape: thumb ? 'landscape' : 'square', background: v.banner || thumb || undefined, ...(v.avatar ? { logo: v.avatar } : {}), description: lastTxt + (v.bio || 'Rediffusions de ' + v.name), releaseInfo: v.archives.length ? v.archives.length + ' rediffs' : undefined };
   if (!withVideos) return m;
   const vid = (n, season, i, total) => ({ id: 'twitchvod:' + v.login + ':' + n.id, title: n.title || 'Rediffusion', season, episode: i + 1, released: n.publishedAt || new Date(0).toISOString(), thumbnail: n.previewThumbnailURL || undefined, overview: [new Date(n.publishedAt).toLocaleDateString('fr-FR'), dur(n.lengthSeconds), n.game ? '🎮 ' + n.game.displayName : '', '👁 ' + fmtN(n.viewCount)].filter(Boolean).join(' · ') });
   m.videos = [...v.archives.map((n, i) => vid(n, 1, i)), ...v.highlights.map((n, i) => vid(n, 2, i))];
@@ -523,7 +544,7 @@ const MANIFEST = {
   id: 'community.twitch.lives', version: '0.1.0', name: 'TwitchIO', description: 'Lives Twitch dans Stremio',
   resources: ['catalog', 'meta', 'stream'], types: ['tv', 'series'], idPrefixes: ['twitch:', 'twitchvod:'],
   behaviorHints: { configurable: true, configurationRequired: false },
-  catalogs: [{ type: 'tv', id: 'twitch-top', name: 'TwitchIO · Lives par jeu', extra: [{ name: 'search', isRequired: false }, { name: 'genre', isRequired: false, options: GAMES }] }],
+  catalogs: [{ type: 'tv', id: 'twitch-top', name: 'TwitchIO · Lives par jeu', extra: [{ name: 'genre', isRequired: false, options: GAMES }] }, { type: 'tv', id: 'twitch-find', name: 'TwitchIO · Lives', extra: [{ name: 'search', isRequired: true }] }],
 };
 
 async function probe(login) { // diagnostic d'une chaîne pour le dashboard
@@ -855,7 +876,7 @@ async function handler(req, res) {
     if (seg[0] === 'manifest.json') {
       store.log({ k: 'install', u: pseudo || undefined, appareil: cfg.device || undefined, reglages: pseudo ? summary(cfg) : 'défaut', dev }); store.user(pseudo, { cfg: { ...cfg, tok: undefined, compte: !!cfg.tok }, dev: cfg.device });
       const S = await siteLib.load(), mf = { ...MANIFEST, name: S.name, logo: originOf(req) + '/logo.png?v=' + S.logoV }, GL = await Promise.race([gameList(), new Promise(r => setTimeout(() => r(GAMES), 3000))]);
-      mf.catalogs = [{ type: 'tv', id: 'twitch-top', name: S.name + ' · Lives par jeu', extra: [{ name: 'search', isRequired: false }, { name: 'genre', isRequired: false, options: GL }] }];
+      mf.catalogs = [{ type: 'tv', id: 'twitch-top', name: S.name + ' · Lives par jeu', extra: [{ name: 'genre', isRequired: false, options: GL }] }, { type: 'tv', id: 'twitch-find', name: S.name + ' · Lives', extra: [{ name: 'search', isRequired: true }] }]; // « Lives » : uniquement dans la recherche
       // avec un compte lié, « Mes rediffusions » remplace « Rediffusions » à l'accueil (même contenu = doublon) : « Rediffusions » ne sert plus alors qu'à la recherche d'une chaîne quelconque (search obligatoire), et « Mes rediffusions » n'est pas proposée dans la recherche
       const myVods = !!(S.feat.vods && S.feat.followed && auth);
       if (S.feat.vods) mf.catalogs.push({ type: 'series', id: 'twitch-vods', name: S.name + ' · Rediffusions', extra: [{ name: 'search', isRequired: myVods }] });
@@ -932,7 +953,7 @@ async function handler(req, res) {
         if (seg[0] === 'catalog') {
           const q = (extraOf(seg[3]).get('search') || '').trim().toLowerCase().replace(/^@/, '');
           let logins = [];
-          if (q) logins = LOGIN_RE.test(q) ? [q] : [];
+          if (q) logins = (await withTimeout(searchChannels(q), 5000, [])).slice(0, 6).map(x => x.login);
           else if (auth) logins = (await followedChannels(auth).catch(() => [])).slice(0, 24).map(x => x.login);
           else logins = ((await liveStreams('').catch(() => [])) || []).slice(0, 24).map(x => x.login);
           const vs = (await withTimeout(Promise.all(logins.map(l => withTimeout(channelVods(l), 6000, null).catch(() => null))), 7000, [])).filter(Boolean);
@@ -973,7 +994,7 @@ async function handler(req, res) {
         return json(res, { metas: L.map(catalogMeta) }, { 'Cache-Control': 'no-store' });
       } catch (e) { store.incr('err'); store.log({ k: 'erreur', u: pseudo || undefined, ou: 'catalogue des chaînes suivies', msg: e.message }); return json(res, { metas: [] }); }
     }
-    if (seg[0] === 'catalog' && seg[1] === 'tv' && strip(seg[2]) === 'twitch-top' && F.catalog) { // sans jeu : les plus regardés ; avec un jeu (menu ou recherche) : ses lives
+    if (seg[0] === 'catalog' && seg[1] === 'tv' && (strip(seg[2]) === 'twitch-top' || strip(seg[2]) === 'twitch-find') && F.catalog) { // sans jeu : les plus regardés ; avec un jeu (menu ou recherche) : ses lives
       const ex = extraOf(seg[3]), genre = ex.get('genre'), q = (ex.get('search') || '').trim();
       try {
         if (genre || !q) { const L = await liveStreams(genre || ''); store.log({ k: 'catalog', u: pseudo || undefined, n: L ? L.length : 0, jeu: genre || 'populaires', dev }); return json(res, { metas: (L || []).map(catalogMeta) }, { 'Cache-Control': 'public, s-maxage=30' }); }
@@ -983,10 +1004,13 @@ async function handler(req, res) {
     }
     if (seg[0] === 'catalog' && seg[1] === 'tv') {
       const search = seg[3] ? (new URLSearchParams(strip(seg[3])).get('search') || '').trim().toLowerCase().replace(/^@/, '') : '';
-      if (search) { // recherche d'une chaîne par son nom (sans clés Twitch) : la fiche s'ouvre, puis le live se lance
+      if (search) { // recherche de chaînes par nom (même partiel, sans clés Twitch) : seules celles en direct sont proposées, leurs rediffs sont dans « Rediffusions »
+        const found = await withTimeout(searchChannels(search), 5000, []);
+        const lives = (await Promise.all(found.filter(x => x.live !== false).slice(0, 6).map(async x => { const info = await channelInfo(x.login); return info && info.live ? metaFromInfo(x.login, info) : null; }))).filter(Boolean);
+        if (lives.length) return json(res, { metas: lives }, { 'Cache-Control': 'public, s-maxage=30' });
         if (!LOGIN_RE.test(search)) return json(res, { metas: [] });
         const info = await channelInfo(search);
-        if (info && !info.live) return json(res, { metas: [] }); // hors ligne : pas proposée dans les lives (ses rediffs restent dans « Rediffusions »)
+        if (info && !info.live) return json(res, { metas: [] }); // hors ligne : pas proposée dans les lives
         let meta = info ? metaFromInfo(search, info) : { id: 'twitch:' + search, type: 'tv', name: search, poster: 'https://static-cdn.jtvnw.net/previews-ttv/live_user_' + search + '-440x248.jpg', posterShape: 'landscape' };
         if (!info) { try { const s = (await helix('/streams', { user_login: search }))[0]; if (s) meta = metaOf(s); } catch { /* sans clés : fiche simple */ } }
         return json(res, { metas: [meta] });
