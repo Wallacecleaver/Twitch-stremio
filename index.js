@@ -361,7 +361,7 @@ const metaFromInfo = (login, i) => {
   const nb = i.viewers.toLocaleString('fr-FR'), live = 'https://static-cdn.jtvnw.net/previews-ttv/live_user_' + login + '-1280x720.jpg';
   return {
     id: 'twitch:' + login, type: 'tv', name: i.name, posterShape: 'landscape',
-    poster: i.preview || i.avatar || live, background: i.preview || i.banner || i.avatar || undefined, ...(i.avatar ? { logo: i.avatar } : {}),
+    poster: i.live ? live + '?t=' + Math.floor(Date.now() / 60000) : (i.preview || i.avatar || live), background: i.live ? live + '?t=' + Math.floor(Date.now() / 60000) : (i.preview || i.banner || i.avatar || undefined), ...(i.avatar ? { logo: i.avatar } : {}),
     description: i.live ? ((i.game ? '🎮 ' + i.game + ' · 👁 ' + nb + '\n\n' : '👁 ' + nb + '\n\n') + (i.title || '')).trim() : ('Hors ligne' + (i.bio ? '\n\n' + i.bio : '')),
     genres: i.game ? [i.game] : [], releaseInfo: i.live ? '🔴 ' + fmtN(i.viewers) + ' 👁' : i.name,
   };
@@ -449,8 +449,11 @@ async function posterSvg(login) {
   if (!info || !info.live) return null;
   let img = '';
   try {
-    const r = await fetch(info.preview || 'https://static-cdn.jtvnw.net/previews-ttv/live_user_' + login + '-640x360.jpg', { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(4000) });
-    const b = r.ok ? Buffer.from(await r.arrayBuffer()) : null;
+    // dernière image que Twitch a générée pour le live (il la renouvelle environ toutes les 5 minutes) ; le paramètre évite une vieille copie du CDN
+    const fresh = 'https://static-cdn.jtvnw.net/previews-ttv/live_user_' + login + '-640x360.jpg?t=' + Date.now();
+    let r = await fetch(fresh, { headers: { 'User-Agent': UA, 'Cache-Control': 'no-cache' }, signal: AbortSignal.timeout(4000) }).catch(() => null);
+    if (!r || !r.ok) r = info.preview ? await fetch(info.preview, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(4000) }) : null;
+    const b = r && r.ok ? Buffer.from(await r.arrayBuffer()) : null;
     if (b && b.length < 1500000) img = 'data:' + ((r.headers.get('content-type') || 'image/jpeg').split(';')[0]) + ';base64,' + b.toString('base64');
   } catch { /* sans vignette */ }
   if (!img) return null;
@@ -468,12 +471,12 @@ async function posterSvg(login) {
     '<g transform="translate(' + ex + ' 37)" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M-11 0 C-6 -8 6 -8 11 0 C6 8 -6 8 -11 0 Z"/><circle r="3.4" fill="#fff" stroke="none"/></g>' +
     (game ? '<rect x="16" y="302" rx="21" ry="21" width="' + gw + '" height="42" fill="#0e0e10" fill-opacity="0.72"/><circle cx="38" cy="323" r="6" fill="#a970ff"/>' +
       '<text x="54" y="331" ' + FONT + ' font-size="23" font-weight="600" fill="#fff">' + xmlEsc(game) + '</text>' : '') + '</svg>';
-  posterCache.set(login, { v, exp: Date.now() + 45000 });
+  posterCache.set(login, { v, exp: Date.now() + 30000 });
   if (posterCache.size > 150) posterCache.delete(posterCache.keys().next().value);
   return v;
 }
 // remplace l'affiche des lives d'un catalogue par l'affiche avec le jeu et les spectateurs
-const badge = (metas, req) => !POSTER_OVERLAY ? metas : metas.map(m => /^twitch:[a-z0-9_]{3,25}$/.test(m.id || '') && String(m.releaseInfo || '').startsWith('🔴') ? { ...m, poster: originOf(req) + '/poster/' + m.id.slice(7) + '.svg?v=' + Math.floor(Date.now() / 45000) } : m);
+const badge = (metas, req) => !POSTER_OVERLAY ? metas : metas.map(m => /^twitch:[a-z0-9_]{3,25}$/.test(m.id || '') && String(m.releaseInfo || '').startsWith('🔴') ? { ...m, poster: originOf(req) + '/poster/' + m.id.slice(7) + '.svg?v=' + Math.floor(Date.now() / 30000) } : m);
 const catalogMeta = x => { const m = metaFromInfo(x.login, x.info); delete m.logo; return { ...m, background: undefined, name: '👁 ' + fmtN(x.info.viewers) + ' · ' + x.info.name, releaseInfo: '🔴 ' + fmtN(x.info.viewers) + ' 👁' }; };
 
 // Menu « Genre » : les catégories les plus regardées de Twitch (liste récupérée sans clé, gardée 6 h), complétées par la liste fixe.
