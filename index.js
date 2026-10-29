@@ -78,7 +78,12 @@ let FEAT = siteLib.DEF.feat; // interrupteurs du dashboard (Paramètres), rafra�
 const LOGIN_RE = /^[a-z0-9_]{3,25}$/;
 
 const BLANK = '<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title></title></head><body style="margin:0;background:#0b0b10"></body></html>'; // accueil et chemins inconnus : rien à voir
-const send = (res, code, type, body, h = {}) => { res.writeHead(code, { 'Content-Type': type, ...h }); res.end(body); };
+// Content-Length toujours annoncé : sans lui Node répond en « chunked », et les lecteurs mpv/ffmpeg (Nuvio, Stremio PC) prennent la fin de la réponse pour une coupure et se reconnectent sans fin.
+const send = (res, code, type, body, h = {}) => {
+  const hd = { 'Content-Type': type, ...h };
+  if (code !== 204 && code !== 304 && !Object.keys(hd).some(k => k.toLowerCase() === 'content-length') && (typeof body === 'string' || Buffer.isBuffer(body))) hd['Content-Length'] = Buffer.byteLength(body);
+  res.writeHead(code, hd); res.end(body);
+};
 const json = (res, o, h) => send(res, 200, 'application/json; charset=utf-8', JSON.stringify(o), { 'Cache-Control': 'no-store', ...h });
 
 /* ------------------------------------------------------------------ lecture d'un live (méthode non officielle) */
@@ -283,6 +288,17 @@ function absolutize(text, base) {
 
 // Mode ordinateur : les listes de lecture passent par nous, nettoyées (sans balises Twitch propres) pour le lecteur de Stremio PC.
 const pcOn = cfg => !!(cfg && cfg.pc && sealLib.available());
+// Lecteurs mpv/ffmpeg (Nuvio, Stremio PC…) : Twitch envoie ses morceaux en « chunked » sans taille, ce qui les fait se reconnecter sans fin (option ffmpeg reconnect_streamed).
+// Pour eux, les listes de qualité et les morceaux passent par l'addon, qui annonce la taille. TWITCH_SEGMENTS_PROXY=1 : pour tout le monde ; =0 : désactivé.
+const mpvLike = req => { const m = process.env.TWITCH_SEGMENTS_PROXY; return sealLib.available() && (m === '1' || (m !== '0' && /libmpv|mpv|ffmpeg|lavf/i.test(String(req.headers['user-agent'] || '')))); };
+const segExt = u => { const m = /\.(ts|mp4|m4s|aac|m4a|cmfv|cmfa)(?:$|\?)/i.exec(String(u).split('#')[0]); return m ? '.' + m[1].toLowerCase() : ''; };
+const segUrl = (origin, base, u) => origin + base + '/s/' + sealLib.seal(u) + segExt(u);
+function viaAddonSegments(text, origin, base) { // morceaux et segment d'initialisation → adresses de l'addon
+  return text.split(/\r?\n/).map(l => {
+    if (/^#EXT-X-(MAP|KEY|PRELOAD-HINT):/.test(l)) return l.replace(/URI="(https?:[^"]+)"/g, (_, u) => 'URI="' + segUrl(origin, base, u) + '"');
+    return /^https?:\/\//.test(l) ? segUrl(origin, base, l.trim()) : l;
+  }).join('\n');
+}
 const pcUrl = (origin, base, u) => origin + base + '/m/' + sealLib.seal(u) + '.m3u8';
 function pcMaster(text, origin, base) {
   const L = text.split(/\r?\n/), out = [];
@@ -1006,15 +1022,27 @@ async function handler(req, res) {
       const r = await fetch(u, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(8000) });
       const t = await r.text();
       if (!r.ok || !t.startsWith('#EXTM3U')) return send(res, r.ok ? 502 : r.status, 'text/plain; charset=utf-8', 'Flux indisponible');
-      const body = cleanMedia(absolutize(t, u));
-      return send(res, 200, 'application/vnd.apple.mpegurl', /cloudfront/.test(u) ? body.replace(/-unmuted/g, '-muted') : body, { 'Cache-Control': 'no-store' }); // rediffs réservées aux abonnés : seuls les segments « muted » sont ouverts
+      let body = cleanMedia(absolutize(t, u));
+      if (/cloudfront/.test(u)) body = body.replace(/-unmuted/g, '-muted'); // rediffs réservées aux abonnés : seuls les segments « muted » sont ouverts
+      if (mpvLike(req)) body = viaAddonSegments(body, originOf(req), base);
+      return send(res, 200, 'application/vnd.apple.mpegurl', body, { 'Cache-Control': 'no-store' });
+    }
+    if (seg[0] === 's' && seg[1]) { // morceau de vidéo relayé avec sa taille (lecteurs mpv/ffmpeg) ; l'adresse est chiffrée par nous : ce n'est pas un relais ouvert
+      const u = sealLib.open(strip(seg[1]).replace(/\.[a-z0-9]{2,4}$/i, ''));
+      if (!u || !/^https:\/\//.test(u)) return send(res, 400, 'text/plain; charset=utf-8', 'Lien invalide');
+      try {
+        const up = await fetch(u, { headers: { 'User-Agent': UA, ...(req.headers.range ? { Range: req.headers.range } : {}) }, signal: AbortSignal.timeout(15000) });
+        const buf = Buffer.from(await up.arrayBuffer()), hd = { 'Cache-Control': 'no-store' };
+        for (const k of ['content-range', 'accept-ranges']) if (up.headers.get(k)) hd[k] = up.headers.get(k);
+        return send(res, up.status, up.headers.get('content-type') || 'application/octet-stream', buf, hd);
+      } catch (e) { return send(res, 502, 'text/plain; charset=utf-8', 'Morceau indisponible'); }
     }
 
     if (seg[0] === 'p' && seg[1]) { // liste de lecture « sans pub » : récupérée côté serveur auprès d'un relais, puis servie au lecteur
       const login = strip(seg[1]).replace(/\.m3u8$/, '').toLowerCase();
       if (!LOGIN_RE.test(login)) return send(res, 400, 'text/plain; charset=utf-8', 'Nom de chaîne invalide');
       if (F.maint) return send(res, 503, 'text/plain; charset=utf-8', 'Addon en maintenance');
-      const fin = m => pcOn(cfg) ? pcMaster(m, originOf(req), base) : m;
+      const fin = m => pcOn(cfg) || mpvLike(req) ? pcMaster(m, originOf(req), base) : m;
       const [b, lv] = await Promise.all([cfg.relay ? bestProxy(login, cfg.hevc) : null, cfg.hevc && cfg.relay ? liveStream(login, true, auth).catch(() => null) : null]);
       store.incr('play'); store.top(login); store.user(pseudo, { ch: login, dev: cfg.device });
       store.log({ k: 'play', u: pseudo || undefined, ch: login, relais: b ? b.name : cfg.relay ? 'officiel (repli)' : 'officiel (relais coupés)', ms: Date.now() - t0, appareil: cfg.device || undefined, dev });
@@ -1135,7 +1163,7 @@ async function handler(req, res) {
       // Mise en forme choisie par la personne (cfg.fmt) : voir lib/format.js
       const gameTxt = info && info.game ? cut(info.game, 22) : '';
       const dOf = v => { const m = /(\d{3,4})p(\d+)?/.exec(v.name) || [], h = Number(m[1] || v.h || 0), f = m[2] || (v.fps > 30 ? String(v.fps) : '30'); return { h, fps: Number(f), short: h ? h + 'p' + (m[2] || (v.fps > 30 ? v.fps : '')) : v.name.replace(/ \(source\)/, ''), rawName: v.name, viewers: nb, game: gameTxt, cap: cfg.cap }; };
-      const fixed = video.slice(0, cfg.fixed).map(v => ({ ...fmtLib.render(cfg.fmt, { brand: BR, kind: 'fixed', ...dOf(v), noAd: !!relayUrls && relayUrls.has(v.url) }), url: pcOn(cfg) ? pcUrl(originOf(req), base, v.url) : v.url }));
+      const fixed = video.slice(0, cfg.fixed).map(v => ({ ...fmtLib.render(cfg.fmt, { brand: BR, kind: 'fixed', ...dOf(v), noAd: !!relayUrls && relayUrls.has(v.url) }), url: pcOn(cfg) || (process.env.TWITCH_SEGMENTS_PROXY === '1' && sealLib.available()) ? pcUrl(originOf(req), base, v.url) : v.url }));
       const auto = { ...fmtLib.render(cfg.fmt, { brand: BR, kind: 'auto', viewers: nb, game: gameTxt, cap: cfg.cap, noAd: !!b }), url: originOf(req) + base + '/p/' + login + '.m3u8' };
       const audio = cfg.audio ? vars.filter(v => v.audio).slice(0, 1).map(v => ({ ...fmtLib.render(cfg.fmt, { brand: BR, kind: 'audio', noAd: !!b }), url: v.url })) : [];
       return json(res, { streams: [auto, ...fixed, ...audio] });
