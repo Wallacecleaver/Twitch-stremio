@@ -454,14 +454,20 @@ async function posterSvg(login) {
     if (b && b.length < 1500000) img = 'data:' + ((r.headers.get('content-type') || 'image/jpeg').split(';')[0]) + ';base64,' + b.toString('base64');
   } catch { /* sans vignette */ }
   if (!img) return null;
-  const game = clip(info.game, 30), nb = '🔴 ' + fmtN(info.viewers) + ' 👁', w = 26 + nb.length * 17;
+  const FONT = 'font-family="Segoe UI,Roboto,Helvetica,Arial,sans-serif"';
+  const game = clip(info.game, 26), nb = fmtN(info.viewers), tw = nb.length * 11.4, ex = Math.round(58 + tw + 21), pw = ex + 11 + 17; // badge spectateurs : pastille rouge + nombre + œil (dessinés, pas d'emoji : même rendu partout)
+  const gw = Math.round(game.length * 12.4 + 46);
   const v = '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="640" height="360" viewBox="0 0 640 360">' +
-    '<defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="0.85"/></linearGradient></defs>' +
+    '<defs><linearGradient id="b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="0.78"/></linearGradient>' +
+    '<linearGradient id="t" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity="0.5"/><stop offset="1" stop-color="#000" stop-opacity="0"/></linearGradient></defs>' +
     '<image href="' + img + '" xlink:href="' + img + '" x="0" y="0" width="640" height="360" preserveAspectRatio="xMidYMid slice"/>' +
-    '<rect x="0" y="230" width="640" height="130" fill="url(#g)"/>' +
-    '<rect x="14" y="14" rx="10" ry="10" width="' + w + '" height="38" fill="#000" fill-opacity="0.7"/>' +
-    '<text x="27" y="41" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#fff">' + xmlEsc(nb) + '</text>' +
-    (game ? '<text x="18" y="338" font-family="Arial,Helvetica,sans-serif" font-size="30" font-weight="700" fill="#fff">🎮 ' + xmlEsc(game) + '</text>' : '') + '</svg>';
+    '<rect x="0" y="0" width="640" height="110" fill="url(#t)"/><rect x="0" y="220" width="640" height="140" fill="url(#b)"/>' +
+    '<rect x="16" y="16" rx="21" ry="21" width="' + pw + '" height="42" fill="#0e0e10" fill-opacity="0.72"/>' +
+    '<circle cx="39" cy="37" r="12" fill="#eb0400" fill-opacity="0.28"/><circle cx="39" cy="37" r="6.5" fill="#ff2d2a"/>' +
+    '<text x="58" y="45" ' + FONT + ' font-size="23" font-weight="700" fill="#fff">' + xmlEsc(nb) + '</text>' +
+    '<g transform="translate(' + ex + ' 37)" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M-11 0 C-6 -8 6 -8 11 0 C6 8 -6 8 -11 0 Z"/><circle r="3.4" fill="#fff" stroke="none"/></g>' +
+    (game ? '<rect x="16" y="302" rx="21" ry="21" width="' + gw + '" height="42" fill="#0e0e10" fill-opacity="0.72"/><circle cx="38" cy="323" r="6" fill="#a970ff"/>' +
+      '<text x="54" y="331" ' + FONT + ' font-size="23" font-weight="600" fill="#fff">' + xmlEsc(game) + '</text>' : '') + '</svg>';
   posterCache.set(login, { v, exp: Date.now() + 45000 });
   if (posterCache.size > 150) posterCache.delete(posterCache.keys().next().value);
   return v;
