@@ -452,27 +452,81 @@ async function gameList() {
 // Rediffusions (VOD) : une chaîne = une série, ses rediffs = les épisodes d'une saison.
 const VIDEO_NODE = 'id title publishedAt lengthSeconds viewCount previewThumbnailURL(width: 640, height: 360) game { displayName }';
 const vodCache = new Map();
-// première vignette de rediff qui s'affiche vraiment (celles des rediffs réservées aux abonnés ou expirées renvoient une erreur) ; '' si aucune
-const goodThumb = async nodes => {
-  const ok = await Promise.all(nodes.map(async n => { const u = n && n.previewThumbnailURL; if (!u) return false; try { const r = await fetch(u, { headers: { Range: 'bytes=0-0', 'User-Agent': UA }, signal: AbortSignal.timeout(2500) }); return r.ok && /^image\//.test(r.headers.get('content-type') || ''); } catch { return false; } }));
-  const i = ok.indexOf(true); return i >= 0 ? nodes[i].previewThumbnailURL : '';
-};
+// Logo d'une chaîne pour les rediffs : l'avatar Twitch, sauf s'il est absent ou s'il contient un faux damier « transparent » (image mal exportée) :
+// on prend alors le logo de la chaîne YouTube liée sur sa page Twitch, et à défaut l'avatar tel quel.
+const logoCache = new Map();
+function checkerPng(buf) { // true si le coin haut-gauche d'un PNG est un damier gris/blanc cuit dans l'image
+  try {
+    if (buf.length < 64 || buf.readUInt32BE(0) !== 0x89504e47) return false;
+    let pos = 8, w = 0, h = 0, depth = 0, ct = 0, il = 0; const idat = [];
+    while (pos + 8 <= buf.length) {
+      const len = buf.readUInt32BE(pos), type = buf.toString('latin1', pos + 4, pos + 8);
+      if (type === 'IHDR') { w = buf.readUInt32BE(pos + 8); h = buf.readUInt32BE(pos + 12); depth = buf[pos + 16]; ct = buf[pos + 17]; il = buf[pos + 20]; }
+      else if (type === 'IDAT') idat.push(buf.subarray(pos + 8, pos + 8 + len));
+      else if (type === 'IEND') break;
+      pos += 12 + len;
+    }
+    const bpp = ct === 2 ? 3 : ct === 6 ? 4 : 0;
+    if (!bpp || depth !== 8 || il || w < 64 || h < 64) return false;
+    const raw = require('zlib').inflateSync(Buffer.concat(idat)), stride = w * bpp, rows = 48, px = [];
+    let prev = Buffer.alloc(stride);
+    for (let y = 0; y < rows; y++) {
+      const f = raw[y * (stride + 1)], line = Buffer.from(raw.subarray(y * (stride + 1) + 1, (y + 1) * (stride + 1)));
+      for (let i = 0; i < stride; i++) {
+        const a = i >= bpp ? line[i - bpp] : 0, b = prev[i], c = i >= bpp ? prev[i - bpp] : 0;
+        let add = 0;
+        if (f === 1) add = a; else if (f === 2) add = b; else if (f === 3) add = (a + b) >> 1;
+        else if (f === 4) { const pa = Math.abs(b - c), pb = Math.abs(a - c), pc = Math.abs(a + b - 2 * c); add = pa <= pb && pa <= pc ? a : pb <= pc ? b : c; }
+        line[i] = (line[i] + add) & 255;
+      }
+      for (let x = 0; x < 48; x++) px.push([line[x * bpp], line[x * bpp + 1], line[x * bpp + 2], bpp === 4 ? line[x * bpp + 3] : 255]);
+      prev = line;
+    }
+    let grey = 0, white = 0, mid = 0;
+    for (const [r, g, b, al] of px) { if (al < 250 || Math.abs(r - g) > 6 || Math.abs(g - b) > 6) continue; grey++; if (r >= 244) white++; else if (r >= 190 && r <= 232) mid++; }
+    return grey > px.length * 0.85 && white > px.length * 0.25 && mid > px.length * 0.25;
+  } catch { return false; }
+}
+async function youtubeLogo(login) {
+  try {
+    const d = await gqlRaw('query { user(login: ' + JSON.stringify(login) + ') { channel { socialMedias { name url } } } }');
+    const yt = (((d.user || {}).channel || {}).socialMedias || []).map(x => x && x.url).find(u => /^https?:\/\/(www\.|m\.)?youtube\.com\//i.test(u || ''));
+    if (!yt) return '';
+    const r = await fetch(yt, { headers: { 'User-Agent': UA, 'Accept-Language': 'fr-FR,fr;q=0.9' }, signal: AbortSignal.timeout(5000) });
+    const html = r.ok ? (await r.text()).slice(0, 400000) : '';
+    const m = /<meta property="og:image" content="([^"]+)"/i.exec(html);
+    return m && /^https:\/\/(yt3\.(googleusercontent|ggpht)\.com|lh\d\.googleusercontent\.com)\//.test(m[1]) ? m[1] : '';
+  } catch { return ''; }
+}
+async function channelLogo(login, avatar) {
+  const c = logoCache.get(login);
+  if (c && c.exp > Date.now()) return c.v;
+  let v = avatar || '';
+  try {
+    let bad = !avatar;
+    if (avatar) { const r = await fetch(avatar, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(3500) }); bad = r.ok ? checkerPng(Buffer.from(await r.arrayBuffer())) : true; }
+    if (bad) v = (await youtubeLogo(login)) || avatar || '';
+  } catch { /* on garde l'avatar */ }
+  logoCache.set(login, { v, exp: Date.now() + 6 * 3600000 });
+  if (logoCache.size > 500) logoCache.delete(logoCache.keys().next().value);
+  return v;
+}
 async function channelVods(login) {
   const c = vodCache.get(login);
   if (c && c.exp > Date.now()) return c.v;
   const d = await gqlRaw('query { user(login: ' + JSON.stringify(login) + ') { displayName login description profileImageURL(width: 300) offlineImageURL a: videos(first: 30, type: ARCHIVE, sort: TIME) { edges { node { ' + VIDEO_NODE + ' } } } h: videos(first: 10, type: HIGHLIGHT, sort: TIME) { edges { node { ' + VIDEO_NODE + ' } } } } }');
   const u = d.user, nodes = k => ((u && u[k] || {}).edges || []).map(e => e && e.node).filter(n => n && n.id);
-  const v = u ? { thumb: '', login: u.login || login, name: u.displayName || login, avatar: u.profileImageURL || '', banner: u.offlineImageURL || '', bio: u.description || '', archives: nodes('a'), highlights: nodes('h') } : null;
-  if (v) v.thumb = await goodThumb(v.archives.slice(0, 3));
+  const v = u ? { logo: '', login: u.login || login, name: u.displayName || login, avatar: u.profileImageURL || '', banner: u.offlineImageURL || '', bio: u.description || '', archives: nodes('a'), highlights: nodes('h') } : null;
+  if (v) v.logo = await channelLogo(v.login, v.avatar);
   vodCache.set(login, { v, exp: Date.now() + 120000 });
   if (vodCache.size > 100) vodCache.delete(vodCache.keys().next().value);
   return v;
 }
 const dur = s => { s = Number(s) || 0; const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60); return h ? h + ' h ' + String(m).padStart(2, '0') : m + ' min'; };
 const vodMeta = (v, withVideos) => {
-  const last = v.archives[0], thumb = v.thumb; // dernière rediff en vignette : même format que les lives, et pas de fond en damier derrière les avatars transparents
+  const last = v.archives[0], logo = v.logo || v.avatar;
   const lastTxt = last ? '📼 Dernière rediff : ' + new Date(last.publishedAt).toLocaleDateString('fr-FR') + (last.title ? ' · ' + last.title : '') + '\n\n' : '';
-  const m = { id: 'twitchvod:' + v.login, type: 'series', name: v.name, poster: thumb || v.avatar, posterShape: thumb ? 'landscape' : 'square', background: v.banner || thumb || undefined, ...(v.avatar ? { logo: v.avatar } : {}), description: lastTxt + (v.bio || 'Rediffusions de ' + v.name), releaseInfo: v.archives.length ? v.archives.length + ' rediffs' : undefined };
+  const m = { id: 'twitchvod:' + v.login, type: 'series', name: v.name, poster: logo, posterShape: 'square', background: v.banner || undefined, ...(logo ? { logo } : {}), description: lastTxt + (v.bio || 'Rediffusions de ' + v.name), releaseInfo: v.archives.length ? v.archives.length + ' rediffs' : undefined };
   if (!withVideos) return m;
   const vid = (n, season, i, total) => ({ id: 'twitchvod:' + v.login + ':' + n.id, title: n.title || 'Rediffusion', season, episode: i + 1, released: n.publishedAt || new Date(0).toISOString(), thumbnail: n.previewThumbnailURL || undefined, overview: [new Date(n.publishedAt).toLocaleDateString('fr-FR'), dur(n.lengthSeconds), n.game ? '🎮 ' + n.game.displayName : '', '👁 ' + fmtN(n.viewCount)].filter(Boolean).join(' · ') });
   m.videos = [...v.archives.map((n, i) => vid(n, 1, i)), ...v.highlights.map((n, i) => vid(n, 2, i))];
@@ -935,7 +989,7 @@ async function handler(req, res) {
           const ex = extraOf(seg[3]), q = (ex.get('search') || '').trim().toLowerCase(), skip = Math.max(0, parseInt(ex.get('skip'), 10) || 0);
           const all = (await followedAll(auth)).filter(x => !q || x.name.toLowerCase().includes(q) || x.login.includes(q));
           store.log({ k: 'catalog', u: pseudo || undefined, n: all.length, mesRediffs: true, dev });
-          return json(res, { metas: all.slice(skip, skip + 100).map(x => ({ id: 'twitchvod:' + x.login, type: 'series', name: x.name, poster: x.avatar, posterShape: 'square', description: x.live ? '🔴 En direct · ' + fmtN(x.viewers) + ' 👁' : 'Rediffusions de ' + x.name, releaseInfo: x.live ? '🔴 En direct' : undefined })) }, { 'Cache-Control': 'no-store' });
+          return json(res, { metas: all.slice(skip, skip + 100).map(x => ({ id: 'twitchvod:' + x.login, type: 'series', name: x.name, poster: (logoCache.get(x.login) || {}).v || x.avatar, posterShape: 'square', description: x.live ? '🔴 En direct · ' + fmtN(x.viewers) + ' 👁' : 'Rediffusions de ' + x.name, releaseInfo: x.live ? '🔴 En direct' : undefined })) }, { 'Cache-Control': 'no-store' });
         }
         if (seg[0] === 'catalog') {
           const q = (extraOf(seg[3]).get('search') || '').trim().toLowerCase().replace(/^@/, '');
@@ -1054,7 +1108,7 @@ async function handler(req, res) {
 
 module.exports = handler;
 module.exports.handler = handler;
-module.exports._t = { variantsOf, liveStream, usherUrl, metaOf, MANIFEST, absolutize, proxyList, bestProxy };
+module.exports._t = { checkerPng, channelLogo, variantsOf, liveStream, usherUrl, metaOf, MANIFEST, absolutize, proxyList, bestProxy };
 process.on('unhandledRejection', e => console.error('erreur non gérée :', e && e.message || e));
 if (require.main === module) {
   http.createServer(handler).listen(PORT, HOST, () => {
