@@ -66,6 +66,12 @@ input.bad{border-color:var(--ko);box-shadow:0 0 0 4px var(--kos);animation:shake
 .btn:hover{border-color:var(--bx);background:var(--el2);transform:translateY(-2px)}.btn:active{transform:scale(.97)}
 .btn.pr{background:linear-gradient(135deg,color-mix(in srgb,var(--a),#fff 22%),var(--ah));border-color:transparent;box-shadow:0 8px 20px -10px var(--a)}.btn.pr:hover{filter:brightness(1.1)}
 .btn:disabled{opacity:.4;cursor:not-allowed;transform:none}.btn.dg{color:#fda4af}.btn.big{padding:16px 30px;font-size:1rem}
+.actv{display:grid;gap:10px;padding:16px 18px;border-radius:16px;border:1px solid color-mix(in srgb,var(--a) 40%,transparent);background:linear-gradient(135deg,color-mix(in srgb,var(--a) 14%,transparent),transparent 70%),var(--el)}
+#actvBody{display:grid;gap:14px;margin-top:4px}.actv-h{display:flex;align-items:center;gap:10px}.actv p{color:var(--t2);font-size:.88rem;line-height:1.55}.tag{font-size:.64rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#fbbf24;border:1px solid rgba(251,191,36,.4);border-radius:99px;padding:3px 8px}
+.actv-code{font-family:'Space Grotesk',monospace;font-size:2rem;font-weight:700;letter-spacing:.22em;text-align:center;padding:14px 10px;border-radius:14px;background:rgba(0,0,0,.35);border:1px dashed var(--bx);user-select:all}
+.actv-btns{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}.actv-btns .btn{text-decoration:none;display:inline-flex;align-items:center}
+.actv-st{display:flex;align-items:center;justify-content:center;gap:10px;font-size:.86rem;color:var(--t2)}.actv-err{color:#fda4af;font-size:.86rem}
+.lnk{font:inherit;font-size:.82rem;color:var(--a2);background:none;border:0;cursor:pointer;text-decoration:underline;padding:0}
 .sp2{width:16px;height:16px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:s .7s linear infinite}@keyframes s{to{transform:rotate(360deg)}}
 .nav{display:flex;justify-content:space-between;gap:10px;margin-top:28px;padding-top:22px;border-top:1px solid var(--bs)}
 .note{padding:13px 16px;border-radius:var(--r);font-size:.85rem;border:1px solid rgba(157,92,255,.3);background:var(--as);color:#e2d4ff;transition:all .4s var(--ease)}.note.ok{background:var(--oks);border-color:rgba(52,211,153,.35);color:#86efac}.note.w{background:rgba(245,158,11,.1);border-color:rgba(245,158,11,.3);color:#fcd34d}
@@ -204,8 +210,9 @@ function body(){
  if(step===2)h='<h1>Compte Twitch <span class="hint">· facultatif</span></h1><p class="sub">Tu peux passer cette étape. Elle ne sert que si tu veux le <b>1440p</b>.</p><div class="grid">'
   +'<div class="why"><b>Pourquoi lier un compte ?</b> Twitch n\'envoie le 1440p qu\'aux personnes connectées. En liant ton compte, l\'addon demande le flux à Twitch comme si c\'était toi. Le compte sert <b>uniquement</b> à demander la vidéo (rien n\'est posté, suivi ou modifié).</div>'
   +'<div class="note'+(st.tok?' ok':'')+'" id="acctNote"></div>'
-  +'<div class="url"><input type="password" id="tokIn" placeholder="Valeur du cookie auth-token" autocomplete="off" spellcheck="false"><button class="btn pr" id="tokBtn">Lier</button><button class="btn dg" id="tokDel"'+(st.tok?'':' hidden')+'>Retirer</button></div>'
-  +'<details class="help"><summary>Où trouver mon auth-token ?</summary><ol><li>Sur Chrome ou Brave, ouvre twitch.tv et connecte-toi.</li><li>Appuie sur F12, puis ouvre l\'onglet « Application ».</li><li>À gauche : Cookies → https://www.twitch.tv.</li><li>Copie la valeur de la ligne <b>auth-token</b> et colle-la ci-dessus.</li></ol></details>'
+  +'<div class="actv"><div class="actv-h"><b>Connexion par code</b><span class="tag">Expérimental</span></div><p>Comme sur une TV : tu reçois un code, tu l\'entres sur <b>twitch.tv/activate</b> et tu autorises. Aucun cookie à copier.</p><div id="actvBody"></div></div>'
+  +'<button class="btn dg" id="tokDel" style="justify-self:start"'+(st.tok?'':' hidden')+'>Retirer le compte lié</button>'
+  +'<details class="help"><summary>Méthode avancée : coller le cookie auth-token</summary><div class="url" style="margin-top:6px"><input type="password" id="tokIn" placeholder="Valeur du cookie auth-token" autocomplete="off" spellcheck="false"><button class="btn pr" id="tokBtn">Lier</button></div><ol><li>Sur Chrome ou Brave, ouvre twitch.tv et connecte-toi.</li><li>Appuie sur F12, puis ouvre l\'onglet « Application ».</li><li>À gauche : Cookies → https://www.twitch.tv.</li><li>Copie la valeur de la ligne <b>auth-token</b> et colle-la ci-dessus.</li></ol></details>'
   +sw('hevc','Autoriser le 1440p (HEVC / AV1)','Demande à Twitch les qualités au-delà du 1080p. Il faut un compte lié, une chaîne qui diffuse en 1440p et un lecteur qui sait lire ce format. En cas de souci, coupe-le.')
   +'<span class="hint">🔒 Le jeton est vérifié auprès de Twitch, puis chiffré : il n\'est jamais affiché ni stocké en clair, et reste protégé par ton mot de passe. Il donne accès à ton compte : ne le partage avec personne.</span></div>';
  if(step===3)h='<h1>Affichage des sources</h1><p class="sub">Choisis comment les sources apparaissent dans la liste de Stremio quand tu ouvres un live. Tu pourras changer ça quand tu veux, sans réinstaller.</p><div class="grid">'
@@ -399,6 +406,7 @@ function bind(){
  if($('#fixed'))$('#fixed').onchange=e=>{st.fixed=+e.target.value};
  if($('#copy'))$('#copy').onclick=async()=>{try{await navigator.clipboard.writeText($('#link').value)}catch{$('#link').select();document.execCommand('copy')}toast('Lien copié ✓')};
  if($('#acctNote'))acct();
+ if($('#actvBody')){actvStop();actvIdle()}
  if($('#tokDel'))$('#tokDel').onclick=()=>{st.tok='';st.acct='';st.hevc=false;acct();setSw('hevc',false)};
  if($('#tokBtn'))$('#tokBtn').onclick=async()=>{const v=$('#tokIn').value.trim();if(!v)return bad('tokIn')&&toast('Colle d\'abord la valeur du cookie');const b=$('#tokBtn');b.disabled=true;b.innerHTML='<span class="sp2"></span>';
   try{const r=await api('/api/seal',{token:v});if(r.ok){st.tok=r.sealed;st.acct=r.login||'';st.hevc=true;$('#tokIn').value='';acct();setSw('hevc',true);toast('Compte lié : '+(r.login||'ok'))}else{toast(r.error||'Échec')}}catch(e){toast('Erreur : '+e.message)}
@@ -414,6 +422,22 @@ function bind(){
     b.disabled=false;b.textContent='Déverrouiller';bad('pwo',r.error||'Échec')}catch(e){b.disabled=false;b.textContent='Déverrouiller';toast('Erreur : '+e.message)}};
   $('#unlock').onclick=u;$('#pwo').onkeydown=e=>{if(e.key==='Enter')u()};$('#pwo').focus({preventScroll:true})}
 }
+let actvT=null;
+function actvStop(){if(actvT){clearTimeout(actvT);actvT=null}}
+function actvIdle(msg){const b=$('#actvBody');if(!b)return;b.innerHTML=(msg?'<div class="actv-err">'+esc(msg)+'</div>':'')+'<div class="actv-btns"><button class="btn pr" id="actvGo" type="button">'+(st.tok?'Changer de compte Twitch':'Se connecter avec Twitch')+'</button></div>';$('#actvGo').onclick=actvStart}
+async function actvStart(){const b=$('#actvBody');if(!b)return;actvStop();b.innerHTML='<div class="actv-st"><span class="sp2"></span> Demande du code…</div>';
+ let r;try{r=await api('/api/twitch/start',{})}catch(e){return actvIdle('Erreur : '+e.message)}
+ if(!r.ok)return actvIdle(r.error||'Impossible de démarrer');
+ const code=String(r.user_code||'');
+ b.innerHTML='<div class="actv-code" id="actvCode">'+esc(code)+'</div><div class="actv-btns"><a class="btn pr" href="'+esc(r.url)+'" target="_blank" rel="noopener noreferrer">Ouvrir twitch.tv/activate ↗</a><button class="btn" id="actvCopy" type="button">Copier le code</button></div><div class="actv-st"><span class="sp2"></span> En attente de ton autorisation… <button class="lnk" id="actvCancel" type="button">Annuler</button></div><span class="hint" style="text-align:center">Entre ce code sur Twitch si on te le demande, connecte-toi puis clique sur « Autoriser ». Il reste valable une trentaine de minutes.</span>';
+ $('#actvCopy').onclick=()=>{navigator.clipboard&&navigator.clipboard.writeText(code).then(()=>toast('Code copié'),()=>{})};
+ $('#actvCancel').onclick=()=>{actvStop();actvIdle()};
+ const wait=Math.max(3,r.interval||5)*1000,poll=async()=>{if(!$('#actvBody')){actvStop();return}
+  let p;try{p=await api('/api/twitch/poll',{sid:r.sid})}catch{actvT=setTimeout(poll,wait*1.5);return}
+  if(p.pending){actvT=setTimeout(poll,wait);return}
+  if(p.ok){st.tok=p.sealed;st.acct=p.login||'';st.hevc=true;acct();setSw('hevc',true);toast('Compte lié : '+(p.login||'ok'));actvIdle();return}
+  actvIdle(p.error||'Échec de la connexion')};
+ actvT=setTimeout(poll,wait)}
 function acct(){const n=$('#acctNote');if(!n)return;n.className='note'+(st.tok?' ok':'');n.innerHTML=st.tok?'Compte lié'+(st.acct?' : <b>'+esc(st.acct)+'</b>':'')+'.':'Aucun compte lié : le 1440p ne sera pas proposé.';const d=$('#tokDel');if(d)d.hidden=!st.tok}
 $('#steps').onclick=e=>{const b=e.target.closest('[data-s]');if(b)go(+b.dataset.s)};
 document.addEventListener('keydown',e=>{if(e.key!=='Enter'||e.target.tagName==='BUTTON'||(e.target.dataset&&e.target.dataset.t)||e.target.tagName==='SUMMARY'||e.target.id==='tokIn'||e.target.id==='pwo'||locked||result)return;const n=$('#next');if(n)n.click();else if($('#go'))$('#go').click();else if($('#login'))$('#login').click()});
