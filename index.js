@@ -437,6 +437,37 @@ async function liveStreams(game) { // game vide = les plus regardés de tout Twi
 const norm = t => String(t).toLowerCase().replace(/[^a-z0-9]/g, '');
 const gameOf = async q => { const k = norm(q); if (k.length < 3) return null; if (ALIAS[k]) return ALIAS[k]; const L = await Promise.race([gameList(), new Promise(r => setTimeout(() => r(GAMES), 2500))]); return L.find(x => norm(x) === k) || L.find(x => norm(x).includes(k)) || null; }; // null : ce n'est pas un jeu connu → recherche de chaîne
 const withTimeout = (p, ms, fb) => Promise.race([p, new Promise(r => setTimeout(() => r(fb), ms))]);
+// Affiche des lives avec le jeu et les spectateurs dessinés dessus (image SVG générée par l'addon, vignette incluse). Désactivable : variable POSTER_OVERLAY=0.
+const POSTER_OVERLAY = process.env.POSTER_OVERLAY !== '0';
+const xmlEsc = t => String(t || '').replace(/[<>&"']/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' }[c]));
+const clip = (t, n) => { t = String(t || ''); return t.length > n ? t.slice(0, n - 1) + '…' : t; };
+const posterCache = new Map();
+async function posterSvg(login) {
+  const c = posterCache.get(login);
+  if (c && c.exp > Date.now()) return c.v;
+  const info = await channelInfo(login);
+  if (!info || !info.live) return null;
+  let img = '';
+  try {
+    const r = await fetch(info.preview || 'https://static-cdn.jtvnw.net/previews-ttv/live_user_' + login + '-640x360.jpg', { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(4000) });
+    const b = r.ok ? Buffer.from(await r.arrayBuffer()) : null;
+    if (b && b.length < 1500000) img = 'data:' + ((r.headers.get('content-type') || 'image/jpeg').split(';')[0]) + ';base64,' + b.toString('base64');
+  } catch { /* sans vignette */ }
+  if (!img) return null;
+  const game = clip(info.game, 30), nb = '🔴 ' + fmtN(info.viewers) + ' 👁', w = 26 + nb.length * 17;
+  const v = '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="640" height="360" viewBox="0 0 640 360">' +
+    '<defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="0.85"/></linearGradient></defs>' +
+    '<image href="' + img + '" xlink:href="' + img + '" x="0" y="0" width="640" height="360" preserveAspectRatio="xMidYMid slice"/>' +
+    '<rect x="0" y="230" width="640" height="130" fill="url(#g)"/>' +
+    '<rect x="14" y="14" rx="10" ry="10" width="' + w + '" height="38" fill="#000" fill-opacity="0.7"/>' +
+    '<text x="27" y="41" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#fff">' + xmlEsc(nb) + '</text>' +
+    (game ? '<text x="18" y="338" font-family="Arial,Helvetica,sans-serif" font-size="30" font-weight="700" fill="#fff">🎮 ' + xmlEsc(game) + '</text>' : '') + '</svg>';
+  posterCache.set(login, { v, exp: Date.now() + 45000 });
+  if (posterCache.size > 150) posterCache.delete(posterCache.keys().next().value);
+  return v;
+}
+// remplace l'affiche des lives d'un catalogue par l'affiche avec le jeu et les spectateurs
+const badge = (metas, req) => !POSTER_OVERLAY ? metas : metas.map(m => /^twitch:[a-z0-9_]{3,25}$/.test(m.id || '') && String(m.releaseInfo || '').startsWith('🔴') ? { ...m, poster: originOf(req) + '/poster/' + m.id.slice(7) + '.svg?v=' + Math.floor(Date.now() / 45000) } : m);
 const catalogMeta = x => { const m = metaFromInfo(x.login, x.info); delete m.logo; return { ...m, background: undefined, name: '👁 ' + fmtN(x.info.viewers) + ' · ' + x.info.name, releaseInfo: '🔴 ' + fmtN(x.info.viewers) + ' 👁' }; };
 
 // Menu « Genre » : les catégories les plus regardées de Twitch (liste récupérée sans clé, gardée 6 h), complétées par la liste fixe.
@@ -907,6 +938,13 @@ async function handler(req, res) {
       if (S.logoV) { try { const m = /^data:(image\/(?:png|jpeg|webp));base64,(.+)$/.exec((await store.getKey('logo')) || ''); if (m) { type = m[1]; buf = Buffer.from(m[2], 'base64'); } } catch { /* logo par défaut */ } }
       return send(res, 200, type, buf || asset('logo.png'), { 'Cache-Control': 'public, max-age=300' });
     }
+    if (seg[0] === 'poster' && seg[1] && POSTER_OVERLAY) {
+      const lg = strip(seg[1]).replace(/\.svg$/, '').toLowerCase();
+      if (!LOGIN_RE.test(lg)) return send(res, 404, 'text/plain; charset=utf-8', 'Chaîne invalide');
+      const svg = await posterSvg(lg).catch(() => null);
+      if (!svg) { res.writeHead(302, { Location: 'https://static-cdn.jtvnw.net/previews-ttv/live_user_' + lg + '-640x360.jpg', 'Cache-Control': 'no-store' }); return res.end(); }
+      return send(res, 200, 'image/svg+xml', svg, { 'Cache-Control': 'public, max-age=45' });
+    }
     if (seg[0] === 'logo.svg') return send(res, 200, 'image/svg+xml', asset('logo.svg'), { 'Cache-Control': 'public, max-age=86400' });
     if (seg[0] === 'config' || seg[0] === 'configure') return send(res, 200, 'text/html; charset=utf-8', await configPage(), { 'Cache-Control': 'no-cache' });
     if (seg[0] === 'api' && seg[1] === 'profile') return json(res, await profileApi(req));
@@ -1032,15 +1070,15 @@ async function handler(req, res) {
       try {
         const L = byGame((await followedChannels(auth)).filter(x => x.info.live), extraOf(seg[3]).get('genre'), x => x.info.game); // seules les chaînes en direct : les autres apparaissent quand elles passent en ligne
         store.log({ k: 'catalog', u: pseudo || undefined, n: L.length, suivis: true, dev });
-        return json(res, { metas: L.map(catalogMeta) }, { 'Cache-Control': 'no-store' });
+        return json(res, { metas: badge(L.map(catalogMeta), req) }, { 'Cache-Control': 'no-store' });
       } catch (e) { store.incr('err'); store.log({ k: 'erreur', u: pseudo || undefined, ou: 'catalogue des chaînes suivies', msg: e.message }); return json(res, { metas: [] }); }
     }
     if (seg[0] === 'catalog' && seg[1] === 'tv' && (strip(seg[2]) === 'twitch-top' || strip(seg[2]) === 'twitch-find') && F.catalog) { // sans jeu : les plus regardés ; avec un jeu (menu ou recherche) : ses lives
       const ex = extraOf(seg[3]), genre = ex.get('genre'), q = (ex.get('search') || '').trim();
       try {
-        if (genre || !q) { const L = await liveStreams(genre || ''); store.log({ k: 'catalog', u: pseudo || undefined, n: L ? L.length : 0, jeu: genre || 'populaires', dev }); return json(res, { metas: (L || []).map(catalogMeta) }, { 'Cache-Control': 'public, s-maxage=30' }); }
+        if (genre || !q) { const L = await liveStreams(genre || ''); store.log({ k: 'catalog', u: pseudo || undefined, n: L ? L.length : 0, jeu: genre || 'populaires', dev }); return json(res, { metas: badge((L || []).map(catalogMeta), req) }, { 'Cache-Control': 'public, s-maxage=30' }); }
         const gm = q.length >= 3 ? await gameOf(q) : null;
-        if (gm) { const L = await withTimeout(liveStreams(gm), 6000, null); if (L && L.length) { store.log({ k: 'catalog', u: pseudo || undefined, n: L.length, jeu: gm, dev }); return json(res, { metas: L.map(catalogMeta) }, { 'Cache-Control': 'public, s-maxage=30' }); } }
+        if (gm) { const L = await withTimeout(liveStreams(gm), 6000, null); if (L && L.length) { store.log({ k: 'catalog', u: pseudo || undefined, n: L.length, jeu: gm, dev }); return json(res, { metas: badge(L.map(catalogMeta), req) }, { 'Cache-Control': 'public, s-maxage=30' }); } }
       } catch (e) { store.incr('err'); store.log({ k: 'erreur', u: pseudo || undefined, ou: 'catalogue des lives par jeu', msg: e.message }); }
     }
     if (seg[0] === 'catalog' && seg[1] === 'tv') {
@@ -1051,7 +1089,7 @@ async function handler(req, res) {
         if (info && !info.live) return json(res, { metas: [] }); // hors ligne : pas proposée dans les lives
         let meta = info ? metaFromInfo(search, info) : { id: 'twitch:' + search, type: 'tv', name: search, poster: 'https://static-cdn.jtvnw.net/previews-ttv/live_user_' + search + '-440x248.jpg', posterShape: 'landscape' };
         if (!info) { try { const s = (await helix('/streams', { user_login: search }))[0]; if (s) meta = metaOf(s); } catch { /* sans clés : fiche simple */ } }
-        return json(res, { metas: [meta] });
+        return json(res, { metas: badge([meta], req) });
       }
       let list = [];
       if (!F.catalog) return json(res, { metas: [] });
