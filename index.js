@@ -101,7 +101,12 @@ async function accessToken(login, playerType = 'site', clientId = GQL_CLIENT_ID,
 // Variantes de demande à Twitch pour obtenir les qualités HEVC / AV1 (1440p et plus) : on les essaie toutes et on garde la meilleure.
 const WEB = { platform: 'web', player_backend: 'mediaplayer', playlist_include_framerate: 'true', reassignments_supported: 'true', transcode_mode: 'cbr_v1' };
 const ANDROID_UA = 'Dalvik/2.1.0 (Linux; U; Android 7.1.2; SM-G977N Build/LMY48Z) tv.twitch.android.app/16.8.1/1608010';
+const TV_UA = 'Mozilla/5.0 (Linux; Android 7.1; Smart Box C1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36';
 const TV_ID = 'ue6666qo983tsx6so1t0vnawi233wa', ANDROID_ID = 'kd1unb4b3q4t58fwlpcbzcbnm76a8fp'; // identifiants publics des applications Twitch TV et Android
+// applications utilisables pour la connexion par code : le jeton n'est valable qu'avec l'identifiant qui l'a créé (préfixe « ac: » ou « tv: » dans le jeton chiffré)
+const DC_CLIENTS = [{ k: 'ac', id: ANDROID_ID, ua: ANDROID_UA }, { k: 'tv', id: TV_ID, ua: TV_UA }];
+// jeton lié : { raw, cid, ua } — les jetons « par code » (ac:/tv:) ne marchent qu'avec l'identifiant de leur application
+const tokOf = oauth => { const m = /^(ac|tv):(.+)$/.exec(oauth || ''), c = m && DC_CLIENTS.find(x => x.k === m[1]); return c ? { raw: m[2], cid: c.id, ua: c.ua } : { raw: oauth, cid: GQL_CLIENT_ID, ua: UA }; };
 // copie de la demande du lecteur web de Twitch (relevée dans Chrome) : adresse /api/v2/, include_unavailable, acmb, etc.
 const hex = n => [...Array(n)].map(() => Math.floor(Math.random() * 16).toString(16)).join('');
 const WEBV2 = (codecs, unavailable = true) => login => ({
@@ -164,16 +169,17 @@ async function liveStream(login, hevc, oauth) {
   if (!hevc && !oauth) return liveOnce(login, 'site', null);
   const ck = login + '|' + (oauth ? crypto.createHash('sha1').update(oauth).digest('hex').slice(0, 8) : ''), c = hevcCache.get(ck);
   if (c && c.exp > Date.now()) return c.v;
-  const dcm = /^ac:(.+)$/.exec(oauth || ''), raw = dcm ? dcm[1] : oauth; // connexion par code : le jeton n'est valable qu'avec l'identifiant de l'application Android
-  const DC_TRIES = [
-    { auth: 1, tok: 'site', cid: ANDROID_ID, q: { supported_codecs: 'av1,h265,h264', ...WEB } },
-    { auth: 1, tok: 'site', cid: ANDROID_ID, q: { supported_codecs: 'h265,h264' } },
-    { auth: 1, tok: 'site', cid: ANDROID_ID, v2: true, q: WEBV2('av1,h265,h264') },
-    { auth: 1, tok: 'site', cid: ANDROID_ID, v2: true, persisted: true, q: EXACT },
-  ];
+  const dcm = /^(ac|tv):(.+)$/.exec(oauth || ''), raw = dcm ? dcm[2] : oauth; // connexion par code : le jeton n'est valable qu'avec l'identifiant de l'application qui l'a créé
+  const dcc = dcm ? DC_CLIENTS.find(c => c.k === dcm[1]) : null;
+  const DC_TRIES = dcc ? [
+    { auth: 1, tok: 'site', cid: dcc.id, q: { supported_codecs: 'av1,h265,h264', ...WEB } },
+    { auth: 1, tok: 'site', cid: dcc.id, q: { supported_codecs: 'h265,h264' } },
+    { auth: 1, tok: 'site', cid: dcc.id, v2: true, q: WEBV2('av1,h265,h264') },
+    { auth: 1, tok: 'site', cid: dcc.id, v2: true, persisted: true, q: EXACT },
+  ] : [];
   const list = (oauth ? (dcm ? DC_TRIES : AUTH_TRIES) : []).concat(HEVC_TRIES), tokens = {};
   const res = await Promise.allSettled(list.map(async t => {
-    const key = t.tok + (t.cid || '') + (t.auth ? 'A' : '') + (t.persisted ? 'P' : ''), tk = await (tokens[key] ||= accessToken(login, t.tok, t.cid, { oauth: t.auth ? raw : null, persisted: t.persisted, ua: t.auth && dcm ? ANDROID_UA : undefined }));
+    const key = t.tok + (t.cid || '') + (t.auth ? 'A' : '') + (t.persisted ? 'P' : ''), tk = await (tokens[key] ||= accessToken(login, t.tok, t.cid, { oauth: t.auth ? raw : null, persisted: t.persisted, ua: t.auth && dcc ? dcc.ua : undefined }));
     const r = await liveOnce(login, t.tok, typeof t.q === 'function' ? t.q(login) : t.q, tk, t.v2);
     r.tk = tk;
     return r;
@@ -366,7 +372,7 @@ const NODE_FIELDS = 'login displayName profileImageURL(width: 300) stream { titl
 const followQuery = (field, after) => 'query Followed { currentUser { login ' + field + '(first: 100' + (after ? ', after: "' + after + '"' : '') + ') { edges { cursor node { ' + NODE_FIELDS + ' } } pageInfo { hasNextPage } } } }';
 const followCache = new Map();
 async function followPage(oauth, field, after) {
-  const r = await fetch(GQL, { method: 'POST', headers: { 'Client-ID': GQL_CLIENT_ID, Authorization: 'OAuth ' + oauth, 'Content-Type': 'application/json', 'User-Agent': UA, 'X-Device-Id': crypto.randomBytes(16).toString('hex') }, body: JSON.stringify({ operationName: 'Followed', query: followQuery(field, after) }), signal: AbortSignal.timeout(8000) });
+  const r = await fetch(GQL, { method: 'POST', headers: { 'Client-ID': tokOf(oauth).cid, Authorization: 'OAuth ' + tokOf(oauth).raw, 'Content-Type': 'application/json', 'User-Agent': tokOf(oauth).ua, 'X-Device-Id': crypto.randomBytes(16).toString('hex') }, body: JSON.stringify({ operationName: 'Followed', query: followQuery(field, after) }), signal: AbortSignal.timeout(8000) });
   if (!r.ok) throw new Error('Twitch (suivis) : HTTP ' + r.status);
   const j = await r.json().catch(() => ({})), u = j && j.data && j.data.currentUser, conn = u && u[field];
   if (!conn) throw new Error('Twitch n\'a pas renvoyé les chaînes suivies' + (j && j.errors && j.errors[0] ? ' : ' + String(j.errors[0].message).slice(0, 120) : ' (compte non reconnu ?)'));
@@ -466,7 +472,7 @@ const vodMeta = (v, withVideos) => {
 };
 async function vodToken(id, cid = GQL_CLIENT_ID, playerType = 'site', oauth = null) {
   const hd = { 'Client-ID': cid, 'Content-Type': 'application/json', 'User-Agent': UA };
-  if (oauth) { hd.Authorization = 'OAuth ' + oauth; hd['X-Device-Id'] = crypto.randomBytes(16).toString('hex'); }
+  if (oauth) { const tk = tokOf(oauth); hd['Client-ID'] = tk.cid; hd['User-Agent'] = tk.ua; hd.Authorization = 'OAuth ' + tk.raw; hd['X-Device-Id'] = crypto.randomBytes(16).toString('hex'); }
   const r = await fetch(GQL, { method: 'POST', headers: hd, signal: AbortSignal.timeout(10000), body: JSON.stringify({ operationName: 'PlaybackAccessToken', variables: { isLive: false, login: '', isVod: true, vodID: id, playerType }, query: TOKEN_QUERY }) });
   if (!r.ok) throw new Error('jeton : HTTP ' + r.status);
   const j = await r.json().catch(() => ({})), t = j && j.data && j.data.videoPlaybackAccessToken;
@@ -606,20 +612,25 @@ const tooMany = req => { const ip = store.ipOf(req), n = (hits.get(ip) || 0) + 1
 // lie le compte Twitch d'une personne : vérifie le jeton, le chiffre, renvoie la version chiffrée (qui ira dans SON lien ; rien n'est stocké)
 // connexion par code (twitch.tv/activate) : la personne autorise sur Twitch, aucun cookie à copier. Le jeton est chiffré et renvoyé, rien n'est stocké.
 const DEVICES = new Map(); // sid -> { dc, exp }
-const DC_FORM = { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': ANDROID_UA };
+const dcHeaders = ua => ({ 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': ua });
 async function deviceStart(req) {
   if (tooMany(req)) return { ok: false, error: 'trop de demandes, réessaie dans une minute' };
   if (!sealLib.available()) return { ok: false, error: 'Chiffrement non configuré : l\'administrateur doit ajouter la variable SECRET.' };
-  try {
-    const r = await fetch(ID_URL + '/oauth2/device', { method: 'POST', headers: DC_FORM, body: new URLSearchParams({ client_id: ANDROID_ID, scopes: '' }), signal: AbortSignal.timeout(10000) });
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok || !j.device_code || !j.user_code) return { ok: false, error: 'Twitch refuse la demande de code (' + (j.message || 'HTTP ' + r.status) + '). Utilise la méthode avancée.' };
-    for (const [k, v] of DEVICES) if (v.exp < Date.now()) DEVICES.delete(k);
-    if (DEVICES.size > 300) DEVICES.clear();
-    const sid = crypto.randomBytes(12).toString('base64url'), ttl = Math.min(Number(j.expires_in) || 1800, 1800);
-    DEVICES.set(sid, { dc: j.device_code, exp: Date.now() + ttl * 1000 });
-    return { ok: true, sid, user_code: String(j.user_code), url: /^https:\/\/(www\.)?twitch\.tv\//.test(j.verification_uri || '') ? j.verification_uri : 'https://www.twitch.tv/activate', interval: Math.max(3, Number(j.interval) || 5), expires_in: ttl };
-  } catch (e) { return { ok: false, error: e.message }; }
+  const errs = [];
+  // on essaie chaque application Twitch connue jusqu'à ce que l'une accepte la demande (Twitch en refuse parfois une : « invalid client »)
+  for (const c of DC_CLIENTS) {
+    try {
+      const r = await fetch(ID_URL + '/oauth2/device', { method: 'POST', headers: dcHeaders(c.ua), body: new URLSearchParams({ client_id: c.id, scopes: '' }), signal: AbortSignal.timeout(10000) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.device_code || !j.user_code) { errs.push(c.k + ' : ' + (j.message || j.error || 'HTTP ' + r.status)); continue; }
+      for (const [k, v] of DEVICES) if (v.exp < Date.now()) DEVICES.delete(k);
+      if (DEVICES.size > 300) DEVICES.clear();
+      const sid = crypto.randomBytes(12).toString('base64url'), ttl = Math.min(Number(j.expires_in) || 1800, 1800);
+      DEVICES.set(sid, { dc: j.device_code, exp: Date.now() + ttl * 1000, c });
+      return { ok: true, sid, user_code: String(j.user_code), url: /^https:\/\/(www\.)?twitch\.tv\//.test(j.verification_uri || '') ? j.verification_uri : 'https://www.twitch.tv/activate', interval: Math.max(3, Number(j.interval) || 5), expires_in: ttl };
+    } catch (e) { errs.push(c.k + ' : ' + e.message); }
+  }
+  return { ok: false, error: 'Twitch refuse la demande de code (' + errs.join(' ; ') + '). Utilise la méthode avancée.' };
 }
 async function devicePoll(req) {
   if (tooMany(req)) return { ok: false, error: 'trop de demandes, réessaie dans une minute' };
@@ -627,7 +638,7 @@ async function devicePoll(req) {
   const d = DEVICES.get(String(b.sid || ''));
   if (!d || d.exp < Date.now()) return { ok: false, expired: true, error: 'Le code a expiré : recommence.' };
   try {
-    const r = await fetch(ID_URL + '/oauth2/token', { method: 'POST', headers: DC_FORM, body: new URLSearchParams({ client_id: ANDROID_ID, scopes: '', device_code: d.dc, grant_type: 'urn:ietf:params:oauth:grant-type:device_code' }), signal: AbortSignal.timeout(10000) });
+    const r = await fetch(ID_URL + '/oauth2/token', { method: 'POST', headers: dcHeaders(d.c.ua), body: new URLSearchParams({ client_id: d.c.id, scopes: '', device_code: d.dc, grant_type: 'urn:ietf:params:oauth:grant-type:device_code' }), signal: AbortSignal.timeout(10000) });
     const j = await r.json().catch(() => ({}));
     if (!r.ok || !j.access_token) {
       const m = String(j.message || j.error || '');
@@ -637,9 +648,9 @@ async function devicePoll(req) {
     }
     const tok = String(j.access_token);
     DEVICES.delete(String(b.sid));
-    const v = await fetch(ID_URL + '/oauth2/validate', { headers: { Authorization: 'OAuth ' + tok, 'User-Agent': ANDROID_UA }, signal: AbortSignal.timeout(8000) });
+    const v = await fetch(ID_URL + '/oauth2/validate', { headers: { Authorization: 'OAuth ' + tok, 'User-Agent': d.c.ua }, signal: AbortSignal.timeout(8000) });
     const vj = v.ok ? await v.json().catch(() => ({})) : {};
-    return { ok: true, sealed: sealLib.seal('ac:' + tok), login: vj.login || '' };
+    return { ok: true, sealed: sealLib.seal(d.c.k + ':' + tok), login: vj.login || '' };
   } catch (e) { return { ok: false, error: e.message }; }
 }
 
@@ -863,7 +874,7 @@ async function handler(req, res) {
         return { n: 0 };
       });
       if (cfg.relay && F.relays) out.relais = await timed(async () => { if (!live) return { nom: null, total: proxyList().length, sansLive: true }; const b = await Promise.race([bestProxy(sample, false), new Promise((_, r) => setTimeout(() => r(new Error('aucun relais ne répond')), 7000))]); if (!b) throw new Error('aucun relais ne répond'); return { nom: b.name, total: proxyList().length }; });
-      if (cfg.tok && auth) out.compte = await timed(async () => { const t = await accessToken(sample || 'twitch', 'site', GQL_CLIENT_ID, { oauth: auth }), j = JSON.parse(t.value); if (!j.user_id) throw new Error('compte non reconnu par Twitch (jeton expiré ?)'); return { resolution: j.maximum_resolution || '?' }; });
+      if (cfg.tok && auth) out.compte = await timed(async () => { const t = await accessToken(sample || 'twitch', 'site', tokOf(auth).cid, { oauth: tokOf(auth).raw, ua: tokOf(auth).ua }), j = JSON.parse(t.value); if (!j.user_id) throw new Error('compte non reconnu par Twitch (jeton expiré ?)'); return { resolution: j.maximum_resolution || '?' }; });
       return json(res, out, { 'Cache-Control': 'no-store' });
     }
 
