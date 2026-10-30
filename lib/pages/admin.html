@@ -407,10 +407,15 @@ const v1=D.map(d=>g('d:'+d+':stream')),v2=D.map(d=>g('d:'+d+':incident')),mx=Mat
 }
 const LV={INFO:['in','INFO'],WARN:['wa','ALERTE'],ERROR:['ko','ERREUR']};
 const KC={stream:'ok',play:'ok',test:'pr',incident:'wa',erreur:'ko',install:'in'};
+// Par quoi passe la lecture : un relais (proxy), le flux de secours sans pub (adblock) ou le flux officiel de Twitch.
+function via(l){const r=String(l.relais||'');
+ if(/^Secours/i.test(r))return'<span class="pill ok">adblock</span> <span class="dim">('+esc(r.replace(/^Secours\s*/i,''))+')</span>';
+ if(!r||/officiel|aucun|coupés/i.test(r))return'<span class="pill wa">flux officiel</span> <span class="dim">(pubs possibles)</span>';
+ return'<span class="pill pr">proxy</span> <span class="dim">('+esc(r)+')</span>'}
 function msg(l){const a=[];const P=(k,v)=>v!==undefined&&v!==''&&a.push('<span class="k">'+k+'</span> '+esc(v));
  switch(l.k){
-  case'stream':a.push('<b>'+esc(l.ch)+'</b>');l.etat?a.push(esc(l.etat)):(P('relais',l.relais),P('',l.relais_ms?l.relais_ms+' ms':''));P('total',l.ms+' ms');l.plafond&&P('max',l.plafond+'p');break;
-  case'play':a.push('<b>'+esc(l.ch)+'</b> lecture auto');P('relais',l.relais);P('total',l.ms+' ms');break;
+  case'stream':a.push('cherche <b>'+esc(l.ch)+'</b>');l.etat?a.push('· '+esc(l.etat)):a.push('→ passe par '+via(l));P('total',l.ms+' ms');l.plafond&&P('max',l.plafond+'p');break;
+  case'play':a.push('lance <b>'+esc(l.ch)+'</b> → passe par '+via(l));P('total',l.ms+' ms');break;
   case'test':a.push('<b>'+esc(l.ch)+'</b> test <span class="pill '+(l.verdict==='ok'?'ok':l.verdict==='lent'?'wa':l.verdict==='hors ligne'?'':'ko')+'">'+esc(l.verdict)+'</span> '+esc(l.resume));P('qualité',l.qualite);P('segment',l.segment_ms?l.segment_ms+' ms / '+l.duree_s+' s':'');break;
   case'incident':a.push('<span class="pill '+(l.lvl==='ERROR'?'ko':l.lvl==='INFO'?'':'wa')+'">'+esc(l.type)+'</span>');l.ch&&a.push('<b>'+esc(l.ch)+'</b>');a.push(esc(l.detail));P('arrêts',l.arrets);P('bloqué',l.arret_ms?(l.arret_ms/1000).toFixed(1)+' s':'');P('qualité',l.qualite);P('tampon',l.tampon_s?l.tampon_s+' s':'');P('perdues',l.images_perdues);break;
   case'install':a.push('Installation du profil');P('réglages',l.reglages);break;
