@@ -20,43 +20,17 @@ const crypto = require('crypto');
     try {
       fs.writeFileSync(file, [
         '# Configuration de l\'addon (relis ce fichier en redémarrant l\'addon)',
+        '# Tout le reste (Cloudflare, API Twitch, relais, adresse publique, port…) se règle dans le dashboard : /admin → Paramètres → Configuration.',
         '',
         '# Mot de passe du dashboard /admin',
         'ADMIN_PASSWORD=' + pw,
         '',
-        '# Clé de chiffrement des jetons Twitch placés dans les liens d\'installation.',
-        '# Changer cette valeur invalide tous les liens avec un compte lié. Pour garder les anciens liens, remets l\'ancienne valeur de SECRET (ou d\'ADMIN_PASSWORD) utilisée sur Vercel.',
+        '# Clé de chiffrement des jetons Twitch placés dans les liens d\'installation, et des jetons saisis dans le dashboard.',
+        '# Changer cette valeur invalide tous les liens avec un compte lié (et il faut ressaisir les jetons du dashboard).',
         'SECRET=' + secret,
         '',
-        '# Clés de l\'API Twitch (facultatif) : https://dev.twitch.tv/console',
-        '#TWITCH_CLIENT_ID=',
-        '#TWITCH_CLIENT_SECRET=',
-        '',
-        '# Adresse publique de l\'addon (tunnel ou nom de domaine, en https). Vide : déduite de la requête (http://localhost:7000 en local).',
-        '#PUBLIC_URL=https://exemple.trycloudflare.com',
-        '',
-        '# Port et interface d\'écoute (0.0.0.0 = accessible depuis le réseau local, 127.0.0.1 = ce PC uniquement)',
-        '#PORT=7000',
-        '#HOST=0.0.0.0',
-        '',
-        '# Dossier du fichier data.json (stats, journal, profils, réglages)',
+        '# Dossier du fichier data.json (stats, journal, profils, réglages) : doit rester ici, il est lu avant le dashboard',
         '#DATA_DIR=./data',
-        '',
-        '# Facultatif : jeton auth-token du compte Twitch de l\'administrateur, et liste de relais (séparés par \\n, « Nom | adresse avec {channel} »)',
-        '#TWITCH_AUTH_TOKEN=',
-        '#PROXIES=',
-        '',
-        '# Morceaux vidéo : adresse du Worker Cloudflare qui les télécharge à la place de l\'addon (dossier worker/), sans slash final',
-        '#SEGMENTS_ORIGIN=https://segments.exemple.workers.dev',
-        '# 0 = interdit à l\'addon de relayer les morceaux (économise ta bande passante) ; TWITCH_SEGMENTS_PROXY : 0 = jamais d\'intermédiaire en mode auto, 1 = toujours',
-        '#SEGMENTS_ADDON=0',
-        '#TWITCH_SEGMENTS_PROXY=0',
-        '# 1 = journal de chaque requête dans la console (diagnostic)',
-        '#DEBUG_HTTP=1',
-        '# Dashboard → onglet Vidéo : consommation du Worker (Cloudflare → My Profile → API Tokens, permission « Account Analytics : Read »)',
-        '#CF_API_TOKEN=',
-        '#CF_ACCOUNT_ID=',
-        '#CF_WORKER_NAME=twitchio-segments',
         '',
       ].join('\n'));
       console.log('Fichier .env créé. Mot de passe du dashboard (/admin) : ' + pw);
@@ -74,6 +48,8 @@ const crypto = require('crypto');
 })();
 
 const store = require('./lib/store');
+const conf = require('./lib/conf');
+conf.init(); // réglages saisis dans le dashboard (Paramètres → Configuration) : appliqués avant tout le reste, ils remplacent les variables du .env
 const makeAdmin = require('./lib/admin');
 const cfgLib = require('./lib/settings');
 const fmtLib = require('./lib/format');
@@ -922,6 +898,8 @@ const mask = v => v ? 'défini' : 'absent';
 // Consommation du Worker Cloudflare (dashboard → onglet Vidéo) : API d'analyse de Cloudflare, avec un jeton « Account Analytics : Read ».
 // Variables : CF_API_TOKEN, CF_ACCOUNT_ID (32 caractères hexadécimaux), CF_WORKER_NAME (par défaut twitchio-segments). Résultat gardé 5 min.
 let cfCache = { at: 0, v: null };
+// Réglages changés dans le dashboard : on oublie ce qui avait été calculé avec les anciennes valeurs
+conf.onChange(() => { cfCache = { at: 0, v: null }; acctCache = { v: null, exp: 0 }; app = null; proxyCache.clear(); });
 async function cfUsage() {
   const tok = process.env.CF_API_TOKEN, acc = String(process.env.CF_ACCOUNT_ID || '').trim(), name = process.env.CF_WORKER_NAME || 'twitchio-segments';
   if (!tok || !acc) return { configured: false };

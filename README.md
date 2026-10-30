@@ -8,7 +8,7 @@ Addon Stremio hébergé sur ton PC : regarder des lives Twitch dans Stremio. Auc
 2. Au premier lancement, un fichier `.env` est créé à côté de `index.js` avec un mot de passe pour le dashboard et une clé de chiffrement. Le mot de passe est aussi affiché dans la console.
 3. Ouvre `http://localhost:7000/config`, choisis tes réglages, puis installe le lien obtenu dans Stremio.
 
-Sur le même PC, Stremio accepte `http://localhost:7000`. Pour tes amis (ou Stremio sur un autre appareil), il faut une adresse **https** publique : un tunnel (Cloudflare Tunnel, ngrok, Tailscale Funnel…) vers le port 7000. Mets cette adresse dans `PUBLIC_URL` du fichier `.env`, puis redémarre.
+Sur le même PC, Stremio accepte `http://localhost:7000`. Pour tes amis (ou Stremio sur un autre appareil), il faut une adresse **https** publique : un tunnel (Cloudflare Tunnel, ngrok, Tailscale Funnel…) vers le port 7000. Mets cette adresse dans le dashboard (Paramètres → Configuration → Adresse publique) du fichier `.env`, puis redémarre.
 
 ## Données (fichier JSON)
 
@@ -19,18 +19,19 @@ Tout est enregistré dans `data/data.json` : statistiques, journal, utilisateurs
 - Pour changer de dossier : variable `DATA_DIR` dans `.env`.
 - Pour sauvegarder ou déplacer l'addon : copie le dossier `data` et le fichier `.env`.
 
-## Variables (`.env`)
+## Configuration
+
+Tout se règle dans le dashboard : `/admin` → **Paramètres → Configuration** (Cloudflare et Worker, API Twitch, relais personnalisés, adresse publique, port, journal de diagnostic). Les valeurs sont enregistrées dans `data/data.json` ; les jetons et mots de passe y sont chiffrés avec `SECRET`. Le compte Twitch de l'administrateur se lie dans l'onglet **Compte Twitch**. Tout est pris en compte tout de suite, sauf `PORT` et `HOST` (au prochain démarrage).
+
+Au premier démarrage avec ce système, ce qui se trouvait déjà dans le `.env` est repris automatiquement : tu peux ensuite supprimer ces lignes du `.env`.
+
+Le fichier `.env` ne garde que :
 
 | Variable | Rôle |
 |---|---|
 | `ADMIN_PASSWORD` | mot de passe du dashboard `/admin` |
-| `SECRET` | clé de chiffrement des jetons Twitch placés dans les liens (la changer invalide ces liens) |
-| `PUBLIC_URL` | adresse publique de l'addon (https) |
-| `PORT`, `HOST` | port (7000) et interface d'écoute (`0.0.0.0` ; `127.0.0.1` pour ce PC uniquement) |
-| `DATA_DIR` | dossier de `data.json` |
-| `TWITCH_CLIENT_ID`, `TWITCH_CLIENT_SECRET` | facultatif : catalogue « Lives populaires » via l'API officielle |
-| `TWITCH_AUTH_TOKEN` | facultatif : compte Twitch de l'administrateur (sinon à lier dans le dashboard) |
-| `PROXIES` | facultatif : relais, un par ligne (séparés par `\n` dans `.env`), `Nom \| adresse` avec `{channel}` |
+| `SECRET` | clé de chiffrement des jetons Twitch placés dans les liens et des jetons saisis dans le dashboard (la changer invalide ces liens, et il faut ressaisir les jetons) |
+| `DATA_DIR` | facultatif : dossier de `data.json` (lu avant le dashboard) |
 
 ## Pages
 
