@@ -26,3 +26,13 @@ Un spectateur fait environ 1 requête par seconde (un morceau et une liste toute
 - `SEGMENTS_ADDON=0` : interdit à l'addon de relayer lui-même les morceaux (route `/s/` fermée).
 - `TWITCH_SEGMENTS_PROXY` : `0` = en mode « Automatique », jamais d'intermédiaire ; `1` = toujours.
 - `DEBUG_HTTP=1` : une ligne de journal par requête dans la console (lecteur, statut, octets, durée ; « COUPÉ » si le lecteur abandonne).
+
+## Suivre la consommation dans le dashboard
+
+Onglet **Vidéo** du dashboard (`/admin`) : lectures par mode (Cloudflare, direct, serveur de l'addon), état du Worker, vidéo encore passée par ton serveur, profils par mode et conseils. Chaque lecture du journal indique aussi « vidéo via Cloudflare ✓ » (ou directe / via l'addon).
+
+Pour y voir aussi les requêtes, les erreurs, le temps de CPU et le coût estimé du Worker, relie le dashboard à Cloudflare :
+
+1. Cloudflare → **My Profile → API Tokens → Create Token** → modèle personnalisé, permission **Account → Account Analytics → Read**.
+2. Dans le `.env` : `CF_API_TOKEN=` (le jeton) et `CF_ACCOUNT_ID=` (32 caractères, visibles dans l'adresse du tableau de bord Cloudflare). `CF_WORKER_NAME=` seulement si tu as renommé le Worker.
+3. Redémarre l'addon. Les chiffres sont mis à jour toutes les 5 minutes.

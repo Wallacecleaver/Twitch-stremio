@@ -177,6 +177,19 @@ pre{background:var(--bg2);border:1px solid var(--bs);border-radius:var(--r);padd
  <div class="sec"><div class="sh"><div class="stt"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>Tester les relais maintenant</div><div class="ctl"><input id="rch" placeholder="chaîne en direct" size="22"><button class="btn pr" id="rgo">Tester</button></div></div><div class="sb np tw" id="relout"><div class="empty">Entre une chaîne en direct puis lance le test.</div></div></div>
 </div>
 
+<div class="page" id="p-seg">
+ <div class="hero"><div><h1>Vidéo · Cloudflare</h1><p id="segSub">Qui télécharge la vidéo : l'appareil de la personne, Cloudflare, ou ce serveur.</p></div><div class="ctl"><button class="btn" id="segRef" type="button">Actualiser</button></div></div>
+ <div class="grid" id="segK"></div>
+ <div class="cols">
+  <div class="sec"><div class="sh"><div class="stt"><svg viewBox="0 0 24 24"><path d="M19.35 10.04A7.49 7.49 0 0 0 12 4C9.11 4 6.6 5.64 5.35 8.04A5.994 5.994 0 0 0 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/></svg> Consommation Cloudflare</div><span class="cnt" id="segCfSt"></span></div><div class="sb" id="segCf"></div></div>
+  <div class="sec"><div class="sh"><div class="stt"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm-1 15-4-4 1.4-1.4L11 14.2l5.6-5.6L18 10l-7 7z"/></svg> Worker</div></div><div class="sb" id="segW"></div></div>
+ </div>
+ <div class="cols c2">
+  <div class="sec"><div class="sh"><div class="stt"><svg viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5s-3 1.34-3 3 1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg> Profils par mode de téléchargement</div></div><div class="sb" id="segMix"></div></div>
+  <div class="sec"><div class="sh"><div class="stt"><svg viewBox="0 0 24 24"><path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7z"/></svg> Conseils</div></div><div class="sb" id="segTips"></div></div>
+ </div>
+</div>
+
 <div class="page" id="p-logs">
  <div class="sec"><div class="sh">
   <div class="stt"><svg viewBox="0 0 24 24"><path d="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-6 10H6v-2h8v2zm4-4H6v-2h12v2z"/></svg>Journal<span class="cnt" id="logN">0</span></div>
@@ -308,8 +321,8 @@ pre{background:var(--bg2);border:1px solid var(--bs);border-radius:var(--r);padd
 <script>
 /*{{ANNJS}}*/
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
-const IC={dash:'M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z',users:'M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5s-3 1.34-3 3 1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z',relays:'M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z',logs:'M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-6 10H6v-2h8v2zm4-4H6v-2h12v2z',acct:'M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z',diag:'M19.35 10.04A7.49 7.49 0 0 0 12 4C9.11 4 6.6 5.64 5.35 8.04A5.99 5.99 0 0 0 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM10 17l-3.5-3.5 1.41-1.41L10 14.17l4.59-4.59L16 11l-6 6z',site:'M3 5h18v14H3V5zm2 2v10h14V7H5zm2 2h6v2H7V9zm0 4h10v2H7v-2z',set:'M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58a.5.5 0 0 0 .12-.61l-1.92-3.32a.5.5 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.5.5 0 0 0-.48-.41h-3.84a.5.5 0 0 0-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.5.5 0 0 0-.59.22L2.74 8.87a.5.5 0 0 0 .12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.5.5 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.5.5 0 0 0-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z'};
-const TABS=[['dash','Dashboard'],['users','Utilisateurs'],['relays','Relais'],['logs','Journal'],['diag','Diagnostic'],['acct','Compte Twitch'],['site','Page config'],['set','Paramètres']];
+const IC={seg:'M19.35 10.04A7.49 7.49 0 0 0 12 4C9.11 4 6.6 5.64 5.35 8.04A5.994 5.994 0 0 0 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z',dash:'M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z',users:'M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5s-3 1.34-3 3 1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z',relays:'M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z',logs:'M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-6 10H6v-2h8v2zm4-4H6v-2h12v2z',acct:'M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z',diag:'M19.35 10.04A7.49 7.49 0 0 0 12 4C9.11 4 6.6 5.64 5.35 8.04A5.99 5.99 0 0 0 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM10 17l-3.5-3.5 1.41-1.41L10 14.17l4.59-4.59L16 11l-6 6z',site:'M3 5h18v14H3V5zm2 2v10h14V7H5zm2 2h6v2H7V9zm0 4h10v2H7v-2z',set:'M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58a.5.5 0 0 0 .12-.61l-1.92-3.32a.5.5 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.5.5 0 0 0-.48-.41h-3.84a.5.5 0 0 0-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.5.5 0 0 0-.59.22L2.74 8.87a.5.5 0 0 0 .12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.5.5 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.5.5 0 0 0-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z'};
+const TABS=[['dash','Dashboard'],['users','Utilisateurs'],['relays','Relais'],['seg','Vidéo'],['logs','Journal'],['diag','Diagnostic'],['acct','Compte Twitch'],['site','Page config'],['set','Paramètres']];
 $('#tabs').innerHTML=TABS.map(([k,l])=>'<button class="tab" data-k="'+k+'"><svg viewBox="0 0 24 24"><path d="'+IC[k]+'"/></svg>'+l+(k==='logs'?'<span class="c" id="errN" hidden></span>':'')+'</button>').join('');
 let S=null,paused=false,timer=null,cur='dash';try{cur=localStorage.admtab||'dash'}catch{}
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -317,7 +330,7 @@ const n=x=>Number(x||0).toLocaleString('fr-FR'),pct=(a,b)=>b?Math.round(100*a/b)
 const ago=t=>{if(!t)return'–';const s=Math.round((Date.now()-t)/1000);return s<60?'il y a '+s+' s':s<3600?'il y a '+Math.round(s/60)+' min':s<86400?'il y a '+Math.round(s/3600)+' h':'il y a '+Math.round(s/86400)+' j'};
 const dur=s=>s<3600?Math.max(1,Math.round(s/60))+' min':s<86400?(s/3600).toFixed(1)+' h':(s/86400).toFixed(1)+' j';
 const toast=(m,e)=>{const d=document.createElement('div');d.className='tt'+(e?' e':'');d.textContent=m;$('#toast').append(d);setTimeout(()=>d.remove(),3200)};
-function go(k){cur=k;try{localStorage.admtab=k}catch{}$$('.page').forEach(p=>p.classList.toggle('on',p.id==='p-'+k));$$('.tab').forEach(t=>t.classList.toggle('on',t.dataset.k===k))}
+function go(k){cur=k;try{localStorage.admtab=k}catch{}if(k==='seg'&&typeof loadSeg==='function')setTimeout(loadSeg,0);$$('.page').forEach(p=>p.classList.toggle('on',p.id==='p-'+k));$$('.tab').forEach(t=>t.classList.toggle('on',t.dataset.k===k))}
 
 let SITE0=null,SITE_OK=false;const dirty=v=>{const e=$('#sSt');e.textContent=v?'Modifications non enregistrées':'';e.classList.toggle('dirty',!!v)};const SWC=['#9d5cff','#6366f1','#0ea5e9','#10b981','#f59e0b','#ef4444','#ec4899'];let sCol='#9d5cff';
 const DEFLEGAL='Addon gratuit et non officiel · n\'héberge aucun contenu';
@@ -358,6 +371,50 @@ $('#rlAll').onclick=()=>fSave({offRelays:[]});
 loadFeat();
 const go0=go;go=function(k){go0(k);if(k==='site'&&!SITE_OK)loadSite()};
 $('#tabs').onclick=e=>{const b=e.target.closest('.tab');if(b)go(b.dataset.k)};go(cur);loadProf();
+
+const SEGN={worker:'Cloudflare',direct:'direct (appareil)',addon:'serveur de l\'addon',auto:'automatique'};
+const segPill=m=>'<span class="pill '+(m==='worker'?'ok':m==='addon'?'wa':'in')+'" title="Qui télécharge la vidéo">'+(m==='worker'?'vidéo via Cloudflare ✓':m==='addon'?'vidéo via l\'addon':'vidéo directe')+'</span>';
+const gb=b=>b>=1073741824?(b/1073741824).toFixed(2).replace('.',',')+' Go':b>=1048576?(b/1048576).toFixed(1).replace('.',',')+' Mo':b>=1024?Math.round(b/1024)+' Ko':n(b)+' o';
+const segCard=(c,ic,l,v,sub)=>'<div class="sc"><div class="si '+c+'"><svg viewBox="0 0 24 24"><path d="'+ic+'"/></svg></div><div class="sl">'+l+'</div><div class="sv">'+v+'</div><div class="ss">'+sub+'</div></div>';
+const kv=(l,v,c)=>'<div class="rk" style="grid-template-columns:1fr auto"><span>'+l+'</span><em'+(c?' style="color:'+c+'"':'')+'>'+v+'</em></div>';
+async function loadSeg(){
+ let I=null,ST=S;try{[I,ST]=await Promise.all([api('segments'),S||api('state?n=1')])}catch{toast('Chargement impossible',1);return}
+ if(!I||I.error){toast('Erreur : '+((I||{}).error||'inconnue'),1);return}
+ const st=ST.stats||{},T=ST.days&&ST.days.length?ST.days[ST.days.length-1]:'',dj=k=>st['d:'+T+':'+k]||0,w=I.worker||{},cf=I.cf||{};
+ const nW=st.seg_worker||0,nD=st.seg_direct||0,nA=st.seg_addon||0,bytes=st.seg_addon_bytes||0;
+ const wst=!w.set?['Non configuré','var(--t3)']:w.ok?['OK · '+w.ms+' ms','var(--ok)']:['Problème','var(--ko)'];
+ $('#segK').innerHTML=segCard('ok',IC.seg,'Lectures via Cloudflare',n(nW),n(dj('seg_worker'))+' aujourd\'hui')
+  +segCard('in',IC.users,'Lectures directes',n(nD),n(dj('seg_direct'))+' aujourd\'hui · l\'appareil télécharge chez Twitch')
+  +segCard(nA?'wa':'in',IC.relays,'Passées par ce serveur',n(nA),nA||bytes?gb(bytes)+' de vidéo servis ('+gb(dj('seg_addon_bytes'))+' aujourd\'hui)':'aucune vidéo ne passe par ce serveur')
+  +segCard(w.set&&w.ok?'ok':w.set?'ko':'in',IC.dash,'Worker Cloudflare','<span style="color:'+wst[1]+'">'+wst[0]+'</span>',w.set?esc(w.note||''):'SEGMENTS_ORIGIN non défini');
+ $('#segW').innerHTML=kv('Adresse',w.set?esc(I.origin.replace(/^https:\/\//,'')):'–')+kv('État',w.set?(w.ok?'répond ('+w.ms+' ms)':esc(w.note||'problème')):'non configuré',w.set?(w.ok?'var(--ok)':'var(--ko)'):'')
+  +kv('Relais de morceaux de l\'addon',I.addonAllowed?'autorisé':'interdit (SEGMENTS_ADDON=0)',I.addonAllowed?'':'var(--ok)')+kv('TWITCH_SEGMENTS_PROXY',I.env.proxy===''?'non défini':esc(I.env.proxy))+kv('Chiffrement (SECRET)',I.env.sealed?'actif':'absent',I.env.sealed?'':'var(--ko)')+kv('Journal DEBUG_HTTP',I.env.debug?'activé (bavard)':'désactivé');
+ // consommation Cloudflare
+ const rowC=(l,d)=>d?'<div class="rk" style="grid-template-columns:90px 1fr 1fr 1fr 1fr;gap:8px"><span>'+l+'</span><em>'+n(d.requests)+' req</em><em>'+n(d.errors)+' err</em><em>'+(d.cpuTimeUs!==undefined?n(Math.round(d.cpuTimeUs/1000))+' ms CPU':'–')+'</em><em>'+(d.responseBodySize!==undefined?gb(d.responseBodySize):'–')+'</em></div>':'';
+ if(!cf.configured){$('#segCfSt').textContent='non relié';$('#segCf').innerHTML='<p class="dim" style="margin:0 0 10px">Pour voir ici les requêtes, les erreurs et le coût estimé du Worker, relie le dashboard à Cloudflare (une seule fois) :</p><ol class="dim" style="margin:0 0 10px;padding-left:18px;line-height:1.7"><li>Cloudflare → <b>My Profile → API Tokens → Create Token</b> → modèle personnalisé, permission <b>Account → Account Analytics → Read</b>.</li><li>Dans le <code>.env</code> : <code>CF_API_TOKEN=</code> (le jeton) et <code>CF_ACCOUNT_ID=</code> (les 32 caractères visibles dans l\'adresse du tableau de bord Cloudflare).</li><li>Redémarre l\'addon.</li></ol><p class="dim" style="margin:0">En attendant : Cloudflare → Workers &amp; Pages → <b>'+esc(cf.name||'twitchio-segments')+'</b> → Metrics.</p>'}
+ else if(cf.error){$('#segCfSt').textContent='erreur';$('#segCf').innerHTML='<div class="note w" style="padding:10px 12px;border-radius:10px;background:var(--was);color:#fcd34d">'+esc(cf.error)+'</div><p class="dim" style="margin:10px 0 0">Vérifie le jeton (permission « Account Analytics : Read »), CF_ACCOUNT_ID et le nom du Worker (CF_WORKER_NAME).</p>'}
+ else{const m=cf.mois||{},j=cf.jour||{},reqM=m.requests||0,costReq=Math.max(0,reqM-1e7)/1e6*0.3,cpuMs=m.cpuTimeUs!==undefined?m.cpuTimeUs/1000:null,costCpu=cpuMs===null?0:Math.max(0,cpuMs-3e7)/1e6*0.02,tot=5+costReq+costCpu,free=Math.min(100,Math.round((j.requests||0)/1000));
+  $('#segCfSt').textContent='mis à jour '+ago(cf.maj);
+  $('#segCf').innerHTML='<div class="rk" style="grid-template-columns:90px 1fr 1fr 1fr 1fr;gap:8px;color:var(--t3);font-size:.75rem"><span></span><span>Requêtes</span><span>Erreurs</span><span>CPU</span><span>Envoyé</span></div>'+rowC('Aujourd\'hui',j)+rowC('7 jours',cf.semaine)+rowC('Ce mois',m)
+   +'<div style="margin-top:14px;display:grid;gap:4px">'+kv('Plan gratuit : limite du jour (100 000 req.)',free+' %',free>=80?'var(--ko)':free>=50?'var(--w)':'')+kv('Plan payant : estimation de ce mois','≈ '+tot.toFixed(2).replace('.',',')+' $ (5 $ + '+(costReq+costCpu).toFixed(2).replace('.',',')+' $)')+'</div>'
+   +'<p class="dim" style="margin:12px 0 0;font-size:.78rem">Cloudflare ne facture pas la bande passante, seulement les requêtes (10 M incluses puis 0,30 $/M) et le temps de CPU. Estimation indicative : la facture fait foi.</p>'}
+ // profils par mode
+ const mix={auto:0,direct:0,worker:0,addon:0};(ST.users||[]).forEach(u=>{const k=(u.cfg||{}).seg||'auto';mix[k]=(mix[k]||0)+1});const tot2=Object.values(mix).reduce((a,b)=>a+b,0)||1;
+ $('#segMix').innerHTML=Object.entries(mix).map(([k,v])=>'<div class="rk"><b></b><span>'+esc(SEGN[k]||k)+'</span><em>'+n(v)+'</em><div class="bar"><i style="width:'+Math.round(v/tot2*100)+'%"></i></div></div>').join('')+'<p class="dim" style="margin:10px 0 0;font-size:.78rem">« Automatique » : direct, sauf pour les lecteurs mpv/ffmpeg qui passent par le Worker s\'il existe.</p>';
+ // conseils
+ const tips=[];
+ if(!w.set)tips.push(['wa','Le Worker n\'est pas relié : ajoute SEGMENTS_ORIGIN dans le .env pour sortir la vidéo de ce serveur.']);
+ else if(!w.ok)tips.push(['ko','Le Worker ne répond pas correctement ('+esc(w.note||'')+'). Les profils réglés sur Cloudflare risquent de ne pas lire.']);
+ if(bytes>0&&w.ok)tips.push(['wa',gb(bytes)+' de vidéo sont déjà passés par ce serveur : passe les profils concernés sur « Serveur externe (Cloudflare) » ou « Direct ».']);
+ if(mix.addon>0&&!I.addonAllowed)tips.push(['ko',mix.addon+' profil(s) réglé(s) sur « via l\'addon » alors que SEGMENTS_ADDON=0 : ils retombent sur Cloudflare ou en direct.']);
+ if(I.env.proxy==='0'&&mix.auto>0)tips.push(['in','TWITCH_SEGMENTS_PROXY=0 : en mode « Automatique », aucun profil n\'utilise le Worker. Retire cette ligne pour en profiter.']);
+ if(I.env.debug)tips.push(['in','DEBUG_HTTP est activé : la console est très bavarde. Désactive-le une fois le diagnostic terminé.']);
+ if(cf.ok&&(cf.jour||{}).errors>0)tips.push(['wa',n(cf.jour.errors)+' erreur(s) du Worker aujourd\'hui : ouvre le journal de Cloudflare (Workers → Logs) pour le détail.']);
+ if(!tips.length)tips.push(['ok','Rien à signaler.']);
+ $('#segTips').innerHTML=tips.map(([c,t])=>'<div style="display:flex;gap:10px;align-items:flex-start;padding:7px 0"><span class="pill '+c+'" style="margin-top:1px">'+(c==='ok'?'OK':c==='ko'?'!':c==='wa'?'Conseil':'Info')+'</span><span>'+t+'</span></div>').join('');
+ $('#segSub').textContent=(w.set&&w.ok?'Cloudflare opérationnel':w.set?'Cloudflare : à vérifier':'Cloudflare non relié')+' · '+n(nW+nD+nA)+' lecture(s) suivies depuis le démarrage des compteurs';
+}
+$('#segRef').onclick=()=>{cfRefresh();loadSeg()};function cfRefresh(){}
 async function api(p,o){const r=await fetch('/admin/api/'+p,o);if((r.headers.get('content-type')||'').includes('html')){location.reload();return{}}return r.json()}
 const card=(c,ic,l,v,s)=>'<div class="sc"><div class="si '+c+'"><svg viewBox="0 0 24 24"><path d="'+ic+'"/></svg></div><div class="sl">'+l+'</div><div class="sv">'+v+'</div><div class="ss">'+s+'</div></div>';
 const mc=(c,ic,l,v,sub)=>'<div class="mc"><div class="si '+c+'"><svg viewBox="0 0 24 24"><path d="'+ic+'"/></svg></div><div><b>'+v+'</b><span>'+l+' · '+sub+'</span></div></div>';
@@ -415,7 +472,7 @@ function via(l){const r=String(l.relais||'');
 function msg(l){const a=[];const P=(k,v)=>v!==undefined&&v!==''&&a.push('<span class="k">'+k+'</span> '+esc(v));
  switch(l.k){
   case'stream':a.push('cherche <b>'+esc(l.ch)+'</b>');l.etat?a.push('· '+esc(l.etat)):a.push('→ passe par '+via(l));P('total',l.ms+' ms');l.plafond&&P('max',l.plafond+'p');break;
-  case'play':a.push('lance <b>'+esc(l.ch)+'</b> → passe par '+via(l));P('total',l.ms+' ms');break;
+  case'play':a.push('lance <b>'+esc(l.ch)+'</b> → passe par '+via(l));l.seg&&a.push(segPill(l.seg));P('lecteur',l.lecteur);P('total',l.ms+' ms');break;
   case'test':a.push('<b>'+esc(l.ch)+'</b> test <span class="pill '+(l.verdict==='ok'?'ok':l.verdict==='lent'?'wa':l.verdict==='hors ligne'?'':'ko')+'">'+esc(l.verdict)+'</span> '+esc(l.resume));P('qualité',l.qualite);P('segment',l.segment_ms?l.segment_ms+' ms / '+l.duree_s+' s':'');break;
   case'incident':a.push('<span class="pill '+(l.lvl==='ERROR'?'ko':l.lvl==='INFO'?'':'wa')+'">'+esc(l.type)+'</span>');l.ch&&a.push('<b>'+esc(l.ch)+'</b>');a.push(esc(l.detail));P('arrêts',l.arrets);P('bloqué',l.arret_ms?(l.arret_ms/1000).toFixed(1)+' s':'');P('qualité',l.qualite);P('tampon',l.tampon_s?l.tampon_s+' s':'');P('perdues',l.images_perdues);break;
   case'install':a.push('Installation du profil');P('réglages',l.reglages);break;

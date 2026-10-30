@@ -53,6 +53,10 @@ const crypto = require('crypto');
         '#TWITCH_SEGMENTS_PROXY=0',
         '# 1 = journal de chaque requête dans la console (diagnostic)',
         '#DEBUG_HTTP=1',
+        '# Dashboard → onglet Vidéo : consommation du Worker (Cloudflare → My Profile → API Tokens, permission « Account Analytics : Read »)',
+        '#CF_API_TOKEN=',
+        '#CF_ACCOUNT_ID=',
+        '#CF_WORKER_NAME=twitchio-segments',
         '',
       ].join('\n'));
       console.log('Fichier .env créé. Mot de passe du dashboard (/admin) : ' + pw);
@@ -915,7 +919,40 @@ async function checkStream(login, c, u, dev, auth) {
 }
 
 const mask = v => v ? 'défini' : 'absent';
-const adminRoute = makeAdmin({ send, json, relayReport, probe, check: async (login, c, u) => { const n = cfgLib.normalize(c || {}); return checkStream(login, n, u || 'admin', 'admin', n.hevc ? await ownerToken() : null); }, account, config: () => ({
+// Consommation du Worker Cloudflare (dashboard → onglet Vidéo) : API d'analyse de Cloudflare, avec un jeton « Account Analytics : Read ».
+// Variables : CF_API_TOKEN, CF_ACCOUNT_ID (32 caractères hexadécimaux), CF_WORKER_NAME (par défaut twitchio-segments). Résultat gardé 5 min.
+let cfCache = { at: 0, v: null };
+async function cfUsage() {
+  const tok = process.env.CF_API_TOKEN, acc = String(process.env.CF_ACCOUNT_ID || '').trim(), name = process.env.CF_WORKER_NAME || 'twitchio-segments';
+  if (!tok || !acc) return { configured: false };
+  if (!/^[a-f0-9]{32}$/i.test(acc) || !/^[A-Za-z0-9_-]{1,63}$/.test(name)) return { configured: true, error: 'CF_ACCOUNT_ID (32 caractères) ou CF_WORKER_NAME invalide' };
+  if (cfCache.v && Date.now() - cfCache.at < 300000) return cfCache.v;
+  const now = new Date(), iso = d => d.toISOString().replace(/\.\d+Z$/, 'Z'), url = process.env.CF_GRAPHQL_URL || 'https://api.cloudflare.com/client/v4/graphql';
+  const day0 = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())), week0 = new Date(day0 - 6 * 864e5), month0 = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  const run = async (since, fields) => {
+    const q = '{ viewer { accounts(filter: {accountTag: "' + acc + '"}) { workersInvocationsAdaptive(limit: 10000, filter: {scriptName: "' + name + '", datetime_geq: "' + iso(since) + '", datetime_leq: "' + iso(now) + '"}) { sum { ' + fields + ' } } } } }';
+    const r = await fetch(url, { method: 'POST', headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' }, body: JSON.stringify({ query: q }), signal: AbortSignal.timeout(10000) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || (j.errors && j.errors.length)) throw new Error((j.errors && j.errors[0] && j.errors[0].message) || 'HTTP ' + r.status);
+    const rows = ((((j.data || {}).viewer || {}).accounts || [])[0] || {}).workersInvocationsAdaptive || [];
+    return rows.reduce((a, x) => { for (const k of Object.keys(x.sum || {})) a[k] = (a[k] || 0) + Number(x.sum[k] || 0); return a; }, {});
+  };
+  const get = async since => { try { return await run(since, 'requests errors subrequests cpuTimeUs responseBodySize'); } catch { return run(since, 'requests errors subrequests'); } }; // champs facultatifs : repli sur les trois de base
+  let v;
+  try { const [jour, semaine, mois] = await Promise.all([get(day0), get(week0), get(month0)]); v = { configured: true, ok: true, name, jour, semaine, mois, maj: Date.now() }; }
+  catch (e) { v = { configured: true, error: String(e.message).slice(0, 160) }; }
+  cfCache = { at: Date.now(), v }; return v;
+}
+async function segmentsInfo() { // onglet « Vidéo » du dashboard : le Worker répond-il ? que consomme-t-il ?
+  const origin = segOrigin(); let worker = { set: !!origin };
+  if (origin) {
+    const t = Date.now();
+    try { const r = await fetch(origin + '/', { signal: AbortSignal.timeout(4000) }), txt = await r.text(), noKey = /SECRET manquant/.test(txt); worker = { set: true, ok: r.ok && !noKey, ms: Date.now() - t, note: noKey ? 'SECRET manquant dans le Worker' : r.ok ? 'répond' : 'HTTP ' + r.status }; }
+    catch (e) { worker = { set: true, ok: false, note: 'injoignable : ' + String(e.message).slice(0, 80) }; }
+  }
+  return { origin, worker, addonAllowed: segAddonOk(), env: { proxy: process.env.TWITCH_SEGMENTS_PROXY ?? '', debug: process.env.DEBUG_HTTP === '1', sealed: sealLib.available() }, cf: await cfUsage() };
+}
+const adminRoute = makeAdmin({ send, json, relayReport, probe, segments: segmentsInfo, check: async (login, c, u) => { const n = cfgLib.normalize(c || {}); return checkStream(login, n, u || 'admin', 'admin', n.hevc ? await ownerToken() : null); }, account, config: () => ({
   relais: allProxies(),
   rows: [
     ['Version', require('./package.json').version, null],
@@ -1095,6 +1132,7 @@ async function handler(req, res) {
         const up = await fetch(u, { headers: { 'User-Agent': UA, ...(req.headers.range ? { Range: req.headers.range } : {}) }, signal: AbortSignal.timeout(15000) });
         const buf = Buffer.from(await up.arrayBuffer()), hd = { 'Cache-Control': 'no-store' };
         res._dbg = 'amont=' + up.status;
+        store.incr('seg_addon_n'); store.incr('seg_addon_bytes', buf.length); store.incr('d:' + store.day() + ':seg_addon_bytes', buf.length);
         for (const k of ['content-range', 'accept-ranges']) if (up.headers.get(k)) hd[k] = up.headers.get(k);
         return send(res, up.status, up.headers.get('content-type') || 'application/octet-stream', buf, hd);
       } catch (e) { return send(res, 502, 'text/plain; charset=utf-8', 'Morceau indisponible'); }
@@ -1106,8 +1144,8 @@ async function handler(req, res) {
       if (F.maint) return send(res, 503, 'text/plain; charset=utf-8', 'Addon en maintenance');
       const sm = segMode(req, cfg), fin = m => pcOn(cfg) || sm !== 'direct' ? pcMaster(m, originOf(req), base, sm) : m;
       const [b, lv] = await Promise.all([cfg.relay ? bestProxy(login, cfg.hevc) : null, cfg.hevc && cfg.relay ? liveStream(login, true, auth).catch(() => null) : null]);
-      store.incr('play'); store.top(login); store.user(pseudo, { ch: login, dev: cfg.device });
-      store.log({ k: 'play', u: pseudo || undefined, ch: login, relais: b ? b.name : cfg.relay ? 'officiel (repli)' : 'officiel (relais coupés)', ms: Date.now() - t0, appareil: cfg.device || undefined, dev });
+      store.incr('play'); store.top(login); store.user(pseudo, { ch: login, dev: cfg.device }); store.incr('seg_' + sm); store.incr('d:' + store.day() + ':seg_' + sm);
+      store.log({ k: 'play', u: pseudo || undefined, ch: login, seg: sm, lecteur: String(req.headers['user-agent'] || '').slice(0, 40) || undefined, relais: b ? b.name : cfg.relay ? 'officiel (repli)' : 'officiel (relais coupés)', ms: Date.now() - t0, appareil: cfg.device || undefined, dev });
       if (b) return send(res, 200, 'application/vnd.apple.mpegurl', fin(cfgLib.filterMaster(mergedMaster(b, lv, cfg), cfg)), { 'Cache-Control': 'no-store', 'X-Relais': b.name });
       const s = await liveStream(login, cfg.hevc, auth); // aucun relais : flux officiel, servi par nous pour appliquer le plafond de qualité
       if (s.offline) return send(res, 404, 'text/plain; charset=utf-8', 'Chaîne hors ligne');
