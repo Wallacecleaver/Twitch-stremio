@@ -94,7 +94,7 @@ async function accessToken(login, playerType = 'site', clientId = GQL_CLIENT_ID,
   const headers = { 'Client-ID': clientId, 'Content-Type': 'application/json', 'User-Agent': o.ua || UA };
   if (o.oauth) { headers.Authorization = 'OAuth ' + o.oauth; headers['X-Device-Id'] = crypto.randomBytes(16).toString('hex'); }
   const body = o.persisted
-    ? { operationName: 'PlaybackAccessToken', variables: { isLive: true, login, isVod: false, vodID: '', playerType, platform: 'web' }, extensions: { persistedQuery: { version: 1, sha256Hash: PERSISTED_HASH } } }
+    ? { operationName: 'PlaybackAccessToken', variables: { isLive: true, login, isVod: false, vodID: '', playerType, platform: o.platform || 'web' }, extensions: { persistedQuery: { version: 1, sha256Hash: PERSISTED_HASH } } }
     : { operationName: 'PlaybackAccessToken', variables: { isLive: true, login, isVod: false, vodID: '', playerType }, query: TOKEN_QUERY };
   const r = await fetch(GQL, { method: 'POST', headers, signal: AbortSignal.timeout(10000), body: JSON.stringify(body) });
   if (!r.ok) throw new Error('Twitch (GQL) : HTTP ' + r.status);
@@ -260,12 +260,39 @@ async function relayReport(login) {
     try {
   const pr = await fetch(v.url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(3000) }), t = await pr.text();
   const seg = t.split(/\r?\n/).find(l => /^https?:\/\//.test(l));
-  return { qualite_testee: v.name, liste_http: pr.status, hote_liste: new URL(v.url).hostname, hote_segments: seg ? new URL(seg).hostname : null, pubs_detectees: /stitched|X-TV-TWITCH-AD|SCTE35|CUE-OUT/i.test(t) };
+  return { qualite_testee: v.name, liste_http: pr.status, hote_liste: new URL(v.url).hostname, hote_segments: seg ? new URL(seg).hostname : null, pubs_detectees: AD_RE.test(t) };
     } catch (e) { return { qualite_testee: v.name, liste_erreur: e.message }; }
   };
   const rows = await Promise.all(proxyList().map(px => askProxy(px, login).then(async r => ({ relais: px.name, ok: true, ms: r.ms, ...(await inspect(r)) }), e => ({ relais: px.name, ok: false, ms: e.ms, erreur: e.message }))));
   const direct = await liveStream(login).then(async d => d.offline ? { hors_ligne: true } : { officiel: await inspect({ text: await fetch(d.url, { headers: { 'User-Agent': UA } }).then(x => x.text()), url: d.url }) }, e => ({ officiel_erreur: e.message }));
   return { chaine: login, relais_valides: rows.filter(r => r.ok).length, sur: rows.length, flux_officiel: direct, detail: rows.filter(r => r.ok).concat(rows.filter(r => !r.ok).map(r => ({ relais: r.relais, ok: false, erreur: r.erreur }))) };
+}
+// Aucun relais ne répond : si le flux officiel contient des pubs, on redemande la chaîne à Twitch comme un autre lecteur (intégré, popout, autoplay), qui n'en a souvent pas.
+// Méthode inspirée du script Twitch HLS Proxy / TwitchAdSolutions. BACKUP_ADFREE=0 pour désactiver. Résultat de même forme qu'un relais : { name, url, text, ms }.
+const AD_RE = /stitched-ad|X-TV-TWITCH-AD|#EXTINF:[\d.]+,\s*Amazon|#EXT-X-SCTE35|CUE-OUT/i;
+async function masterHasAds(r) { // une qualité de la liste principale : sa liste de segments contient-elle une pub ?
+  const v = variantsOf(absolutize(r.text, r.url)).filter(x => !x.audio).pop();
+  if (!v) return false;
+  const t = await fetch(v.url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(3000) }).then(x => x.text());
+  return AD_RE.test(t);
+}
+async function backupSource(login) {
+  if (process.env.BACKUP_ADFREE === '0') return null;
+  const t0 = Date.now();
+  try {
+    const off = await liveOnce(login, 'site', null);
+    if (off.offline || !(await masterHasAds(off))) return null; // pas de pub sur le flux officiel : on le garde
+  } catch { return null; }
+  for (const type of ['embed', 'popout', 'autoplay']) {
+    try {
+      const tk = await accessToken(login, type, GQL_CLIENT_ID, type === 'autoplay' ? { persisted: true, platform: 'android' } : {});
+      const r = await liveOnce(login, type, null, tk);
+      if (r.offline || !isMaster(r.text) || await masterHasAds(r)) continue;
+      store.incr('backup|' + type);
+      return { name: 'Secours ' + type, url: r.url, text: r.text, ms: Date.now() - t0 };
+    } catch { /* type suivant */ }
+  }
+  return null;
 }
 const proxyCache = new Map();
 async function bestProxy(login, hevc) { // le relais valide le plus rapide (les autres requêtes sont annulées)
@@ -275,6 +302,7 @@ async function bestProxy(login, hevc) { // le relais valide le plus rapide (les 
   let v = null;
   try { v = await Promise.any(proxyList().map(px => askProxy(px, login, all.signal, hevc))); } catch { v = null; }
   all.abort();
+  if (!v && FEAT.relays !== false) v = await backupSource(login).catch(() => null); // aucun relais : flux « secours » sans pub si le flux officiel en contient
   if (v) store.incr('r|' + v.name + '|win');
   if (proxyCache.size > 200) proxyCache.clear();
   proxyCache.set(key, { v, exp: Date.now() + (v ? 15000 : 5000) });
