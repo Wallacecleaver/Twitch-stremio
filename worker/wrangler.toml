@@ -1,0 +1,7 @@
+name = "twitchio-segments"
+main = "segments.js"
+compatibility_date = "2025-01-01"
+workers_dev = true
+# Le secret SECRET se règle avec : npx wrangler secret put SECRET   (même valeur que SECRET dans le .env de l'addon ; ADMIN_PASSWORD s'il n'y a pas de SECRET)
+# Pour profiter du cache (un seul téléchargement chez Twitch par morceau, même avec beaucoup de spectateurs), ajoute un domaine à toi :
+# routes = [{ pattern = "segments.ton-domaine.fr", custom_domain = true }]
