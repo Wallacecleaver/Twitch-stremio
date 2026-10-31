@@ -21,7 +21,7 @@ Tout est enregistré dans `data/data.json` : statistiques, journal, utilisateurs
 
 ## Configuration
 
-Tout se règle dans le dashboard : `/admin` → **Paramètres → Configuration** (Cloudflare et Worker, API Twitch, relais personnalisés, adresse publique, port, journal de diagnostic). Les valeurs sont enregistrées dans `data/data.json` ; les jetons et mots de passe y sont chiffrés avec `SECRET`. Le compte Twitch de l'administrateur se lie dans l'onglet **Compte Twitch**. Tout est pris en compte tout de suite, sauf `PORT` et `HOST` (au prochain démarrage).
+Tout se règle dans le dashboard : `/admin` → **Paramètres → Configuration** (Cloudflare et Worker, API Twitch, relais personnalisés, adresse publique, port, journal de diagnostic). Les valeurs sont enregistrées dans `data/data.json` ; les jetons et mots de passe y sont chiffrés avec `SECRET`. Le compte Twitch de l'administrateur se lie dans l'onglet **Diagnostic** (section « Mon compte Twitch »). L'activation de chaque relais se fait dans l'onglet **Relais**. Tout est pris en compte tout de suite, sauf `PORT` et `HOST` (au prochain démarrage).
 
 Au premier démarrage avec ce système, ce qui se trouvait déjà dans le `.env` est repris automatiquement : tu peux ensuite supprimer ces lignes du `.env`.
 
@@ -37,7 +37,7 @@ Le fichier `.env` ne garde que :
 
 - `/manifest.json` : manifeste de l'addon
 - `/config` : chaque personne choisit un pseudo et ses réglages (qualité maximale, 60 i/s, relais sans pub, nombre de qualités fixes, audio seul, nom d'appareil) et obtient son lien d'installation. Elle peut aussi tester le serveur et lier son compte Twitch.
-- `/admin` : dashboard (lectures, part sans pub, appareils, incidents, graphique 7 jours, utilisateurs, relais, journal avec export CSV, diagnostic, réglages du site, compte Twitch lié)
+- `/admin` : dashboard en 8 onglets : Dashboard (lectures, part sans pub, appareils, incidents, graphique 7 jours), Utilisateurs, Journal (export CSV), Relais (santé et activation), Vidéo (Cloudflare, clés d'accès), Diagnostic (test d'une chaîne, lecteur de test, compte Twitch lié), Page config (réglages de /config) et Paramètres (fonctionnalités, limites, maintenance, configuration du serveur)
 - `/test/<nom d'un streamer en direct>` : indique si ce serveur obtient bien le flux du live
 - `/relais/<nom d'un streamer en direct>` : indique quels relais répondent
 
