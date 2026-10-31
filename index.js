@@ -928,7 +928,7 @@ async function checkStream(login, c, u, dev, auth) {
   if (pollMax > 2000) conseils.push('Un appel à la liste de lecture a pris ' + pollMax + ' ms : le serveur ou le réseau est lent à interroger Twitch.');
   if (ads) conseils.push(c.relay ? 'Des pubs sont présentes malgré le relais : le relais utilisé n\'a pas filtré ce flux, essaie un autre relais.' : 'Des pubs sont présentes : active « Relais sans publicité » dans les réglages.');
   if (c.relay && !b) conseils.push('Aucun relais ne répond : le flux officiel est utilisé (avec pubs possibles). Voir l\'onglet Relais.');
-  if (c.hevc && !auth) conseils.push('Le 1440p est demandé mais aucun compte n\'est lié : lie ton compte ci-dessous.');
+  if (c.hevc && !auth) conseils.push('Le 1440p est demandé mais aucun compte n\'est lié : lie ton compte dans Paramètres › Compte Twitch.');
   else if (c.hevc && live.compte && live.compte.connecte && !live.variants.some(x => x.h >= 1440)) conseils.push('Compte lié, mais cette chaîne ne diffuse pas en 1440p (ou le lecteur ne le propose pas) : essaie une chaîne qui diffuse en 1440p.');
   out.mesures = { qualite: v.name, hote: host, segments_ms: dls.map(d => d.ms), duree_s: +segDur.toFixed(1), debit_kbps: kbps, debit_annonce_kbps: annonce || undefined, marge_debit: marge ? +marge.toFixed(2) : undefined, ratio_segment: +ratio.toFixed(2), premier_octet_ms: ttfbMax, liste_ms: pollMs, liste_max_ms: pollMax, segments_avance: avance, segments_attendus: +attendu.toFixed(1), content_length: !sansLongueur, chunked: fragmente, pubs: ads, discontinuites: disc, cible_s: target || undefined };
   out.conseils = conseils;
