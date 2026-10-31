@@ -515,10 +515,10 @@ const v1=D.map(d=>g('d:'+d+':stream')),v2=D.map(d=>g('d:'+d+':incident')),mx=Mat
  $('#bydev').innerHTML=dvs.length?dvs.map(([a,b],i)=>'<div class="rk"><b>'+(i+1)+'</b><span>'+esc(a)+'</span><em>'+n(b)+'</em><div class="bar"><i style="width:'+Math.round(b/dm*100)+'%"></i></div></div>').join(''):'<div class="be">Aucune donnée</div>';
  const pr=rel/tot*100,po=off/tot*100;
  $('#donut').innerHTML='<div class="dn"><div class="dc" style="background:conic-gradient(var(--a) 0 '+pr+'%,#f59e0b '+pr+'% '+(pr+po)+'%,#52525b '+(pr+po)+'% 100%)"><b>'+pct(rel,tot)+'</b></div><div class="dg"><div><i style="background:var(--a)"></i>Relais sans pub<span>'+n(rel)+'</span></div><div><i style="background:#f59e0b"></i>Flux officiel<span>'+n(off)+'</span></div><div><i style="background:#52525b"></i>Hors ligne<span>'+n(g('stream_offline'))+'</span></div></div></div>';
- const hue=s=>{let h=0;for(const c of String(s))h=(h*31+c.charCodeAt(0))%360;return h};
+ const hue=s=>{let h=0;for(const c of String(s))h=(h*31+c.charCodeAt(0))%360;return 235+h%100};
  const fd=S.logs.filter(l=>l.k==='play').slice(0,7);
  $('#feedN').textContent=fd.length;
- $('#feed').innerHTML=fd.length?fd.map(l=>{const u=l.u||'anonyme';return '<div class="fd"><div class="av" style="background:hsl('+hue(u)+' 55% 38%)">'+esc(u.slice(0,1).toUpperCase())+'</div><div><div class="t1"><b>'+esc(u)+'</b> regarde <b>'+esc(l.ch||'?')+'</b></div><div class="t2">'+esc(l.relais||'–')+(l.appareil?' · '+esc(l.appareil):'')+(l.ms?' · '+l.ms+' ms':'')+'</div></div><div class="tr">'+ago(l.t)+'</div></div>'}).join(''):'<div class="empty">Aucune lecture pour le moment.</div>';
+ $('#feed').innerHTML=fd.length?fd.map(l=>{const u=l.u||'anonyme';return '<div class="fd"><div class="av" style="background:linear-gradient(135deg,hsl('+hue(u)+' 62% 46%),hsl('+(hue(u)+28)+' 62% 34%))">'+esc(u.slice(0,1).toUpperCase())+'</div><div><div class="t1"><b>'+esc(u)+'</b> regarde <b>'+esc(l.ch||'?')+'</b></div><div class="t2">'+esc(l.relais||'–')+(l.appareil?' · '+esc(l.appareil):'')+(l.ms?' · '+l.ms+' ms':'')+'</div></div><div class="tr">'+ago(l.t)+'</div></div>'}).join(''):'<div class="empty">Aucune lecture pour le moment.</div>';
  $('#heroSub').textContent=new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'})+' · mis à jour à '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
  renderUsers();
  // relais
@@ -571,10 +571,10 @@ function renderUsers(){
  const q=$('#usq').value.toLowerCase().trim(),so=$('#usS').value;
  let L=all.filter(u=>(!q||u.pseudo.includes(q)||(u.dev||'').toLowerCase().includes(q))&&(usF==='all'||(usF==='act'&&act(u))||(usF==='inc'&&u.inc)||(usF==='pro'&&u.prof)));
  L.sort((a,b)=>so==='n'?b.n-a.n:so==='inc'?b.inc-a.inc:so==='az'?a.pseudo.localeCompare(b.pseudo):(b.last||0)-(a.last||0));
- const hue=t=>{let h=0;for(const c of String(t))h=(h*31+c.charCodeAt(0))%360;return h};
+ const hue=t=>{let h=0;for(const c of String(t))h=(h*31+c.charCodeAt(0))%360;return 235+h%100};
  const chips=c=>c?[c.cap?'max '+c.cap+'p':'qualité max',c.fps60?'60 i/s':'30 i/s',c.relay?'relais sans pub':'sans relais',c.hevc?'1440p':'',c.pc?'mode ordinateur':'',c.audio?'audio':'',c.fixed+' fixe'+(c.fixed>1?'s':'')].filter(Boolean):['réglages par défaut'];
  $('#users').innerHTML=L.length?L.map(u=>{const pf=u.prof,st=live(u)?'on':act(u)?'rc':'';
-  return '<div class="uc"><div class="uh"><div class="av" style="background:hsl('+hue(u.pseudo)+' 55% 38%)">'+esc(u.pseudo.slice(0,1).toUpperCase())+'<i class="'+st+'"></i></div><div><b>'+esc(u.pseudo)+'</b><span>'+esc(u.dev||'appareil non précisé')+'</span></div><div class="ub">'+(pf?'<span class="pill '+(pf.pw?'ok':'wa')+'">'+(pf.pw?'mot de passe':'sans mot de passe')+'</span>':'<span class="pill">lien simple</span>')+(pf&&pf.compte?'<span class="pill in">compte lié</span>':'')+'</div></div>'+
+  return '<div class="uc"><div class="uh"><div class="av" style="background:linear-gradient(135deg,hsl('+hue(u.pseudo)+' 62% 46%),hsl('+(hue(u.pseudo)+28)+' 62% 34%))">'+esc(u.pseudo.slice(0,1).toUpperCase())+'<i class="'+st+'"></i></div><div><b>'+esc(u.pseudo)+'</b><span>'+esc(u.dev||'appareil non précisé')+'</span></div><div class="ub">'+(pf?'<span class="pill '+(pf.pw?'ok':'wa')+'">'+(pf.pw?'mot de passe':'sans mot de passe')+'</span>':'<span class="pill">lien simple</span>')+(pf&&pf.compte?'<span class="pill in">compte lié</span>':'')+'</div></div>'+
   '<div class="us"><div><b>'+n(u.n)+'</b><span>Lectures</span></div><div><b>'+(u.inc?'<span style="color:var(--wa)">'+n(u.inc)+'</span>':'0')+'</b><span>Incidents</span></div><div><b>'+(u.last?ago(u.last).replace('il y a ',''):'–')+'</b><span>Activité</span></div></div>'+
   '<div class="ul"><span>Dernière chaîne : <b>'+esc(u.ch||'–')+'</b></span>'+(pf&&pf.maj?'<span>Profil modifié le '+new Date(pf.maj).toLocaleDateString('fr-FR')+'</span>':'')+'</div>'+
   '<div class="ch">'+chips(u.cfg).map(x=>'<span>'+esc(x)+'</span>').join('')+'</div>'+
