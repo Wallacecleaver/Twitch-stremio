@@ -848,7 +848,8 @@ async function report(req, dev) {
 async function checkStream(login, c, u, dev, auth) {
   if (!LOGIN_RE.test(login)) return { verdict: 'erreur', erreur: 'nom de chaîne invalide' };
   const out = { chaine: login, verdict: 'ok', etapes: [], pseudo: u || undefined }, t0 = Date.now();
-  const step = (nom, ok, detail) => out.etapes.push({ nom, ok, detail, ms: Date.now() - t0 });
+  let tl = t0; // durée propre à chaque étape (et non cumulée depuis le début)
+  const step = (nom, ok, detail) => { const n = Date.now(); out.etapes.push({ nom, ok, detail, ms: n - tl }); tl = n; };
   const finish = (verdict, resume, extra = {}) => {
     out.verdict = verdict; out.resume = resume;
     const lvl = verdict === 'ok' ? 'INFO' : verdict === 'lent' || verdict === 'hors ligne' ? 'WARN' : 'ERROR';
@@ -911,7 +912,14 @@ async function checkStream(login, c, u, dev, auth) {
   const kbps = Math.round(dls.reduce((a, d) => a + d.octets * 8 / 1000 / (d.ms / 1000), 0) / dls.length), msMoy = Math.round(dls.reduce((a, d) => a + d.ms, 0) / dls.length), ttfbMax = Math.max(...dls.map(d => d.ttfb));
   const d0 = dls[dls.length - 1], sansLongueur = dls.some(d => !d.len), fragmente = dls.some(d => /chunked/i.test(d.te || ''));
   step('Segments', ratio < 1, dls.map(d => d.ms + ' ms / ' + d.dur.toFixed(1) + ' s (' + Math.round(d.octets / 1024) + ' Ko)').join(' · ') + ' · ' + kbps + ' kb/s · hôte ' + host);
-  step('En-têtes du segment', !sansLongueur, (d0.len ? 'Content-Length ' + Math.round(Number(d0.len) / 1024) + ' Ko' : 'pas de Content-Length') + (fragmente ? ' · transfert fragmenté (chunked)' : '') + (d0.type ? ' · ' + d0.type : '') + (d0.ranges ? ' · Accept-Ranges ' + d0.ranges : ''));
+  step('En-têtes (chez Twitch)', true, (d0.len ? 'Content-Length ' + Math.round(Number(d0.len) / 1024) + ' Ko' : 'pas de Content-Length') + (fragmente ? ' · transfert fragmenté (chunked)' : '') + (d0.type ? ' · ' + d0.type : '') + (d0.ranges ? ' · Accept-Ranges ' + d0.ranges : ''));
+  // chemin réel des segments pour un lecteur mpv/ffmpeg : c'est LUI qui compte, pas ce que Twitch envoie à ce serveur
+  const envP = process.env.TWITCH_SEGMENTS_PROXY, sm = segMode({ headers: { 'user-agent': 'libmpv' } }, c), voulu = (c.seg && c.seg !== 'auto') || envP === '1';
+  let wl = null, whyDirect = '';
+  if (sm === 'worker') { try { const r = await fetch(segOrigin() + '/s/' + sealLib.seal(last.url) + segExt(last.url), { signal: AbortSignal.timeout(8000) }); await r.arrayBuffer(); wl = { status: r.status, len: r.headers.get('content-length') }; } catch (e) { wl = { err: e.message }; } }
+  if (sm === 'direct' && voulu) whyDirect = !sealLib.available() ? 'SECRET absent, donc pas de chiffrement des liens' : c.seg === 'addon' ? 'clé d\'accès ' + akeys.check(c.akey).why : c.seg === 'worker' ? 'SEGMENTS_ORIGIN (Worker Cloudflare) non configuré' : 'TWITCH_SEGMENTS_PROXY=1 ne suffit pas sans Worker (SEGMENTS_ORIGIN) : le passage par ce serveur exige une clé d\'accès dans le profil (mode ordinateur › « Via le serveur de l\'addon »)';
+  const tailleOk = sm === 'addon' || (sm === 'worker' && !!(wl && wl.len)) || (sm === 'direct' && !sansLongueur);
+  step('Segments côté lecteur (mpv)', tailleOk, sm === 'addon' ? 'via ce serveur : la taille (Content-Length) est toujours annoncée' : sm === 'worker' ? 'via le Worker Cloudflare : ' + (wl && wl.err ? 'injoignable (' + wl.err + ')' : 'HTTP ' + wl.status + (wl.len ? ' · Content-Length ' + Math.round(Number(wl.len) / 1024) + ' Ko' : ' · pas de Content-Length')) : 'direct chez Twitch' + (sansLongueur ? ' : sans taille' : '') + (whyDirect ? ' · le relais voulu n\'est PAS actif : ' + whyDirect : ''));
   const annonce = Math.round((v.bw || 0) / 1000), marge = annonce ? kbps / annonce : 0;
   if (annonce) step('Débit', marge >= 1.5, 'annoncé par Twitch ' + (annonce / 1000).toFixed(1) + ' Mb/s · mesuré ' + (kbps / 1000).toFixed(1) + ' Mb/s (marge ×' + marge.toFixed(1) + ')');
   if (ads) step('Publicité', false, 'marqueurs de pub détectés dans la liste');
@@ -923,20 +931,21 @@ async function checkStream(login, c, u, dev, auth) {
   if (ratio >= 1) conseils.push('Les segments arrivent plus lentement qu\'ils ne se lisent : baisse le plafond de qualité, ou utilise un relais de segments (Worker Cloudflare / « Via le serveur de l\'addon ») si ce PC a une connexion limitée.');
   else if (ratio >= .6) conseils.push('Marge faible sur les segments (' + Math.round(ratio * 100) + ' % du temps de lecture) : essaie une qualité plus basse pour stabiliser.');
   if (annonce && marge < 1.5) conseils.push('Le débit mesuré (' + (kbps / 1000).toFixed(1) + ' Mb/s) est proche du débit de la qualité testée (' + (annonce / 1000).toFixed(1) + ' Mb/s) : choisis une qualité inférieure.');
-  if (sansLongueur || fragmente) conseils.push('Les segments n\'ont pas de Content-Length' + (fragmente ? ' (transfert fragmenté)' : '') + ' : mpv/ffmpeg (Stremio PC) peut croire que le flux se termine et le recharger. Passe par le relais de segments (TWITCH_SEGMENTS_PROXY=1 ou Worker Cloudflare), qui renvoie la taille.');
+  if (!tailleOk && sm === 'direct') conseils.push(whyDirect ? 'Le relais de segments est demandé mais inactif (' + whyDirect + ') : les segments arrivent donc sans taille à mpv/ffmpeg (Stremio PC), qui peut croire que le flux se termine et le recharger. Le plus simple : dashboard › Vidéo › créer une clé d\'accès, puis sur /config (mode ordinateur) choisir « Via le serveur de l\'addon » et coller la clé.' : 'Les segments arrivent sans taille (Content-Length) à mpv/ffmpeg (Stremio PC), qui peut croire que le flux se termine et le recharger. Active le mode ordinateur sur /config avec « Via le serveur de l\'addon » (clé d\'accès créée dans Vidéo) ou un Worker Cloudflare.');
+  if (sm === 'worker' && !tailleOk) conseils.push('Le Worker Cloudflare ne renvoie pas la taille des segments : ' + ((wl && wl.err) || 'vérifie SEGMENTS_ORIGIN et le SECRET du Worker (dashboard › Vidéo)') + '.');
   if (ttfbMax > 1500) conseils.push('Le premier octet met ' + ttfbMax + ' ms à arriver : la latence vers ' + host + ' est élevée (réseau ou région du serveur).');
   if (pollMax > 2000) conseils.push('Un appel à la liste de lecture a pris ' + pollMax + ' ms : le serveur ou le réseau est lent à interroger Twitch.');
   if (ads) conseils.push(c.relay ? 'Des pubs sont présentes malgré le relais : le relais utilisé n\'a pas filtré ce flux, essaie un autre relais.' : 'Des pubs sont présentes : active « Relais sans publicité » dans les réglages.');
   if (c.relay && !b) conseils.push('Aucun relais ne répond : le flux officiel est utilisé (avec pubs possibles). Voir l\'onglet Relais.');
   if (c.hevc && !auth) conseils.push('Le 1440p est demandé mais aucun compte n\'est lié : lie ton compte dans Paramètres › Compte Twitch.');
   else if (c.hevc && live.compte && live.compte.connecte && !live.variants.some(x => x.h >= 1440)) conseils.push('Compte lié, mais cette chaîne ne diffuse pas en 1440p (ou le lecteur ne le propose pas) : essaie une chaîne qui diffuse en 1440p.');
-  out.mesures = { qualite: v.name, hote: host, segments_ms: dls.map(d => d.ms), duree_s: +segDur.toFixed(1), debit_kbps: kbps, debit_annonce_kbps: annonce || undefined, marge_debit: marge ? +marge.toFixed(2) : undefined, ratio_segment: +ratio.toFixed(2), premier_octet_ms: ttfbMax, liste_ms: pollMs, liste_max_ms: pollMax, segments_avance: avance, segments_attendus: +attendu.toFixed(1), content_length: !sansLongueur, chunked: fragmente, pubs: ads, discontinuites: disc, cible_s: target || undefined };
+  out.mesures = { qualite: v.name, hote: host, segments_ms: dls.map(d => d.ms), duree_s: +segDur.toFixed(1), debit_kbps: kbps, debit_annonce_kbps: annonce || undefined, marge_debit: marge ? +marge.toFixed(2) : undefined, ratio_segment: +ratio.toFixed(2), premier_octet_ms: ttfbMax, liste_ms: pollMs, liste_max_ms: pollMax, segments_avance: avance, segments_attendus: +attendu.toFixed(1), content_length: !sansLongueur, chunked: fragmente, chemin: sm, taille_ok: tailleOk, pubs: ads, discontinuites: disc, cible_s: target || undefined };
   out.conseils = conseils;
   const extra = { qualite: v.name, hote: host, segment_ms: msMoy, duree_s: +segDur.toFixed(1), debit_kbps: kbps, pubs: ads || undefined, sans_longueur: sansLongueur || undefined };
   if (avance <= 0) return finish('bloque', 'Le flux est figé : la liste de lecture n\'avance pas.', extra);
   if (ratio >= 1) return finish('bloque', 'Les segments arrivent plus lentement qu\'ils ne se lisent (' + Math.max(...dls.map(d => d.ms)) + ' ms pour ' + segDur.toFixed(1) + ' s) : coupures probables.', extra);
   if (ratio >= .6 || ads || regress || tenue < .7) return finish('lent', ads ? 'Des pubs sont présentes dans ce flux.' : regress ? 'La liste de lecture a reculé : Twitch a changé de serveur, reprises probables.' : tenue < .7 ? 'La liste avance moins vite que prévu (' + avance + ' segments au lieu de ≈' + attendu.toFixed(0) + ') : flux irrégulier.' : 'Les segments arrivent juste à temps (' + Math.max(...dls.map(d => d.ms)) + ' ms pour ' + segDur.toFixed(1) + ' s) : risque de saccades.', extra);
-  return finish('ok', 'Flux sain : segments en ' + msMoy + ' ms en moyenne pour ' + segDur.toFixed(1) + ' s de vidéo' + (sansLongueur ? ' (mais sans Content-Length, voir les conseils)' : '') + '.', extra);
+  return finish('ok', 'Flux sain : segments en ' + msMoy + ' ms en moyenne pour ' + segDur.toFixed(1) + ' s de vidéo' + (!tailleOk ? ' (mais les segments arrivent sans taille au lecteur, voir les conseils)' : '') + '.', extra);
 }
 
 const mask = v => v ? 'défini' : 'absent';
