@@ -54,6 +54,7 @@ const makeAdmin = require('./lib/admin');
 const cfgLib = require('./lib/settings');
 const fmtLib = require('./lib/format');
 const sealLib = require('./lib/seal');
+const akeys = require('./lib/akeys');
 const siteLib = require('./lib/site');
 
 const PORT = process.env.PORT || 7000;
@@ -307,7 +308,8 @@ const pcOn = cfg => !!(cfg && cfg.pc && sealLib.available());
 // Lecteurs mpv/ffmpeg (Nuvio, Stremio PC…) : Twitch envoie ses morceaux en « chunked » sans taille, ce qui peut les faire se reconnecter sans fin (option ffmpeg reconnect_streamed).
 // Pour eux, les listes de qualité et les morceaux peuvent passer par un intermédiaire qui annonce la taille. Qui télécharge les morceaux ? (réglage « seg » de la personne)
 //   direct : l'appareil, chez Twitch (aucune charge pour l'addon) · worker : SEGMENTS_ORIGIN (Cloudflare Worker, voir worker/) · addon : ce serveur (consomme sa bande passante)
-//   auto : direct, sauf pour les lecteurs mpv/ffmpeg (ou TWITCH_SEGMENTS_PROXY=1) qui passent par le worker s'il existe, sinon par l'addon (SEGMENTS_ADDON=0 l'interdit). TWITCH_SEGMENTS_PROXY=0 : toujours direct en auto.
+//   addon : seulement avec une clé d'accès valide dans le profil (lib/akeys.js) ; SEGMENTS_ADDON=0 l'interdit à tout le monde
+//   auto : direct, sauf pour les lecteurs mpv/ffmpeg (ou TWITCH_SEGMENTS_PROXY=1) qui passent par le worker s'il existe, sinon direct. TWITCH_SEGMENTS_PROXY=0 : toujours direct en auto.
 const segOrigin = () => String(process.env.SEGMENTS_ORIGIN || '').replace(/\/+$/, '');
 const segWorkerOk = () => /^https:\/\/[^\s/]+$/.test(segOrigin()) && sealLib.available();
 const segAddonOk = () => process.env.SEGMENTS_ADDON !== '0';
@@ -315,12 +317,14 @@ const NOUA = { headers: {} }; // au moment de lister les sources, le lecteur n'e
 function segMode(req, cfg) { // 'direct' | 'worker' | 'addon'
   if (!sealLib.available()) return 'direct';
   const want = (cfg && cfg.seg) || 'auto', env = process.env.TWITCH_SEGMENTS_PROXY;
-  const relayed = () => (segWorkerOk() ? 'worker' : segAddonOk() ? 'addon' : 'direct');
+  const viaWorker = () => (segWorkerOk() ? 'worker' : 'direct');
+  // la vidéo ne passe par CE serveur qu'avec une clé d'accès valide (créée dans le dashboard) ; sinon Cloudflare, ou direct
+  const viaAddon = () => (segAddonOk() && akeys.check(cfg && cfg.akey).ok ? 'addon' : viaWorker());
   if (want === 'direct') return 'direct';
-  if (want === 'worker') return segWorkerOk() ? 'worker' : 'direct';
-  if (want === 'addon') return segAddonOk() ? 'addon' : segWorkerOk() ? 'worker' : 'direct';
+  if (want === 'worker') return viaWorker();
+  if (want === 'addon') return viaAddon();
   if (env === '0') return 'direct';
-  return env === '1' || /libmpv|mpv|ffmpeg|lavf/i.test(String((req.headers || {})['user-agent'] || '')) ? relayed() : 'direct';
+  return env === '1' || /libmpv|mpv|ffmpeg|lavf/i.test(String((req.headers || {})['user-agent'] || '')) ? viaWorker() : 'direct';
 }
 const segExt = u => { const m = /\.(ts|mp4|m4s|aac|m4a|cmfv|cmfa)(?:$|\?)/i.exec(String(u).split('#')[0]); return m ? '.' + m[1].toLowerCase() : ''; };
 const segUrl = (origin, base, u, mode) => (mode === 'worker' ? segOrigin() : origin + base) + '/s/' + sealLib.seal(u) + segExt(u);
@@ -928,9 +932,9 @@ async function segmentsInfo() { // onglet « Vidéo » du dashboard : le Worker 
     try { const r = await fetch(origin + '/', { signal: AbortSignal.timeout(4000) }), txt = await r.text(), noKey = /SECRET manquant/.test(txt); worker = { set: true, ok: r.ok && !noKey, ms: Date.now() - t, note: noKey ? 'SECRET manquant dans le Worker' : r.ok ? 'répond' : 'HTTP ' + r.status }; }
     catch (e) { worker = { set: true, ok: false, note: 'injoignable : ' + String(e.message).slice(0, 80) }; }
   }
-  return { origin, worker, addonAllowed: segAddonOk(), env: { proxy: process.env.TWITCH_SEGMENTS_PROXY ?? '', debug: process.env.DEBUG_HTTP === '1', sealed: sealLib.available() }, cf: await cfUsage() };
+  return { origin, worker, mix: await akeys.mix(), addonAllowed: segAddonOk(), env: { proxy: process.env.TWITCH_SEGMENTS_PROXY ?? '', debug: process.env.DEBUG_HTTP === '1', sealed: sealLib.available() }, cf: await cfUsage() };
 }
-const adminRoute = makeAdmin({ send, json, relayReport, probe, segments: segmentsInfo, check: async (login, c, u) => { const n = cfgLib.normalize(c || {}); return checkStream(login, n, u || 'admin', 'admin', n.hevc ? await ownerToken() : null); }, account, config: () => ({
+const adminRoute = makeAdmin({ send, json, relayReport, probe, segments: segmentsInfo, akeys, check: async (login, c, u) => { const n = cfgLib.normalize(c || {}); return checkStream(login, n, u || 'admin', 'admin', n.hevc ? await ownerToken() : null); }, account, config: () => ({
   relais: allProxies(),
   rows: [
     ['Version', require('./package.json').version, null],
@@ -989,8 +993,15 @@ async function profileApi(req) {
   if (pseudo.length < 2) return { ok: false, error: 'Pseudo trop court (2 caractères minimum)' };
   const cfg = cfgLib.normalize(b.cfg);
   if (cfg.tok && !sealLib.open(cfg.tok)) cfg.tok = '';
+  if (cfg.seg === 'addon') { // vidéo relayée par ce serveur : clé d'accès obligatoire
+    const ck = akeys.check(cfg.akey);
+    if (!ck.ok) return { ok: false, bad: 'akey', error: cfg.akey ? 'Clé d\'accès ' + ck.why + ' : demande-en une à l\'administrateur.' : 'Une clé d\'accès est nécessaire pour passer par ce serveur : demande-la à l\'administrateur.' };
+    const used = await akeys.usedBy(ck.id, id0);
+    if (used >= ck.rec.max) return { ok: false, bad: 'akey', error: 'Cette clé est déjà utilisée par ' + used + ' profil' + (used > 1 ? 's' : '') + ' (maximum ' + ck.rec.max + ').' };
+  }
   const id = id0 || crypto.randomBytes(16).toString('base64url');
   await store.setKey('p:' + id, JSON.stringify({ pseudo, cfg, pw: npw ? pwHash(npw) : old.pw, maj: Date.now() }));
+  akeys.forget();
   store.log({ k: 'config', u: pseudo, niveau: 'INFO', reglages: summary(cfg), action: id0 ? 'modifiée' : 'créée' });
   return { ok: true, id, pseudo };
 }
@@ -1047,6 +1058,7 @@ async function handler(req, res) {
     if (seg[0] === 'logo.svg') return send(res, 200, 'image/svg+xml', asset('logo.svg'), { 'Cache-Control': 'public, max-age=86400' });
     if (seg[0] === 'config' || seg[0] === 'configure') return send(res, 200, 'text/html; charset=utf-8', await configPage(), { 'Cache-Control': 'no-cache' });
     if (seg[0] === 'api' && seg[1] === 'profile') return json(res, await profileApi(req));
+    if (seg[0] === 'api' && seg[1] === 'akey' && req.method === 'GET') { if (tooMany(req)) return json(res, { ok: false, why: 'trop de demandes' }); const ck = akeys.check(new URL(req.url, 'http://x').searchParams.get('k')); return json(res, ck.ok ? { ok: true } : { ok: false, why: ck.why }); }
     if (seg[0] === 'api' && seg[1] === 'seal' && req.method === 'POST') return json(res, await sealToken(req));
     if (seg[0] === 'api' && seg[1] === 'twitch' && seg[2] === 'start' && req.method === 'POST') return json(res, await deviceStart(req));
     if (seg[0] === 'api' && seg[1] === 'twitch' && seg[2] === 'poll' && req.method === 'POST') return json(res, await devicePoll(req));
@@ -1103,6 +1115,8 @@ async function handler(req, res) {
       return send(res, 200, 'application/vnd.apple.mpegurl', body, { 'Cache-Control': 'no-store' });
     }
     if (seg[0] === 's' && seg[1] && !segAddonOk()) return send(res, 403, 'text/plain; charset=utf-8', 'Relais de morceaux désactivé sur ce serveur (SEGMENTS_ADDON=0)');
+    const akChk = seg[0] === 's' && seg[1] ? akeys.check(cfg.akey) : null;
+    if (akChk && !akChk.ok) return send(res, 403, 'text/plain; charset=utf-8', 'Clé d\'accès requise pour passer par ce serveur (' + akChk.why + ')');
     if (seg[0] === 's' && seg[1]) { // morceau de vidéo relayé avec sa taille (lecteurs mpv/ffmpeg) ; l'adresse est chiffrée par nous : ce n'est pas un relais ouvert
       const u = sealLib.open(strip(seg[1]).replace(/\.[a-z0-9]{2,4}$/i, ''));
       if (!u || !/^https:\/\//.test(u)) return send(res, 400, 'text/plain; charset=utf-8', 'Lien invalide');
@@ -1110,7 +1124,7 @@ async function handler(req, res) {
         const up = await fetch(u, { headers: { 'User-Agent': UA, ...(req.headers.range ? { Range: req.headers.range } : {}) }, signal: AbortSignal.timeout(15000) });
         const buf = Buffer.from(await up.arrayBuffer()), hd = { 'Cache-Control': 'no-store' };
         res._dbg = 'amont=' + up.status;
-        store.incr('seg_addon_n'); store.incr('seg_addon_bytes', buf.length); store.incr('d:' + store.day() + ':seg_addon_bytes', buf.length);
+        store.incr('seg_addon_n'); store.incr('seg_addon_bytes', buf.length); store.incr('akn:' + akChk.id); store.incr('akb:' + akChk.id, buf.length); store.incr('d:' + store.day() + ':seg_addon_bytes', buf.length);
         for (const k of ['content-range', 'accept-ranges']) if (up.headers.get(k)) hd[k] = up.headers.get(k);
         return send(res, up.status, up.headers.get('content-type') || 'application/octet-stream', buf, hd);
       } catch (e) { return send(res, 502, 'text/plain; charset=utf-8', 'Morceau indisponible'); }

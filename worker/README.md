@@ -36,3 +36,9 @@ Pour y voir aussi les requêtes, les erreurs, le temps de CPU et le coût estim�
 1. Cloudflare → **My Profile → API Tokens → Create Token** → modèle personnalisé, permission **Account → Account Analytics → Read**.
 2. Dans le dashboard, onglet **Vidéo** → carte « Consommation Cloudflare » : colle le jeton et l'ID de compte (32 caractères, visibles dans l'adresse du tableau de bord Cloudflare), puis « Relier Cloudflare ». Le nom du Worker se change dans Paramètres → Configuration, seulement si tu l'as renommé.
 3. Les chiffres sont mis à jour toutes les 5 minutes.
+
+## Clés d'accès au serveur
+
+Faire passer la vidéo par **le serveur de l'addon** (réglage « Via le serveur de l'addon » dans `/config`, avec le mode ordinateur) demande une **clé d'accès** créée dans le dashboard : onglet **Vidéo → Clés d'accès au serveur**. Chaque clé a un nom, une durée de validité et un nombre maximum de profils (1 = une seule personne). Tu peux la désactiver ou la supprimer à tout moment, et voir combien de vidéo elle a fait passer.
+
+Sans clé valide, la vidéo ne passe jamais par ton serveur : elle est téléchargée par le Worker Cloudflare s'il est configuré, sinon directement chez Twitch. Les modes « Direct » et « Cloudflare » n'ont pas besoin de clé.

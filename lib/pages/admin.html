@@ -188,6 +188,12 @@ pre{background:var(--bg2);border:1px solid var(--bs);border-radius:var(--r);padd
   <div class="sec"><div class="sh"><div class="stt"><svg viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5s-3 1.34-3 3 1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg> Profils par mode de téléchargement</div></div><div class="sb" id="segMix"></div></div>
   <div class="sec"><div class="sh"><div class="stt"><svg viewBox="0 0 24 24"><path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7z"/></svg> Conseils</div></div><div class="sb" id="segTips"></div></div>
  </div>
+<div class="sec" id="segKeys"><div class="sh"><div class="stt"><svg viewBox="0 0 24 24"><path d="M12.65 10A5.99 5.99 0 0 0 7 6c-3.31 0-6 2.69-6 6s2.69 6 6 6a5.99 5.99 0 0 0 5.65-4H17v4h4v-4h2v-4H12.65zM7 14c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"/></svg> Clés d'accès au serveur</div><span class="cnt" id="akCnt"></span></div><div class="sb">
+  <p class="dim" style="margin:0 0 14px">Pour faire passer sa vidéo par <b>ce serveur</b> (réglage « Via le serveur de l'addon » dans /config), une personne doit entrer une clé créée ici. Sans clé valide, sa vidéo est téléchargée directement chez Twitch ou par le Worker Cloudflare : ton serveur n'en porte rien.</p>
+  <div class="sform" style="margin-bottom:14px"><div class="sf"><label for="akName">Pour qui ?</label><input type="text" id="akName" maxlength="40" placeholder="ex. Julien" autocomplete="off"></div><div class="sf"><label for="akDays">Durée de validité</label><select id="akDays"><option value="0">Sans limite</option><option value="7">7 jours</option><option value="30">30 jours</option><option value="90">90 jours</option></select></div><div class="sf"><label for="akMax">Profils maximum avec cette clé</label><input type="text" id="akMax" value="1" inputmode="numeric" maxlength="3" autocomplete="off"><small>1 = une seule personne (la clé ne peut pas être partagée).</small></div></div>
+  <div class="ctl"><button class="btn pr" id="akNewBtn" type="button">Créer la clé</button></div>
+  <div id="akNew"></div><div id="akList" style="margin-top:16px"></div>
+ </div></div>
 </div>
 
 <div class="page" id="p-logs">
@@ -331,7 +337,7 @@ const n=x=>Number(x||0).toLocaleString('fr-FR'),pct=(a,b)=>b?Math.round(100*a/b)
 const ago=t=>{if(!t)return'–';const s=Math.round((Date.now()-t)/1000);return s<60?'il y a '+s+' s':s<3600?'il y a '+Math.round(s/60)+' min':s<86400?'il y a '+Math.round(s/3600)+' h':'il y a '+Math.round(s/86400)+' j'};
 const dur=s=>s<3600?Math.max(1,Math.round(s/60))+' min':s<86400?(s/3600).toFixed(1)+' h':(s/86400).toFixed(1)+' j';
 const toast=(m,e)=>{const d=document.createElement('div');d.className='tt'+(e?' e':'');d.textContent=m;$('#toast').append(d);setTimeout(()=>d.remove(),3200)};
-function go(k){cur=k;try{localStorage.admtab=k}catch{}if(k==='seg'&&typeof loadSeg==='function')setTimeout(loadSeg,0);$$('.page').forEach(p=>p.classList.toggle('on',p.id==='p-'+k));$$('.tab').forEach(t=>t.classList.toggle('on',t.dataset.k===k))}
+function go(k){cur=k;try{localStorage.admtab=k}catch{}if(k==='seg'&&typeof loadSeg==='function')setTimeout(()=>{loadSeg();loadKeys()},0);$$('.page').forEach(p=>p.classList.toggle('on',p.id==='p-'+k));$$('.tab').forEach(t=>t.classList.toggle('on',t.dataset.k===k))}
 
 let SITE0=null,SITE_OK=false;const dirty=v=>{const e=$('#sSt');e.textContent=v?'Modifications non enregistrées':'';e.classList.toggle('dirty',!!v)};const SWC=['#9d5cff','#6366f1','#0ea5e9','#10b981','#f59e0b','#ef4444','#ec4899'];let sCol='#9d5cff';
 const DEFLEGAL='Addon gratuit et non officiel · n\'héberge aucun contenu';
@@ -399,13 +405,13 @@ async function loadSeg(){
    +'<div style="margin-top:14px;display:grid;gap:4px">'+kv('Plan gratuit : limite du jour (100 000 req.)',free+' %',free>=80?'var(--ko)':free>=50?'var(--w)':'')+kv('Plan payant : estimation de ce mois','≈ '+tot.toFixed(2).replace('.',',')+' $ (5 $ + '+(costReq+costCpu).toFixed(2).replace('.',',')+' $)')+'</div>'
    +'<p class="dim" style="margin:12px 0 0;font-size:.78rem">Cloudflare ne facture pas la bande passante, seulement les requêtes (10 M incluses puis 0,30 $/M) et le temps de CPU. Estimation indicative : la facture fait foi.</p><div class="ctl" style="margin-top:12px"><button class="btn" id="cfUnlink" type="button">Délier Cloudflare</button></div>'}
  // profils par mode
- const mix={auto:0,direct:0,worker:0,addon:0};(ST.users||[]).forEach(u=>{const k=(u.cfg||{}).seg||'auto';mix[k]=(mix[k]||0)+1});const tot2=Object.values(mix).reduce((a,b)=>a+b,0)||1;
+ const mix=Object.assign({auto:0,direct:0,worker:0,addon:0},I.mix||{});const tot2=Object.values(mix).reduce((a,b)=>a+b,0)||1;
  $('#segMix').innerHTML=Object.entries(mix).map(([k,v])=>'<div class="rk"><b></b><span>'+esc(SEGN[k]||k)+'</span><em>'+n(v)+'</em><div class="bar"><i style="width:'+Math.round(v/tot2*100)+'%"></i></div></div>').join('')+'<p class="dim" style="margin:10px 0 0;font-size:.78rem">« Automatique » : direct, sauf pour les lecteurs mpv/ffmpeg qui passent par le Worker s\'il existe.</p>';
  // conseils
  const tips=[];
  if(!w.set)tips.push(['wa','Le Worker n\'est pas relié : renseigne son adresse dans la carte « Worker » ci-dessus pour sortir la vidéo de ce serveur.']);
  else if(!w.ok)tips.push(['ko','Le Worker ne répond pas correctement ('+esc(w.note||'')+'). Les profils réglés sur Cloudflare risquent de ne pas lire.']);
- if(bytes>0&&w.ok)tips.push(['wa',gb(bytes)+' de vidéo sont déjà passés par ce serveur : passe les profils concernés sur « Serveur externe (Cloudflare) » ou « Direct ».']);
+ if(bytes>0&&w.ok)tips.push(['wa',gb(bytes)+' de vidéo sont déjà passés par ce serveur : vérifie dans « Clés d\'accès » qui les utilise, ou désactive la clé.']);
  if(mix.addon>0&&!I.addonAllowed)tips.push(['ko',mix.addon+' profil(s) réglé(s) sur « via l\'addon » alors que le relais de vidéo par ce serveur est interdit (Paramètres → Configuration) : ils retombent sur Cloudflare ou en direct.']);
  if(I.env.proxy==='0'&&mix.auto>0)tips.push(['in','Le mode « Automatique » est réglé sur « Toujours direct » (Paramètres → Configuration) : aucun profil n\'utilise le Worker. Remets-le par défaut pour en profiter.']);
  if(I.env.debug)tips.push(['in','DEBUG_HTTP est activé : la console est très bavarde. Désactive-le une fois le diagnostic terminé.']);
@@ -414,7 +420,7 @@ async function loadSeg(){
  $('#segTips').innerHTML=tips.map(([c,t])=>'<div style="display:flex;gap:10px;align-items:flex-start;padding:7px 0"><span class="pill '+c+'" style="margin-top:1px">'+(c==='ok'?'OK':c==='ko'?'!':c==='wa'?'Conseil':'Info')+'</span><span>'+t+'</span></div>').join('');
  $('#segSub').textContent=(w.set&&w.ok?'Cloudflare opérationnel':w.set?'Cloudflare : à vérifier':'Cloudflare non relié')+' · '+n(nW+nD+nA)+' lecture(s) suivies depuis le démarrage des compteurs';
 }
-$('#segRef').onclick=()=>{cfRefresh();loadSeg()};function cfRefresh(){}
+$('#segRef').onclick=()=>{cfRefresh();loadSeg();loadKeys()};function cfRefresh(){}
 
 /* ---- Configuration du serveur (remplace le .env) ---- */
 const envPost=b=>api('env',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(b)});
@@ -457,6 +463,25 @@ $('#segW').onclick=async e=>{
  const b=e.target.closest('#wLink');if(!b)return;
  try{if(envDone(await envPost({values:{SEGMENTS_ORIGIN:$('#wOrigin').value}}),'Worker enregistré'))loadSeg()}catch{toast('Impossible',1)}
 };
+
+const akPost=b=>api('akeys',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(b)});
+const akDate=t=>t?new Date(t).toLocaleDateString('fr-FR',{day:'numeric',month:'short',year:'numeric'}):'sans limite';
+const akCopy=async t=>{try{await navigator.clipboard.writeText(t);toast('Clé copiée')}catch{toast('Copie impossible : sélectionne la clé à la main',1)}};
+function akRender(V,created){
+ const K=V.keys||[];$('#akCnt').textContent=K.length?K.filter(k=>k.status==='ok').length+' active(s) / '+K.length:'aucune clé';
+ $('#akNew').innerHTML=created?'<div style="margin-top:14px;padding:14px 16px;border-radius:12px;border:1px solid var(--ok);background:rgba(34,197,94,.08)"><div class="dim" style="font-size:.78rem;margin-bottom:6px">Nouvelle clé : donne-la à la personne (elle l\'entre dans /config)</div><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><code style="font-size:1.25rem;letter-spacing:.06em;font-weight:700" id="akBig">'+esc(created)+'</code><button class="btn" type="button" data-akcopy="'+esc(created)+'">Copier</button></div></div>':'';
+ $('#akList').innerHTML=K.length?K.map(k=>{const pill=k.status==='ok'?'<span class="pill ok">active</span>':k.status==='off'?'<span class="pill wa">désactivée</span>':'<span class="pill ko">expirée</span>';
+  return '<div class="rk" style="grid-template-columns:minmax(90px,1fr) minmax(150px,auto) auto auto auto auto;gap:12px;align-items:center;padding:10px 0"><span><b>'+esc(k.name)+'</b><br><small class="dim">'+(k.profiles.length?esc(k.profiles.join(', ')):'aucun profil')+' · créée '+akDate(k.created)+' · expire : '+akDate(k.exp)+'</small></span>'
+  +'<span><code>'+esc(k.key)+'</code> <button class="btn" type="button" style="padding:3px 9px;font-size:.74rem" data-akcopy="'+esc(k.key)+'">Copier</button></span>'+pill
+  +'<span class="dim">'+k.profiles.length+' / '+k.max+' profil(s)</span><span class="dim">'+gb(k.bytes)+'</span>'
+  +'<span style="display:flex;gap:6px"><button class="btn" type="button" data-aktog="'+esc(k.id)+'">'+(k.off?'Réactiver':'Désactiver')+'</button><button class="btn dg" type="button" data-akdel="'+esc(k.id)+'">Supprimer</button></span></div>'}).join(''):'<p class="dim" style="margin:0">Aucune clé pour l\'instant : personne ne peut faire passer sa vidéo par ce serveur.</p>';
+}
+async function loadKeys(){try{akRender(await api('akeys'))}catch{toast('Clés : chargement impossible',1)}}
+$('#akNewBtn').onclick=async()=>{const b=$('#akNewBtn');b.disabled=true;try{const r=await akPost({op:'create',name:$('#akName').value,days:+$('#akDays').value,max:+$('#akMax').value||1});if(!r.ok)toast(r.error||'Création impossible',1);else{$('#akName').value='';akRender(r,r.created);toast('Clé créée')}}catch{toast('Création impossible',1)}b.disabled=false};
+$('#segKeys').onclick=async e=>{const c=e.target.closest('[data-akcopy]'),t=e.target.closest('[data-aktog]'),d=e.target.closest('[data-akdel]');
+ if(c)return akCopy(c.dataset.akcopy);
+ if(t){const r=await akPost({op:'toggle',id:t.dataset.aktog});r.ok?akRender(r):toast(r.error||'Impossible',1);return}
+ if(d){if(!confirm('Supprimer cette clé ? Les profils qui l\'utilisent ne pourront plus faire passer leur vidéo par ce serveur.'))return;const r=await akPost({op:'remove',id:d.dataset.akdel});r.ok?akRender(r):toast(r.error||'Impossible',1)}};
 async function api(p,o){const r=await fetch('/admin/api/'+p,o);if((r.headers.get('content-type')||'').includes('html')){location.reload();return{}}return r.json()}
 const card=(c,ic,l,v,s)=>'<div class="sc"><div class="si '+c+'"><svg viewBox="0 0 24 24"><path d="'+ic+'"/></svg></div><div class="sl">'+l+'</div><div class="sv">'+v+'</div><div class="ss">'+s+'</div></div>';
 const mc=(c,ic,l,v,sub)=>'<div class="mc"><div class="si '+c+'"><svg viewBox="0 0 24 24"><path d="'+ic+'"/></svg></div><div><b>'+v+'</b><span>'+l+' · '+sub+'</span></div></div>';
