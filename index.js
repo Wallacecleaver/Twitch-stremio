@@ -152,7 +152,7 @@ function variantsOf(txt) {
       const audio = /audio_only/i.test(g || '') || /audio/i.test(name) || (!res && /audio/i.test(L));
       if (audio) name = 'Audio seul';
       else if (!/\d{3,4}p/.test(name)) name = h ? h + 'p' + (fps > 30 ? fps : '') : (g && g !== 'chunked' ? g : bw ? (Number(bw[1]) / 1e6).toFixed(1) + ' Mb/s' : 'Source');
-      variants.push({ name, url: lines[i + 1].trim(), h, fps, audio });
+      variants.push({ name, url: lines[i + 1].trim(), h, fps, audio, bw: bw ? Number(bw[1]) : 0 });
     }
   }
   return variants;
@@ -722,11 +722,14 @@ const account = {
     const tok = await ownerToken(), src = tok ? ((await store.getKey('acct').catch(() => null)) ? 'dashboard' : 'variable TWITCH_AUTH_TOKEN') : null;
     const out = { lie: !!tok, source: src, stockage: store.persistent, chiffrement: sealLib.available() };
     if (!tok) return out;
+    const tk = tokOf(tok); // jeton « par code » (ac:/tv:) : il ne marche qu'avec l'identifiant et l'agent de son application
+    out.methode = /^(ac|tv):/.test(tok) ? 'connexion par code' : 'cookie auth-token';
     try {
-      const v = await fetch('https://id.twitch.tv/oauth2/validate', { headers: { Authorization: 'OAuth ' + tok, 'User-Agent': UA }, signal: AbortSignal.timeout(8000) });
+      const v = await fetch(ID_URL + '/oauth2/validate', { headers: { Authorization: 'OAuth ' + tk.raw, 'User-Agent': tk.ua }, signal: AbortSignal.timeout(8000) });
       if (v.status === 401) { out.erreur = 'Twitch refuse ce jeton (expiré ou révoqué) : relie ton compte.'; return out; }
       const j = await v.json(); out.login = j.login; out.user_id = j.user_id;
-      if (channel && LOGIN_RE.test(channel)) { const t = await accessToken(channel, 'site', GQL_CLIENT_ID, { oauth: tok }); const info = JSON.parse(t.value); out.resolution_max = info.maximum_resolution || '?'; out.connecte = !!info.user_id; }
+      if (j.expires_in) out.expire_jours = Math.floor(j.expires_in / 86400);
+      if (channel && LOGIN_RE.test(channel)) { const t = await accessToken(channel, 'site', tk.cid, { oauth: tk.raw, ua: tk.ua }); const info = JSON.parse(t.value); out.resolution_max = info.maximum_resolution || '?'; out.connecte = !!info.user_id; }
     } catch (e) { out.erreur = e.message; }
     return out;
   },
@@ -739,6 +742,12 @@ const account = {
     if (!r.ok) return { ok: false, error: 'Twitch ne répond pas (HTTP ' + r.status + ')' };
     await store.setKey('acct', sealLib.seal(tok)); acctCache = { v: null, exp: 0 };
     const j = await r.json(); return { ok: true, login: j.login };
+  },
+  deviceStart(req) { return deviceStart(req); },
+  async devicePoll(req) { // même flux que /config, mais le jeton est stocké (chiffré) pour les essais de l'administrateur au lieu d'être renvoyé
+    const r = await devicePoll(req);
+    if (r.ok && r.sealed) { await store.setKey('acct', r.sealed); acctCache = { v: null, exp: 0 }; return { ok: true, login: r.login }; }
+    return r;
   },
   async sealed() { const t = await ownerToken(); return t && sealLib.available() ? sealLib.seal(t) : null; },
   async unlink() { await store.delKey('acct'); acctCache = { v: null, exp: 0 }; return { ok: true }; },
@@ -864,8 +873,8 @@ async function checkStream(login, c, u, dev, auth) {
   const v = vars[0];
   if (!v) { step('Qualité', false, 'aucune qualité disponible avec tes réglages'); return finish('erreur', 'Aucune qualité ne correspond à ton plafond.'); }
   step('Qualité testée', true, v.name);
-  const seqs = [], polls = [];
-  let last = null, ads = false, host = '';
+  const seqs = [], polls = [], times = [], sleep = ms => new Promise(r => setTimeout(r, ms));
+  let last = null, lastSegs = [], ads = false, host = '', target = 0, disc = 0, regress = false;
   const rd = async () => {
     const t = Date.now();
     const r = await fetch(v.url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(5000) });
@@ -874,28 +883,60 @@ async function checkStream(login, c, u, dev, auth) {
     const seq = Number((txt.match(/#EXT-X-MEDIA-SEQUENCE:(\d+)/) || [])[1] || 0), L = txt.split(/\r?\n/), segs = [];
     for (let i = 0; i < L.length; i++) if (L[i].startsWith('#EXTINF:') && /^https?:\/\//.test(L[i + 1] || '')) segs.push({ dur: parseFloat(L[i].slice(8)) || 2, url: L[i + 1].trim() });
     if (/stitched|X-TV-TWITCH-AD|SCTE35|CUE-OUT/i.test(txt)) ads = true;
-    seqs.push(seq + segs.length); polls.push(Date.now() - t); last = segs[segs.length - 1] || last;
+    target = Number((txt.match(/#EXT-X-TARGETDURATION:(\d+)/) || [])[1] || target || 0);
+    if (/#EXT-X-DISCONTINUITY/.test(txt)) disc++;
+    const end = seq + segs.length;
+    if (seqs.length && end < seqs[seqs.length - 1]) regress = true; // la liste « recule » : bascule de serveur côté Twitch
+    seqs.push(end); polls.push(Date.now() - t); times.push(Date.now());
+    if (segs.length) { lastSegs = segs; last = segs[segs.length - 1]; }
     if (last) host = new URL(last.url).hostname;
   };
-  try { await rd(); await new Promise(r => setTimeout(r, 2500)); await rd(); await new Promise(r => setTimeout(r, 2500)); await rd(); }
+  try { for (let i = 0; i < 4; i++) { if (i) await sleep(2000); await rd(); } }
   catch (e) { step('Liste de lecture', false, e.message); return finish('bloque', 'La liste de lecture ne répond pas : ' + e.message); }
-  const avance = seqs[seqs.length - 1] - seqs[0], pollMs = Math.round(polls.reduce((a, x) => a + x, 0) / polls.length);
-  step('Liste de lecture', avance > 0, avance > 0 ? '+' + avance + ' segments en 5 s · ' + pollMs + ' ms par appel' : 'la liste ne bouge plus (flux figé)');
+  const span = (times[times.length - 1] - times[0]) / 1000, avance = seqs[seqs.length - 1] - seqs[0];
+  const pollMs = Math.round(polls.reduce((a, x) => a + x, 0) / polls.length), pollMax = Math.max(...polls);
+  const segDur = lastSegs.length ? lastSegs.reduce((a, x) => a + x.dur, 0) / lastSegs.length : 2, attendu = span / segDur, tenue = attendu > 0 ? avance / attendu : 1;
+  step('Liste de lecture', avance > 0 && tenue >= .7 && !regress, avance > 0 ? '+' + avance + ' segments en ' + span.toFixed(1) + ' s (attendu ≈ ' + attendu.toFixed(1) + ') · ' + pollMs + ' ms par appel (max ' + pollMax + ')' + (target ? ' · durée cible ' + target + ' s' : '') + (regress ? ' · la liste a reculé' : '') : 'la liste ne bouge plus (flux figé)');
   if (!last) return finish('erreur', 'Aucun segment dans la liste de lecture.');
-  let dl = null;
-  try {
-    const t = Date.now(), r = await fetch(last.url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(8000) }), buf = Buffer.from(await r.arrayBuffer());
-    if (!r.ok) throw new Error('segment HTTP ' + r.status);
-    dl = { ms: Date.now() - t, octets: buf.length };
-  } catch (e) { step('Segment', false, e.message); return finish('bloque', 'Le segment vidéo ne se télécharge pas : ' + e.message, { hote: host }); }
-  const ratio = dl.ms / (last.dur * 1000), kbps = Math.round(dl.octets * 8 / 1000 / (dl.ms / 1000));
-  step('Segment', ratio < 1, dl.ms + ' ms pour ' + last.dur.toFixed(1) + ' s de vidéo (' + Math.round(dl.octets / 1024) + ' Ko, ' + kbps + ' kb/s) · hôte ' + host);
+  // on télécharge les deux derniers segments : un seul échantillon ne dit rien de la régularité
+  const dls = [];
+  for (const sg of lastSegs.slice(-2)) {
+    try {
+      const t = Date.now(), r = await fetch(sg.url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(8000) }), ttfb = Date.now() - t, buf = Buffer.from(await r.arrayBuffer());
+      if (!r.ok) throw new Error('segment HTTP ' + r.status);
+      dls.push({ ms: Date.now() - t, ttfb, octets: buf.length, dur: sg.dur, len: r.headers.get('content-length'), te: r.headers.get('transfer-encoding'), type: r.headers.get('content-type') || '', ranges: r.headers.get('accept-ranges') || '' });
+    } catch (e) { step('Segment', false, e.message); return finish('bloque', 'Le segment vidéo ne se télécharge pas : ' + e.message, { hote: host }); }
+  }
+  const ratios = dls.map(d => d.ms / (d.dur * 1000)), ratio = Math.max(...ratios);
+  const kbps = Math.round(dls.reduce((a, d) => a + d.octets * 8 / 1000 / (d.ms / 1000), 0) / dls.length), msMoy = Math.round(dls.reduce((a, d) => a + d.ms, 0) / dls.length), ttfbMax = Math.max(...dls.map(d => d.ttfb));
+  const d0 = dls[dls.length - 1], sansLongueur = dls.some(d => !d.len), fragmente = dls.some(d => /chunked/i.test(d.te || ''));
+  step('Segments', ratio < 1, dls.map(d => d.ms + ' ms / ' + d.dur.toFixed(1) + ' s (' + Math.round(d.octets / 1024) + ' Ko)').join(' · ') + ' · ' + kbps + ' kb/s · hôte ' + host);
+  step('En-têtes du segment', !sansLongueur, (d0.len ? 'Content-Length ' + Math.round(Number(d0.len) / 1024) + ' Ko' : 'pas de Content-Length') + (fragmente ? ' · transfert fragmenté (chunked)' : '') + (d0.type ? ' · ' + d0.type : '') + (d0.ranges ? ' · Accept-Ranges ' + d0.ranges : ''));
+  const annonce = Math.round((v.bw || 0) / 1000), marge = annonce ? kbps / annonce : 0;
+  if (annonce) step('Débit', marge >= 1.5, 'annoncé par Twitch ' + (annonce / 1000).toFixed(1) + ' Mb/s · mesuré ' + (kbps / 1000).toFixed(1) + ' Mb/s (marge ×' + marge.toFixed(1) + ')');
   if (ads) step('Publicité', false, 'marqueurs de pub détectés dans la liste');
-  const extra = { qualite: v.name, hote: host, segment_ms: dl.ms, duree_s: last.dur, debit_kbps: kbps, pubs: ads || undefined };
+  if (disc) step('Discontinuités', true, 'la liste signale ' + disc + ' coupure(s) de timeline (normal en cas de pub ou de changement de serveur)');
+  // conseils : ce qu'il faut changer, d'après les mesures
+  const conseils = [];
+  if (avance <= 0) conseils.push('La liste de lecture est figée : la chaîne a peut-être coupé son flux, ou le serveur Twitch contacté est bloqué. Relance dans une minute.');
+  if (regress) conseils.push('La liste de lecture a reculé pendant le test : Twitch a changé de serveur. Une reprise ou un rechargement du flux dans le lecteur est probable.');
+  if (ratio >= 1) conseils.push('Les segments arrivent plus lentement qu\'ils ne se lisent : baisse le plafond de qualité, ou utilise un relais de segments (Worker Cloudflare / « Via le serveur de l\'addon ») si ce PC a une connexion limitée.');
+  else if (ratio >= .6) conseils.push('Marge faible sur les segments (' + Math.round(ratio * 100) + ' % du temps de lecture) : essaie une qualité plus basse pour stabiliser.');
+  if (annonce && marge < 1.5) conseils.push('Le débit mesuré (' + (kbps / 1000).toFixed(1) + ' Mb/s) est proche du débit de la qualité testée (' + (annonce / 1000).toFixed(1) + ' Mb/s) : choisis une qualité inférieure.');
+  if (sansLongueur || fragmente) conseils.push('Les segments n\'ont pas de Content-Length' + (fragmente ? ' (transfert fragmenté)' : '') + ' : mpv/ffmpeg (Stremio PC) peut croire que le flux se termine et le recharger. Passe par le relais de segments (TWITCH_SEGMENTS_PROXY=1 ou Worker Cloudflare), qui renvoie la taille.');
+  if (ttfbMax > 1500) conseils.push('Le premier octet met ' + ttfbMax + ' ms à arriver : la latence vers ' + host + ' est élevée (réseau ou région du serveur).');
+  if (pollMax > 2000) conseils.push('Un appel à la liste de lecture a pris ' + pollMax + ' ms : le serveur ou le réseau est lent à interroger Twitch.');
+  if (ads) conseils.push(c.relay ? 'Des pubs sont présentes malgré le relais : le relais utilisé n\'a pas filtré ce flux, essaie un autre relais.' : 'Des pubs sont présentes : active « Relais sans publicité » dans les réglages.');
+  if (c.relay && !b) conseils.push('Aucun relais ne répond : le flux officiel est utilisé (avec pubs possibles). Voir l\'onglet Relais.');
+  if (c.hevc && !auth) conseils.push('Le 1440p est demandé mais aucun compte n\'est lié : lie ton compte ci-dessous.');
+  else if (c.hevc && live.compte && live.compte.connecte && !live.variants.some(x => x.h >= 1440)) conseils.push('Compte lié, mais cette chaîne ne diffuse pas en 1440p (ou le lecteur ne le propose pas) : essaie une chaîne qui diffuse en 1440p.');
+  out.mesures = { qualite: v.name, hote: host, segments_ms: dls.map(d => d.ms), duree_s: +segDur.toFixed(1), debit_kbps: kbps, debit_annonce_kbps: annonce || undefined, marge_debit: marge ? +marge.toFixed(2) : undefined, ratio_segment: +ratio.toFixed(2), premier_octet_ms: ttfbMax, liste_ms: pollMs, liste_max_ms: pollMax, segments_avance: avance, segments_attendus: +attendu.toFixed(1), content_length: !sansLongueur, chunked: fragmente, pubs: ads, discontinuites: disc, cible_s: target || undefined };
+  out.conseils = conseils;
+  const extra = { qualite: v.name, hote: host, segment_ms: msMoy, duree_s: +segDur.toFixed(1), debit_kbps: kbps, pubs: ads || undefined, sans_longueur: sansLongueur || undefined };
   if (avance <= 0) return finish('bloque', 'Le flux est figé : la liste de lecture n\'avance pas.', extra);
-  if (ratio >= 1) return finish('bloque', 'Les segments arrivent plus lentement qu\'ils ne se lisent (' + dl.ms + ' ms pour ' + last.dur.toFixed(1) + ' s) : coupures probables.', extra);
-  if (ratio >= .6 || ads) return finish('lent', ads ? 'Des pubs sont présentes dans ce flux.' : 'Les segments arrivent juste à temps (' + dl.ms + ' ms pour ' + last.dur.toFixed(1) + ' s) : risque de saccades.', extra);
-  return finish('ok', 'Flux sain : segments en ' + dl.ms + ' ms pour ' + last.dur.toFixed(1) + ' s de vidéo.', extra);
+  if (ratio >= 1) return finish('bloque', 'Les segments arrivent plus lentement qu\'ils ne se lisent (' + Math.max(...dls.map(d => d.ms)) + ' ms pour ' + segDur.toFixed(1) + ' s) : coupures probables.', extra);
+  if (ratio >= .6 || ads || regress || tenue < .7) return finish('lent', ads ? 'Des pubs sont présentes dans ce flux.' : regress ? 'La liste de lecture a reculé : Twitch a changé de serveur, reprises probables.' : tenue < .7 ? 'La liste avance moins vite que prévu (' + avance + ' segments au lieu de ≈' + attendu.toFixed(0) + ') : flux irrégulier.' : 'Les segments arrivent juste à temps (' + Math.max(...dls.map(d => d.ms)) + ' ms pour ' + segDur.toFixed(1) + ' s) : risque de saccades.', extra);
+  return finish('ok', 'Flux sain : segments en ' + msMoy + ' ms en moyenne pour ' + segDur.toFixed(1) + ' s de vidéo' + (sansLongueur ? ' (mais sans Content-Length, voir les conseils)' : '') + '.', extra);
 }
 
 const mask = v => v ? 'défini' : 'absent';
