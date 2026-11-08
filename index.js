@@ -1096,7 +1096,7 @@ async function handler(req, res) {
     store.incr('req'); store.incr('d:' + store.day() + ':req');
     if (['stream', 'catalog', 'p', 'manifest.json'].includes(seg[0])) store.uniq(dev);
 
-    if (!seg.length) return send(res, 200, 'text/html; charset=utf-8', BLANK, { 'Cache-Control': 'no-cache' }); // accueil : page vide (la config est sur /config)
+    if (!seg.length) return send(res, 302, 'text/plain; charset=utf-8', '', { Location: '/config', 'Cache-Control': 'no-store' }); // accueil : redirige vers la page de configuration
     if (seg[0] === 'logo.png') {
       const S = await siteLib.load(); let buf = null, type = 'image/png';
       if (S.logoV) { try { const m = /^data:(image\/(?:png|jpeg|webp));base64,(.+)$/.exec((await store.getKey('logo')) || ''); if (m) { type = m[1]; buf = Buffer.from(m[2], 'base64'); } } catch { /* logo par défaut */ } }
