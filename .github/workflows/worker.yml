@@ -1,0 +1,26 @@
+# Déploie automatiquement le Worker Cloudflare (dossier worker/) à chaque push qui le modifie, ou à la demande (onglet Actions → Run workflow).
+# Secrets à créer dans GitHub (Settings → Secrets and variables → Actions) :
+#   CLOUDFLARE_API_TOKEN  : jeton Cloudflare avec la permission « Edit Cloudflare Workers » (modèle de jeton du même nom)
+#   CLOUDFLARE_ACCOUNT_ID : ID de compte Cloudflare (32 caractères)
+#   WORKER_SECRET         : même valeur que SECRET dans le .env du VPS (ADMIN_PASSWORD s'il n'y a pas de SECRET)
+name: Déployer le Worker Cloudflare
+on:
+  push:
+    branches: [main]
+    paths: ['worker/**', '.github/workflows/worker.yml']
+  workflow_dispatch:
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: worker
+          command: deploy
+          secrets: |
+            SECRET
+        env:
+          SECRET: ${{ secrets.WORKER_SECRET }}

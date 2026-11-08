@@ -15,6 +15,10 @@ Les adresses sont chiffrées par l'addon avec `SECRET` : le Worker n'est pas un 
 
 Pour que plusieurs spectateurs d'une même chaîne partagent le même morceau (cache de la zone Cloudflare), utilise un domaine à toi (`routes` dans `wrangler.toml`) : le cache ne marche pas sur `*.workers.dev`.
 
+## Déploiement automatique (GitHub Actions)
+
+Le fichier `.github/workflows/worker.yml` redéploie le Worker à chaque push qui touche `worker/` (ou à la demande : onglet **Actions** → « Déployer le Worker Cloudflare » → *Run workflow*). Il faut créer 3 secrets dans GitHub (Settings → Secrets and variables → Actions) : `CLOUDFLARE_API_TOKEN` (modèle de jeton « Edit Cloudflare Workers »), `CLOUDFLARE_ACCOUNT_ID` et `WORKER_SECRET` (même valeur que `SECRET` du `.env`). Le SECRET du Worker est remis à chaque déploiement.
+
 ## Coût (à vérifier sur la grille Cloudflare)
 
 Pas de facturation de bande passante. Plan gratuit : 100 000 requêtes/jour. Plan payant : 5 $/mois, 10 M de requêtes incluses puis 0,30 $/M, plus 30 M ms de CPU incluses puis 0,02 $/M ms.
