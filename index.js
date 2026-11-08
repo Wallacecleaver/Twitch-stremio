@@ -11,6 +11,8 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { Readable, pipeline } = require('stream');
+const zlib = require('zlib');
 
 // Configuration : fichier .env à côté de index.js. Il est créé au premier lancement (mot de passe du dashboard et clé de chiffrement générés).
 (function loadEnv() {
@@ -72,8 +74,23 @@ const LOGIN_RE = /^[a-z0-9_]{3,25}$/;
 
 const BLANK = '<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title></title></head><body style="margin:0;background:#0b0b10"></body></html>'; // accueil et chemins inconnus : rien à voir
 // Content-Length toujours annoncé : sans lui Node répond en « chunked », et les lecteurs mpv/ffmpeg (Nuvio, Stremio PC) prennent la fin de la réponse pour une coupure et se reconnectent sans fin.
+// Compression gzip (seulement si le client l'accepte) pour les pages, le JSON et les SVG : le dashboard fait 120 Ko, la page /config 70 Ko.
+// Les listes de lecture (m3u8) ne sont JAMAIS compressées : mpv/ffmpeg s'y perdent. Les pages identiques sont compressées une seule fois (petit cache).
+const ZIP_TYPE = /^(text\/html|application\/json|image\/svg\+xml|text\/css|application\/javascript)/, zipMemo = new Map();
+const gzipBody = (type, body) => {
+  if (typeof body !== 'string' || body.length < 1400) return null;
+  const memo = type.startsWith('text/html');
+  if (memo && zipMemo.has(body)) return zipMemo.get(body);
+  const z = zlib.gzipSync(body, { level: memo ? 9 : 5 });
+  if (memo) { if (zipMemo.size >= 8) zipMemo.delete(zipMemo.keys().next().value); zipMemo.set(body, z); }
+  return z;
+};
 const send = (res, code, type, body, h = {}) => {
   const hd = { 'Content-Type': type, ...h };
+  if (code === 200 && ZIP_TYPE.test(type) && !hd['Content-Encoding'] && /\bgzip\b/.test(String(res.req && res.req.headers['accept-encoding'] || ''))) {
+    const z = gzipBody(type, body);
+    if (z) { body = z; hd['Content-Encoding'] = 'gzip'; hd.Vary = 'Accept-Encoding'; }
+  }
   if (code !== 204 && code !== 304 && !Object.keys(hd).some(k => k.toLowerCase() === 'content-length') && (typeof body === 'string' || Buffer.isBuffer(body))) hd['Content-Length'] = Buffer.byteLength(body);
   res.writeHead(code, hd); res.end(body);
 };
@@ -1060,6 +1077,47 @@ async function profileApi(req) {
   return { ok: true, id, pseudo };
 }
 
+// Liste de lecture d'une qualité : plusieurs lecteurs de la même chaîne (ou un lecteur qui rafraîchit) partagent UNE requête vers Twitch pendant 0,7 s.
+const plCache = new Map();
+function fetchPlaylist(u) {
+  const c = plCache.get(u);
+  if (c && Date.now() - c.t < 700) return c.p;
+  const p = fetch(u, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(8000) }).then(async r => ({ ok: r.ok, status: r.status, text: await r.text() }));
+  if (plCache.size >= 100) plCache.delete(plCache.keys().next().value);
+  plCache.set(u, { t: Date.now(), p });
+  p.catch(() => plCache.delete(u));
+  return p;
+}
+
+// Morceau de vidéo relayé EN FLUX : les octets passent de Twitch au lecteur sans être gardés en mémoire (avant : tout le morceau était chargé en RAM avant l'envoi).
+// Content-Length est repris de Twitch (les lecteurs mpv/ffmpeg en ont besoin, voir send()). Sans Content-Length en amont, repli sur l'ancien mode (tampon complet).
+const segCount = (akId, n) => { store.incr('seg_addon_n'); store.incr('seg_addon_bytes', n); store.incr('akn:' + akId); store.incr('akb:' + akId, n); store.incr('d:' + store.day() + ':seg_addon_bytes', n); };
+async function relaySegment(req, res, u, akId) {
+  const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 15000);
+  res.on('close', () => { clearTimeout(timer); ctl.abort(); }); // lecteur parti : on coupe aussi la connexion vers Twitch
+  try {
+    const up = await fetch(u, { headers: { 'User-Agent': UA, 'Accept-Encoding': 'identity', ...(req.headers.range ? { Range: req.headers.range } : {}) }, signal: ctl.signal });
+    res._dbg = 'amont=' + up.status;
+    const hd = { 'Cache-Control': 'no-store' };
+    for (const k of ['content-range', 'accept-ranges']) if (up.headers.get(k)) hd[k] = up.headers.get(k);
+    const type = up.headers.get('content-type') || 'application/octet-stream', cl = up.headers.get('content-length');
+    if (up.body && cl && /^\d+$/.test(cl) && !up.headers.get('content-encoding')) {
+      res.writeHead(up.status, { 'Content-Type': type, 'Content-Length': cl, ...hd });
+      let n = 0; const src = Readable.fromWeb(up.body);
+      src.on('data', c => { n += c.length; });
+      pipeline(src, res, () => { clearTimeout(timer); if (n) segCount(akId, n); });
+      return;
+    }
+    const buf = Buffer.from(await up.arrayBuffer());
+    clearTimeout(timer); segCount(akId, buf.length);
+    return send(res, up.status, type, buf, hd);
+  } catch (e) {
+    clearTimeout(timer);
+    if (!res.headersSent) return send(res, 502, 'text/plain; charset=utf-8', 'Morceau indisponible');
+    res.destroy();
+  }
+}
+
 async function handler(req, res) {
   let pseudo = '';
   if (process.env.DEBUG_HTTP === '1') { // diagnostic (désactivé par défaut) : une ligne par requête, avec le lecteur, le statut, les octets envoyés et la durée ; « COUPÉ » = le lecteur a abandonné
@@ -1160,8 +1218,7 @@ async function handler(req, res) {
     if (seg[0] === 'm' && seg[1]) { // liste de lecture d'une qualité, nettoyée (mode ordinateur)
       const u = sealLib.open(strip(seg[1]).replace(/\.m3u8$/, ''));
       if (!u || !/^https:\/\//.test(u)) return send(res, 400, 'text/plain; charset=utf-8', 'Lien invalide');
-      const r = await fetch(u, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(8000) });
-      const t = await r.text();
+      const r = await fetchPlaylist(u), t = r.text;
       if (!r.ok || !t.startsWith('#EXTM3U')) return send(res, r.ok ? 502 : r.status, 'text/plain; charset=utf-8', 'Flux indisponible');
       let body = cleanMedia(absolutize(t, u));
       if (/cloudfront/.test(u)) body = body.replace(/-unmuted/g, '-muted'); // rediffs réservées aux abonnés : seuls les segments « muted » sont ouverts
@@ -1175,14 +1232,7 @@ async function handler(req, res) {
     if (seg[0] === 's' && seg[1]) { // morceau de vidéo relayé avec sa taille (lecteurs mpv/ffmpeg) ; l'adresse est chiffrée par nous : ce n'est pas un relais ouvert
       const u = sealLib.open(strip(seg[1]).replace(/\.[a-z0-9]{2,4}$/i, ''));
       if (!u || !/^https:\/\//.test(u)) return send(res, 400, 'text/plain; charset=utf-8', 'Lien invalide');
-      try {
-        const up = await fetch(u, { headers: { 'User-Agent': UA, ...(req.headers.range ? { Range: req.headers.range } : {}) }, signal: AbortSignal.timeout(15000) });
-        const buf = Buffer.from(await up.arrayBuffer()), hd = { 'Cache-Control': 'no-store' };
-        res._dbg = 'amont=' + up.status;
-        store.incr('seg_addon_n'); store.incr('seg_addon_bytes', buf.length); store.incr('akn:' + akChk.id); store.incr('akb:' + akChk.id, buf.length); store.incr('d:' + store.day() + ':seg_addon_bytes', buf.length);
-        for (const k of ['content-range', 'accept-ranges']) if (up.headers.get(k)) hd[k] = up.headers.get(k);
-        return send(res, up.status, up.headers.get('content-type') || 'application/octet-stream', buf, hd);
-      } catch (e) { return send(res, 502, 'text/plain; charset=utf-8', 'Morceau indisponible'); }
+      return relaySegment(req, res, u, akChk.id);
     }
 
     if (seg[0] === 'p' && seg[1]) { // liste de lecture « sans pub » : récupérée côté serveur auprès d'un relais, puis servie au lecteur
@@ -1331,10 +1381,14 @@ async function handler(req, res) {
 
 module.exports = handler;
 module.exports.handler = handler;
-module.exports._t = { checkerPng, channelLogo, variantsOf, liveStream, usherUrl, metaOf, MANIFEST, absolutize, proxyList, bestProxy };
+module.exports._t = { relaySegment, checkerPng, channelLogo, variantsOf, liveStream, usherUrl, metaOf, MANIFEST, absolutize, proxyList, bestProxy };
 process.on('unhandledRejection', e => console.error('erreur non gérée :', e && e.message || e));
 if (require.main === module) {
-  http.createServer(handler).listen(PORT, HOST, () => {
+  const srv = http.createServer(handler);
+  srv.keepAliveTimeout = 65000; // > délai d'inactivité du proxy (Caddy) : sinon réutilisation d'une connexion déjà fermée → 502 ponctuels
+  srv.headersTimeout = 66000;
+  srv.requestTimeout = 30000;
+  srv.listen(PORT, HOST, () => {
     console.log('TwitchIO sur http://localhost:' + PORT + (process.env.PUBLIC_URL ? '  (adresse publique : ' + process.env.PUBLIC_URL + ')' : ''));
     console.log('Données : ' + store.file + '  ·  Dashboard : http://localhost:' + PORT + '/admin  ·  Configuration : http://localhost:' + PORT + '/config');
   });

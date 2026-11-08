@@ -8,7 +8,9 @@ COPY lib ./lib
 
 # Données (data.json, sauvegardes) et .env généré : dans un volume, pour survivre aux mises à jour.
 # ENV_FILE place le .env dans ce volume : le mot de passe et la clé générés au 1er démarrage sont conservés.
+# NODE_OPTIONS : plafonne la mémoire JavaScript (le tas réel reste très en dessous), pour qu'une fuite ne mange pas le VPS.
 ENV NODE_ENV=production \
+    NODE_OPTIONS=--max-old-space-size=160 \
     PORT=7000 \
     HOST=0.0.0.0 \
     DATA_DIR=/app/data \

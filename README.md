@@ -22,6 +22,7 @@ Le repo contient un `Dockerfile` (Node 22 Alpine, aucune dépendance) et un `.en
   ```
 - Le dossier `/app/data` est un volume : il contient `data.json`, la copie de secours et le `.env` généré (variable `ENV_FILE`). Sans volume, tout est perdu à chaque mise à jour.
 - Derrière Caddy (HTTPS), l'adresse publique est déduite de la requête : `PUBLIC_URL` est facultatif.
+- Ressources : l'addon tourne avec ~60 Mo de RAM au repos. Tu peux limiter le conteneur (`--memory 256m --cpus 0.5`) sans problème. Le tas Node est déjà plafonné à 160 Mo dans l'image.
 - Le Worker Cloudflare (`worker/`) se déploie à part, il n'est pas dans l'image.
 - Mise à jour automatique : ajoute le webhook de WDook dans GitHub (repo → Settings → Webhooks, `application/json`, secret vide) ; chaque push sur `main` redéploie l'addon.
 
