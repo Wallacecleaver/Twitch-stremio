@@ -138,7 +138,7 @@ pre{background:var(--bg2);border:1px solid var(--bs);border-radius:var(--r);padd
 <body>
 <header class="app-header">
  <div class="ht">
-  <div class="logo"><img id="hLogo" src="/logo.png" alt="" width="32" height="32"><b id="hName">TwitchIO</b><span class="lb">Admin</span><span class="up" title="Temps depuis le dernier démarrage du serveur"><svg viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg><span id="upt">--</span></span></div>
+  <div class="logo"><img id="hLogo" src="/logo.png" alt="" width="32" height="32"><b id="hName">TwitchIO</b><span class="lb">Admin</span><span class="up" title="Temps depuis le dernier démarrage du serveur"><svg viewBox="0 0 24 24"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/></svg><span id="upt">--</span></span><span class="up" title="Version de l'addon"><svg viewBox="0 0 24 24"><path d="M21.41 11.58l-9-9A2 2 0 0 0 11 2H4a2 2 0 0 0-2 2v7a2 2 0 0 0 .59 1.42l9 9A2 2 0 0 0 13 22a2 2 0 0 0 1.41-.59l7-7A2 2 0 0 0 22 13a2 2 0 0 0-.59-1.42zM6.5 8A1.5 1.5 0 1 1 8 6.5 1.5 1.5 0 0 1 6.5 8z"/></svg><span id="ver">v--</span></span></div>
   <div class="ha"><a class="hb" href="/config" target="_blank" rel="noopener" aria-label="Ouvrir la page /config des utilisateurs" title="Ouvrir la page /config que voient tes amis"><svg viewBox="0 0 24 24"><path d="M14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7zM5 5h6V3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-6h-2v6H5V5z"/></svg><span>Voir /config</span></a><a class="hb d" href="/admin/logout" aria-label="Déconnexion" title="Déconnexion"><svg viewBox="0 0 24 24"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg><span>Déconnexion</span></a></div>
  </div>
  <nav class="tabs" id="tabs"></nav>
@@ -338,7 +338,9 @@ let S=null,paused=false,timer=null,cur='dash';try{cur=localStorage.admtab||'dash
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const n=x=>Number(x||0).toLocaleString('fr-FR'),pct=(a,b)=>b?Math.round(100*a/b)+' %':'–';
 const ago=t=>{if(!t)return'–';const s=Math.round((Date.now()-t)/1000);return s<60?'il y a '+s+' s':s<3600?'il y a '+Math.round(s/60)+' min':s<86400?'il y a '+Math.round(s/3600)+' h':'il y a '+Math.round(s/86400)+' j'};
-const dur=s=>s<3600?Math.max(1,Math.round(s/60))+' min':s<86400?(s/3600).toFixed(1)+' h':(s/86400).toFixed(1)+' j';
+const dur=s=>{s=Math.max(0,Math.floor(s));const d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60),x=s%60,z=v=>String(v).padStart(2,'0');return d?d+' j '+z(h)+' h':h?h+' h '+z(m)+' min':m?m+' min '+z(x)+' s':x+' s'};
+let UP0=null,UPAT=0; // temps de fonctionnement : repris à chaque mise à jour du serveur, puis compté seconde par seconde ici
+setInterval(()=>{if(UP0!=null){const e=document.getElementById('upt');if(e)e.textContent=dur(UP0+(Date.now()-UPAT)/1000)}},1000);
 const toast=(m,e)=>{const d=document.createElement('div');d.className='tt'+(e?' e':'');d.textContent=m;$('#toast').append(d);setTimeout(()=>d.remove(),3200)};
 function go(k){cur=k;try{localStorage.admtab=k}catch{}if(k==='seg'&&typeof loadSeg==='function')setTimeout(()=>{loadSeg();loadKeys()},0);$$('.page').forEach(p=>p.classList.toggle('on',p.id==='p-'+k));$$('.tab').forEach(t=>t.classList.toggle('on',t.dataset.k===k))}
 
@@ -496,7 +498,7 @@ const IP={u:IC.users,v:'M8 5v14l11-7z',s:'M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.1
 function render(){
  const st=S.stats,g=k=>st[k]||0,D=S.days,inc=S.logs.filter(l=>l.k==='incident'||(l.k==='test'&&l.verdict!=='ok'&&l.verdict!=='hors ligne'));
  $('#ban').innerHTML=(S.persistent?'':'<div class="banner w">Stockage temporaire : les données ne sont pas enregistrées sur le disque.</div>')+(S.lastError?'<div class="banner e">Erreur de stockage : '+esc(S.lastError)+'</div>':'');
- $('#upt').textContent=dur(S.up);
+ UP0=S.up;UPAT=Date.now();$('#upt').textContent=dur(S.up);const vv=S.sys&&S.sys.version;if(vv)$('#ver').textContent='v'+vv;
  const rel=g('stream_relay'),off=g('stream_official');
 const v1=D.map(d=>g('d:'+d+':stream')),v2=D.map(d=>g('d:'+d+':incident')),mx=Math.max(1,...v1,...v2),L=v1.length-1;
  const spk=(vals,col)=>{const m=Math.max(1,...vals),pts=vals.map((v,i)=>[Math.round(i*100/Math.max(1,vals.length-1)),Math.round(26-v/m*22)]),l=pts.map(q=>q.join(',')).join(' ');return '<svg class="sp" viewBox="0 0 100 30" preserveAspectRatio="none"><polygon points="0,30 '+l+' 100,30" fill="'+col+'" opacity=".14"/><polyline points="'+l+'" fill="none" stroke="'+col+'" stroke-width="1.6" vector-effect="non-scaling-stroke" stroke-linejoin="round"/></svg>'};
