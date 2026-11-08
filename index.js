@@ -514,27 +514,37 @@ async function liveStreams(game) { // game vide = les plus regardés de tout Twi
 }
 // Lives en français : filtre de langue de Twitch (options.broadcasterLanguages), vérifié à chaque fois (si Twitch l'ignorait, la liste serait la même que « tous les lives »),
 // puis, si ça ne marche pas, l'API officielle (clés Twitch dans le dashboard, paramètre language=fr).
+let frErr = '';
 async function frenchStreams(game) {
   const key = 'fr|' + game.toLowerCase(), c = streamsCache.get(key);
   if (c && c.exp > Date.now()) return c.v;
-  let v = null;
+  let v = null; const errs = [];
   const base = await liveStreams(game).catch(() => null);
   const ignored = L => !!(base && L.length >= 5 && L.slice(0, 10).every((x, i) => base[i] && base[i].login === x.login)); // le filtre n'a rien filtré
+  const edgesOf = d => (game ? d.game && d.game.streams && d.game.streams.edges : d.streams && d.streams.edges) || [];
+  const run = (opt, node) => gqlRaw(game ? 'query { game(name: ' + JSON.stringify(game) + ') { streams' + opt + ' { edges { node { ' + node + ' } } } } }' : 'query { streams' + opt + ' { edges { node { ' + node + ' } } } }');
+  const toL = edges => edges.map(e => toLive(e && e.node)).filter(Boolean).sort((a, b) => b.info.viewers - a.info.viewers);
+  // méthode 1 : filtre de langue de Twitch (broadcasterLanguages), vérifié (s'il est ignoré, la liste est la même que « tous les lives »)
   for (const langs of [['FR'], ['fr']]) {
     try {
-      const opt = '(first: 60, options: { broadcasterLanguages: ' + JSON.stringify(langs) + ' })';
-      const d = await gqlRaw(game ? 'query { game(name: ' + JSON.stringify(game) + ') { streams' + opt + ' { edges { node { ' + STREAM_NODE + ' } } } } }' : 'query { streams' + opt + ' { edges { node { ' + STREAM_NODE + ' } } } }');
-      const edges = game ? (d.game && d.game.streams && d.game.streams.edges) : (d.streams && d.streams.edges);
-      const L = (edges || []).map(e => toLive(e && e.node)).filter(Boolean).sort((a, b) => b.info.viewers - a.info.viewers);
-      if (L.length && !ignored(L)) { v = L; break; }
-    } catch { /* variante suivante */ }
+      const L = toL(edgesOf(await run('(first: 60, options: { broadcasterLanguages: ' + JSON.stringify(langs) + ' })', STREAM_NODE)));
+      if (!L.length) errs.push('filtre ' + langs[0] + ' : liste vide'); else if (ignored(L)) errs.push('filtre ' + langs[0] + ' : ignoré par Twitch'); else { v = L; break; }
+    } catch (e) { errs.push('filtre ' + langs[0] + ' : ' + String(e.message).slice(0, 110)); }
+  }
+  // méthode 2 : on lit la langue de chaque chaîne et on garde le français
+  if (!v) {
+    try {
+      const rows = edgesOf(await run('(first: 100)', STREAM_NODE + ' broadcaster { broadcastSettings { language } }')).filter(e => e && e.node && e.node.broadcaster && e.node.broadcaster.broadcastSettings && /^fr/i.test(String(e.node.broadcaster.broadcastSettings.language || '')));
+      const L = toL(rows); if (L.length) v = L; else errs.push('langue des chaînes : aucune chaîne française dans les 100 premières');
+    } catch (e) { errs.push('langue des chaînes : ' + String(e.message).slice(0, 110)); }
   }
   if (!v) { // repli : API officielle de Twitch (clés Twitch du dashboard)
     try {
       const rows = await helix('/streams', { first: 100, language: 'fr' });
       v = byGame(rows, game, x => x.game_name).map(x => ({ login: x.user_login, info: { name: x.user_name, avatar: '', banner: '', bio: '', live: true, title: x.title || '', game: x.game_name || '', viewers: Number(x.viewer_count) || 0, preview: thumb(x.thumbnail_url) } }));
-    } catch { v = null; }
+    } catch (e) { errs.push('API officielle : ' + String(e.message).slice(0, 80)); v = null; }
   }
+  frErr = v ? '' : errs.join(' | ');
   streamsCache.set(key, { v, exp: Date.now() + (v ? 30000 : 10000) });
   if (streamsCache.size > 80) streamsCache.delete(streamsCache.keys().next().value);
   return v;
@@ -1355,7 +1365,7 @@ async function handler(req, res) {
       const genre = extraOf(seg[3]).get('genre') || '';
       try {
         const L = await frenchStreams(genre);
-        if (!L) { store.incr('err'); store.log({ k: 'erreur', u: pseudo || undefined, ou: 'catalogue des lives en français', msg: 'filtre de langue indisponible (ni Twitch ni l\'API officielle ne répondent)' }); return json(res, { metas: [] }); }
+        if (!L) { store.incr('err'); store.log({ k: 'erreur', u: pseudo || undefined, ou: 'catalogue des lives en français', msg: 'filtre de langue indisponible — ' + frErr }); return json(res, { metas: [] }); }
         store.log({ k: 'catalog', u: pseudo || undefined, n: L.length, jeu: genre || 'populaires', langue: 'fr', dev });
         return json(res, { metas: badge(L.map(catalogMeta), req) }, { 'Cache-Control': 'public, s-maxage=30' });
       } catch (e) { store.incr('err'); store.log({ k: 'erreur', u: pseudo || undefined, ou: 'catalogue des lives en français', msg: e.message }); return json(res, { metas: [] }); }
