@@ -512,37 +512,21 @@ async function liveStreams(game) { // game vide = les plus regardés de tout Twi
   if (streamsCache.size > 80) streamsCache.delete(streamsCache.keys().next().value);
   return v;
 }
-// Lives en français : filtre de langue de Twitch (options.broadcasterLanguages), vérifié à chaque fois (si Twitch l'ignorait, la liste serait la même que « tous les lives »),
-// puis, si ça ne marche pas, l'API officielle (clés Twitch dans le dashboard, paramètre language=fr).
+// Lives en français : filtre de langue de Twitch (la langue est une valeur « enum » : FR sans guillemets). Une liste vide est un résultat valide (aucun live français pour ce jeu).
+// Si Twitch refuse le filtre, repli : on lit la langue de chaque chaîne parmi les 100 premières et on garde le français.
 let frErr = '';
 async function frenchStreams(game) {
   const key = 'fr|' + game.toLowerCase(), c = streamsCache.get(key);
   if (c && c.exp > Date.now()) return c.v;
-  let v = null; const errs = [];
-  const base = await liveStreams(game).catch(() => null);
-  const ignored = L => !!(base && L.length >= 5 && L.slice(0, 10).every((x, i) => base[i] && base[i].login === x.login)); // le filtre n'a rien filtré
   const edgesOf = d => (game ? d.game && d.game.streams && d.game.streams.edges : d.streams && d.streams.edges) || [];
   const run = (opt, node) => gqlRaw(game ? 'query { game(name: ' + JSON.stringify(game) + ') { streams' + opt + ' { edges { node { ' + node + ' } } } } }' : 'query { streams' + opt + ' { edges { node { ' + node + ' } } } }');
   const toL = edges => edges.map(e => toLive(e && e.node)).filter(Boolean).sort((a, b) => b.info.viewers - a.info.viewers);
-  // méthode 1 : filtre de langue de Twitch (broadcasterLanguages), vérifié (s'il est ignoré, la liste est la même que « tous les lives »)
-  for (const langs of [['FR'], ['fr']]) {
-    try {
-      const L = toL(edgesOf(await run('(first: 60, options: { broadcasterLanguages: ' + JSON.stringify(langs) + ' })', STREAM_NODE)));
-      if (!L.length) errs.push('filtre ' + langs[0] + ' : liste vide'); else if (ignored(L)) errs.push('filtre ' + langs[0] + ' : ignoré par Twitch'); else { v = L; break; }
-    } catch (e) { errs.push('filtre ' + langs[0] + ' : ' + String(e.message).slice(0, 110)); }
-  }
-  // méthode 2 : on lit la langue de chaque chaîne et on garde le français
+  let v = null; const errs = [];
+  try { v = toL(edgesOf(await run('(first: 100, options: { broadcasterLanguages: [FR] })', STREAM_NODE))); }
+  catch (e) { errs.push('filtre de langue : ' + String(e.message).slice(0, 110)); }
   if (!v) {
-    try {
-      const rows = edgesOf(await run('(first: 100)', STREAM_NODE + ' broadcaster { broadcastSettings { language } }')).filter(e => e && e.node && e.node.broadcaster && e.node.broadcaster.broadcastSettings && /^fr/i.test(String(e.node.broadcaster.broadcastSettings.language || '')));
-      const L = toL(rows); if (L.length) v = L; else errs.push('langue des chaînes : aucune chaîne française dans les 100 premières');
-    } catch (e) { errs.push('langue des chaînes : ' + String(e.message).slice(0, 110)); }
-  }
-  if (!v) { // repli : API officielle de Twitch (clés Twitch du dashboard)
-    try {
-      const rows = await helix('/streams', { first: 100, language: 'fr' });
-      v = byGame(rows, game, x => x.game_name).map(x => ({ login: x.user_login, info: { name: x.user_name, avatar: '', banner: '', bio: '', live: true, title: x.title || '', game: x.game_name || '', viewers: Number(x.viewer_count) || 0, preview: thumb(x.thumbnail_url) } }));
-    } catch (e) { errs.push('API officielle : ' + String(e.message).slice(0, 80)); v = null; }
+    try { v = toL(edgesOf(await run('(first: 100)', STREAM_NODE + ' broadcaster { broadcastSettings { language } }')).filter(e => e && e.node && e.node.broadcaster && e.node.broadcaster.broadcastSettings && /^fr/i.test(String(e.node.broadcaster.broadcastSettings.language || '')))); }
+    catch (e) { errs.push('langue des chaînes : ' + String(e.message).slice(0, 110)); }
   }
   frErr = v ? '' : errs.join(' | ');
   streamsCache.set(key, { v, exp: Date.now() + (v ? 30000 : 10000) });
@@ -689,7 +673,7 @@ const vodMeta = (v, withVideos) => {
   const lastTxt = last ? '📼 Dernière rediff : ' + new Date(last.publishedAt).toLocaleDateString('fr-FR') + (last.title ? ' · ' + last.title : '') + '\n\n' : '';
   const m = { id: 'twitchvod:' + v.login, type: 'series', name: v.name, poster: logo, posterShape: 'square', background: v.banner || undefined, ...(logo ? { logo } : {}), description: lastTxt + (v.bio || 'Rediffusions de ' + v.name), releaseInfo: v.archives.length ? v.archives.length + ' rediffs' : undefined };
   if (!withVideos) return m;
-  const vid = (n, season, i, total) => ({ id: 'twitchvod:' + v.login + ':' + n.id, title: [dur(n.lengthSeconds), ago(n.publishedAt)].filter(Boolean).join(' · ') + ' — ' + (n.title || 'Rediffusion'), season, episode: i + 1, released: n.publishedAt || new Date(0).toISOString(), thumbnail: n.previewThumbnailURL || undefined, overview: [new Date(n.publishedAt).toLocaleDateString('fr-FR'), dur(n.lengthSeconds), n.game ? '🎮 ' + n.game.displayName : '', '👁 ' + fmtN(n.viewCount)].filter(Boolean).join(' · ') });
+  const vid = (n, season, i, total) => ({ id: 'twitchvod:' + v.login + ':' + n.id, title: n.title || 'Rediffusion', season, episode: i + 1, released: n.publishedAt || new Date(0).toISOString(), thumbnail: n.previewThumbnailURL || undefined, overview: [dur(n.lengthSeconds), ago(n.publishedAt), n.game ? '🎮 ' + n.game.displayName : '', '👁 ' + fmtN(n.viewCount)].filter(Boolean).join(' · ') });
   m.videos = [...v.archives.map((n, i) => vid(n, 1, i)), ...v.highlights.map((n, i) => vid(n, 2, i))];
   return m;
 };
