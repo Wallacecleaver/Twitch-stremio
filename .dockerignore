@@ -1,0 +1,10 @@
+.git
+.gitignore
+node_modules
+.env
+data
+worker
+out.svg
+start.bat
+README.md
+*.md

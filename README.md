@@ -10,6 +10,20 @@ Addon Stremio hébergé sur ton PC : regarder des lives Twitch dans Stremio. Auc
 
 Sur le même PC, Stremio accepte `http://localhost:7000`. Pour tes amis (ou Stremio sur un autre appareil), il faut une adresse **https** publique : un tunnel (Cloudflare Tunnel, ngrok, Tailscale Funnel…) vers le port 7000. Mets cette adresse dans le dashboard (Paramètres → Configuration → Adresse publique) du fichier `.env`, puis redémarre.
 
+## Sur un VPS (Docker / WDook)
+
+Le repo contient un `Dockerfile` (Node 22 Alpine, aucune dépendance) et un `.env.example`.
+
+- **WDook** : « Nouveau projet » → choisis le repo ; les variables du `.env.example` sont préremplies, le port est `7000`. Laisse `ADMIN_PASSWORD` et `SECRET` vides : ils sont générés au premier démarrage (le mot de passe du dashboard est affiché dans les logs du conteneur, `docker logs <conteneur>`).
+- **Docker seul** :
+  ```bash
+  docker build -t twitchio .
+  docker run -d --name twitchio --restart unless-stopped -p 7000:7000 -v twitchio-data:/app/data twitchio
+  ```
+- Le dossier `/app/data` est un volume : il contient `data.json`, la copie de secours et le `.env` généré (variable `ENV_FILE`). Sans volume, tout est perdu à chaque mise à jour.
+- Derrière Caddy (HTTPS), l'adresse publique est déduite de la requête : `PUBLIC_URL` est facultatif.
+- Le Worker Cloudflare (`worker/`) se déploie à part, il n'est pas dans l'image.
+
 ## Données (fichier JSON)
 
 Tout est enregistré dans `data/data.json` : statistiques, journal, utilisateurs, profils (`/u/<id>`), réglages du site, logo et compte lié. Le fichier est relu à chaque démarrage, donc rien n'est perdu quand l'addon ou le PC redémarre.

@@ -14,10 +14,14 @@ const crypto = require('crypto');
 
 // Configuration : fichier .env à côté de index.js. Il est créé au premier lancement (mot de passe du dashboard et clé de chiffrement générés).
 (function loadEnv() {
-  const file = path.join(__dirname, '.env');
+  // Docker/VPS : une variable déclarée mais vide (ex. ADMIN_PASSWORD=) compte comme absente, pour que le mot de passe soit généré.
+  for (const k of ['ADMIN_PASSWORD', 'SECRET', 'DATA_DIR', 'PORT', 'HOST', 'PUBLIC_URL']) if (process.env[k] === '') delete process.env[k];
+  // ENV_FILE : emplacement du .env (dans Docker, il est mis dans le volume des données pour que le mot de passe généré survive aux mises à jour)
+  const file = process.env.ENV_FILE ? path.resolve(process.env.ENV_FILE) : path.join(__dirname, '.env');
   if (!fs.existsSync(file)) {
     const pw = crypto.randomBytes(12).toString('base64url'), secret = crypto.randomBytes(32).toString('base64url');
     try {
+      fs.mkdirSync(path.dirname(file), { recursive: true });
       fs.writeFileSync(file, [
         '# Configuration de l\'addon (relis ce fichier en redémarrant l\'addon)',
         '# Tout le reste (Cloudflare, API Twitch, relais, adresse publique, port…) se règle dans le dashboard : /admin → Paramètres → Configuration.',
