@@ -1118,6 +1118,7 @@ async function handler(req, res) {
     if (seg[0] === 'api' && seg[1] === 'twitch' && seg[2] === 'poll' && req.method === 'POST') return json(res, await devicePoll(req));
     if (seg[0] === 'api' && seg[1] === 'report' && req.method === 'POST') return json(res, await report(req, dev));
     if (seg[0] === 'manifest.json') {
+      if (!pseudo) return send(res, 403, 'text/plain; charset=utf-8', 'Configuration obligatoire : crée ton lien personnel sur ' + originOf(req) + '/config', { 'Cache-Control': 'no-store' }); // manifest « nu » (sans profil) refusé : on ne peut installer l'addon qu'avec un lien généré par /config
       store.log({ k: 'install', u: pseudo || undefined, appareil: cfg.device || undefined, reglages: pseudo ? summary(cfg) : 'défaut', dev }); store.user(pseudo, { cfg: { ...cfg, tok: undefined, compte: !!cfg.tok }, dev: cfg.device });
       const S = await siteLib.load(), mf = { ...MANIFEST, name: S.name, logo: originOf(req) + '/logo.png?v=' + S.logoV }, GL = await Promise.race([gameList(), new Promise(r => setTimeout(() => r(GAMES), 3000))]);
       mf.catalogs = [{ type: 'tv', id: 'twitch-top', name: S.name + ' · Lives par jeu', extra: [{ name: 'genre', isRequired: false, options: GL }] }, { type: 'tv', id: 'twitch-find', name: S.name + ' · Lives', extra: [{ name: 'search', isRequired: true }] }]; // « Lives » : uniquement dans la recherche
