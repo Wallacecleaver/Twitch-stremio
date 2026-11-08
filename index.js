@@ -247,6 +247,11 @@ const allProxies = () => {
   return env.map((l, i) => { const [a, b] = l.includes('|') ? l.split('|').map(x => x.trim()) : ['Relais ' + (i + 1), l]; return { name: a, url: b }; }).filter(x => /^https:\/\/.+\{channel\}/.test(x.url));
 };
 const proxyList = () => allProxies().filter(x => !FEAT.offRelays.includes(x.name));
+// Chaînes protégées (2K, flux réservés) : un relais qui répond 403 pour une chaîne est mis de côté 10 min pour CETTE chaîne seulement (idée du script Twitch HLS Proxy 1.11).
+// On passe donc tout de suite au flux de secours, sans redemander le relais, et ce 403 n'est pas compté comme une panne du relais.
+const ban403 = new Map();
+const BAN403_MS = 10 * 60 * 1000;
+const isBanned = (login, name) => (ban403.get(login + '|' + name) || 0) > Date.now();
 const isMaster = t => typeof t === 'string' && t.startsWith('#EXTM3U') && /#EXT-X-STREAM-INF/.test(t);
 async function askProxy(px, login, signal, hevc) {
   const t0 = Date.now(), url = px.url.replace('{channel}', login) + (FEAT.fast ? (px.url.includes('?') ? '&' : '?') + 'fast_bread=true' : '') + (hevc ? (px.url.includes('?') ? '&' : '?') + 'supported_codecs=av1,h265,h264' : '');
@@ -255,11 +260,12 @@ async function askProxy(px, login, signal, hevc) {
   try {
     const r = await fetch(url, { headers: { 'User-Agent': UA }, signal: ctl.signal, redirect: 'follow' });
     const text = await r.text();
+    if (r.status === 403) { if (ban403.size > 500) ban403.clear(); ban403.set(login + '|' + px.name, Date.now() + BAN403_MS); throw Object.assign(new Error('HTTP 403 (chaîne protégée)'), { is403: true }); }
     if (!r.ok) throw new Error('HTTP ' + r.status);
     if (!isMaster(text)) throw new Error('réponse inattendue');
     store.incr('r|' + px.name + '|ok'); store.incr('r|' + px.name + '|ms', Date.now() - t0);
     return { name: px.name, url, text, ms: Date.now() - t0 };
-  } catch (e) { if (!(signal && signal.aborted)) store.incr('r|' + px.name + '|fail'); throw Object.assign(new Error(e.name === 'AbortError' ? 'délai dépassé' : e.message), { ms: Date.now() - t0, proxy: px.name }); }
+  } catch (e) { if (!(signal && signal.aborted) && !e.is403) store.incr('r|' + px.name + '|fail'); throw Object.assign(new Error(e.name === 'AbortError' ? 'délai dépassé' : e.message), { ms: Date.now() - t0, proxy: px.name }); }
   finally { clearTimeout(timer); }
 }
 async function relayReport(login) {
@@ -310,7 +316,7 @@ async function bestProxy(login, hevc) { // le relais valide le plus rapide (les 
   if (c && c.exp > Date.now()) return c.v;
   const all = new AbortController();
   let v = null;
-  try { v = await Promise.any(proxyList().map(px => askProxy(px, login, all.signal, hevc))); } catch { v = null; }
+  try { v = await Promise.any(proxyList().filter(px => !isBanned(login, px.name)).map(px => askProxy(px, login, all.signal, hevc))); } catch { v = null; }
   all.abort();
   if (!v && FEAT.relays !== false) v = await backupSource(login).catch(() => null); // aucun relais : flux « secours » sans pub si le flux officiel en contient
   if (v) store.incr('r|' + v.name + '|win');
