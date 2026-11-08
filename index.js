@@ -512,6 +512,33 @@ async function liveStreams(game) { // game vide = les plus regardés de tout Twi
   if (streamsCache.size > 80) streamsCache.delete(streamsCache.keys().next().value);
   return v;
 }
+// Lives en français : filtre de langue de Twitch (options.broadcasterLanguages), vérifié à chaque fois (si Twitch l'ignorait, la liste serait la même que « tous les lives »),
+// puis, si ça ne marche pas, l'API officielle (clés Twitch dans le dashboard, paramètre language=fr).
+async function frenchStreams(game) {
+  const key = 'fr|' + game.toLowerCase(), c = streamsCache.get(key);
+  if (c && c.exp > Date.now()) return c.v;
+  let v = null;
+  const base = await liveStreams(game).catch(() => null);
+  const ignored = L => !!(base && L.length >= 5 && L.slice(0, 10).every((x, i) => base[i] && base[i].login === x.login)); // le filtre n'a rien filtré
+  for (const langs of [['FR'], ['fr']]) {
+    try {
+      const opt = '(first: 60, options: { broadcasterLanguages: ' + JSON.stringify(langs) + ' })';
+      const d = await gqlRaw(game ? 'query { game(name: ' + JSON.stringify(game) + ') { streams' + opt + ' { edges { node { ' + STREAM_NODE + ' } } } } }' : 'query { streams' + opt + ' { edges { node { ' + STREAM_NODE + ' } } } }');
+      const edges = game ? (d.game && d.game.streams && d.game.streams.edges) : (d.streams && d.streams.edges);
+      const L = (edges || []).map(e => toLive(e && e.node)).filter(Boolean).sort((a, b) => b.info.viewers - a.info.viewers);
+      if (L.length && !ignored(L)) { v = L; break; }
+    } catch { /* variante suivante */ }
+  }
+  if (!v) { // repli : API officielle de Twitch (clés Twitch du dashboard)
+    try {
+      const rows = await helix('/streams', { first: 100, language: 'fr' });
+      v = byGame(rows, game, x => x.game_name).map(x => ({ login: x.user_login, info: { name: x.user_name, avatar: '', banner: '', bio: '', live: true, title: x.title || '', game: x.game_name || '', viewers: Number(x.viewer_count) || 0, preview: thumb(x.thumbnail_url) } }));
+    } catch { v = null; }
+  }
+  streamsCache.set(key, { v, exp: Date.now() + (v ? 30000 : 10000) });
+  if (streamsCache.size > 80) streamsCache.delete(streamsCache.keys().next().value);
+  return v;
+}
 const norm = t => String(t).toLowerCase().replace(/[^a-z0-9]/g, '');
 const gameOf = async q => { const k = norm(q); if (k.length < 3) return null; if (ALIAS[k]) return ALIAS[k]; const L = await Promise.race([gameList(), new Promise(r => setTimeout(() => r(GAMES), 2500))]); return L.find(x => norm(x) === k) || L.find(x => norm(x).includes(k)) || null; }; // null : ce n'est pas un jeu connu → recherche de chaîne
 const withTimeout = (p, ms, fb) => Promise.race([p, new Promise(r => setTimeout(() => r(fb), ms))]);
@@ -640,13 +667,19 @@ async function channelVods(login) {
   if (vodCache.size > 100) vodCache.delete(vodCache.keys().next().value);
   return v;
 }
+const parisDay = d => new Date(d).toLocaleDateString('en-CA', { timeZone: 'Europe/Paris' }); // AAAA-MM-JJ
+const ago = d => { // « aujourd'hui », « hier », « il y a 3 j », « il y a 2 sem », puis la date
+  const t = new Date(d); if (isNaN(t)) return '';
+  const n = Math.round((Date.parse(parisDay(Date.now())) - Date.parse(parisDay(t))) / 864e5);
+  return n <= 0 ? "aujourd'hui" : n === 1 ? 'hier' : n < 7 ? 'il y a ' + n + ' j' : n < 35 ? 'il y a ' + Math.floor(n / 7) + ' sem' : t.toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' });
+};
 const dur = s => { s = Number(s) || 0; const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60); return h ? h + ' h ' + String(m).padStart(2, '0') : m + ' min'; };
 const vodMeta = (v, withVideos) => {
   const last = v.archives[0], logo = v.logo || v.avatar;
   const lastTxt = last ? '📼 Dernière rediff : ' + new Date(last.publishedAt).toLocaleDateString('fr-FR') + (last.title ? ' · ' + last.title : '') + '\n\n' : '';
   const m = { id: 'twitchvod:' + v.login, type: 'series', name: v.name, poster: logo, posterShape: 'square', background: v.banner || undefined, ...(logo ? { logo } : {}), description: lastTxt + (v.bio || 'Rediffusions de ' + v.name), releaseInfo: v.archives.length ? v.archives.length + ' rediffs' : undefined };
   if (!withVideos) return m;
-  const vid = (n, season, i, total) => ({ id: 'twitchvod:' + v.login + ':' + n.id, title: n.title || 'Rediffusion', season, episode: i + 1, released: n.publishedAt || new Date(0).toISOString(), thumbnail: n.previewThumbnailURL || undefined, overview: [new Date(n.publishedAt).toLocaleDateString('fr-FR'), dur(n.lengthSeconds), n.game ? '🎮 ' + n.game.displayName : '', '👁 ' + fmtN(n.viewCount)].filter(Boolean).join(' · ') });
+  const vid = (n, season, i, total) => ({ id: 'twitchvod:' + v.login + ':' + n.id, title: [dur(n.lengthSeconds), ago(n.publishedAt)].filter(Boolean).join(' · ') + ' — ' + (n.title || 'Rediffusion'), season, episode: i + 1, released: n.publishedAt || new Date(0).toISOString(), thumbnail: n.previewThumbnailURL || undefined, overview: [new Date(n.publishedAt).toLocaleDateString('fr-FR'), dur(n.lengthSeconds), n.game ? '🎮 ' + n.game.displayName : '', '👁 ' + fmtN(n.viewCount)].filter(Boolean).join(' · ') });
   m.videos = [...v.archives.map((n, i) => vid(n, 1, i)), ...v.highlights.map((n, i) => vid(n, 2, i))];
   return m;
 };
@@ -703,7 +736,7 @@ const MANIFEST = {
   id: 'community.twitch.lives', version: '0.1.0', name: 'TwitchIO', description: 'Lives Twitch dans Stremio',
   resources: ['catalog', 'meta', 'stream'], types: ['tv', 'series'], idPrefixes: ['twitch:', 'twitchvod:'],
   behaviorHints: { configurable: true, configurationRequired: false },
-  catalogs: [{ type: 'tv', id: 'twitch-top', name: 'TwitchIO · Lives par jeu', extra: [{ name: 'genre', isRequired: false, options: GAMES }] }, { type: 'tv', id: 'twitch-find', name: 'TwitchIO · Lives', extra: [{ name: 'search', isRequired: true }] }],
+  catalogs: [{ type: 'tv', id: 'twitch-top', name: 'TwitchIO · Lives par jeu', extra: [{ name: 'genre', isRequired: false, options: GAMES }] }, { type: 'tv', id: 'twitch-fr', name: 'TwitchIO · Lives en français', extra: [{ name: 'genre', isRequired: false, options: GAMES }] }, { type: 'tv', id: 'twitch-find', name: 'TwitchIO · Lives', extra: [{ name: 'search', isRequired: true }] }],
 };
 
 async function probe(login) { // diagnostic d'une chaîne pour le dashboard
@@ -1190,7 +1223,7 @@ async function handler(req, res) {
       if (!pseudo) return send(res, 403, 'text/plain; charset=utf-8', 'Configuration obligatoire : crée ton lien personnel sur ' + originOf(req) + '/config', { 'Cache-Control': 'no-store' }); // manifest « nu » (sans profil) refusé : on ne peut installer l'addon qu'avec un lien généré par /config
       store.log({ k: 'install', u: pseudo || undefined, appareil: cfg.device || undefined, reglages: pseudo ? summary(cfg) : 'défaut', dev }); store.user(pseudo, { cfg: { ...cfg, tok: undefined, compte: !!cfg.tok }, dev: cfg.device });
       const S = await siteLib.load(), mf = { ...MANIFEST, name: S.name, logo: originOf(req) + '/logo.png?v=' + S.logoV }, GL = await Promise.race([gameList(), new Promise(r => setTimeout(() => r(GAMES), 3000))]);
-      mf.catalogs = [{ type: 'tv', id: 'twitch-top', name: S.name + ' · Lives par jeu', extra: [{ name: 'genre', isRequired: false, options: GL }] }, { type: 'tv', id: 'twitch-find', name: S.name + ' · Lives', extra: [{ name: 'search', isRequired: true }] }]; // « Lives » : uniquement dans la recherche
+      mf.catalogs = [{ type: 'tv', id: 'twitch-top', name: S.name + ' · Lives par jeu', extra: [{ name: 'genre', isRequired: false, options: GL }] }, ...(S.feat.catalog ? [{ type: 'tv', id: 'twitch-fr', name: S.name + ' · Lives en français', extra: [{ name: 'genre', isRequired: false, options: GL }] }] : []), { type: 'tv', id: 'twitch-find', name: S.name + ' · Lives', extra: [{ name: 'search', isRequired: true }] }]; // « Lives » : uniquement dans la recherche
       // avec un compte lié, « Mes rediffusions » remplace « Rediffusions » à l'accueil (même contenu = doublon) : « Rediffusions » ne sert plus alors qu'à la recherche d'une chaîne quelconque (search obligatoire), et « Mes rediffusions » n'est pas proposée dans la recherche
       const myVods = !!(S.feat.vods && S.feat.followed && auth);
       if (S.feat.vods) mf.catalogs.push({ type: 'series', id: 'twitch-vods', name: S.name + ' · Rediffusions', extra: [{ name: 'search', isRequired: myVods }] });
@@ -1200,7 +1233,7 @@ async function handler(req, res) {
     }
 
     if (seg[0] === 'check') { // vérification d'un profil (page de configuration) : serveur, Twitch, relais, compte lié
-      const out = { v: require('./package.json').version, maint: !!F.maint, stockage: store.persistent, catalogues: ['Lives par jeu'].concat(F.vods ? ['Rediffusions'] : [], auth && F.followed ? ['Mes chaînes suivies'] : []) };
+      const out = { v: require('./package.json').version, maint: !!F.maint, stockage: store.persistent, catalogues: ['Lives par jeu', 'Lives en français'].concat(F.vods ? ['Rediffusions'] : [], auth && F.followed ? ['Mes chaînes suivies'] : []) };
       const timed = async f => { const t = Date.now(); try { return { ok: true, ms: Date.now() - t, ...(await f()) }; } catch (e) { return { ok: false, ms: Date.now() - t, err: String(e.message).slice(0, 120) }; } };
       let sample = null, live = false;
       out.twitch = await timed(async () => { // Twitch répond-il ? (une chaîne quelconque suffit, en ligne ou non)
@@ -1318,6 +1351,15 @@ async function handler(req, res) {
         return json(res, { metas: badge(L.map(catalogMeta), req) }, { 'Cache-Control': 'no-store' });
       } catch (e) { store.incr('err'); store.log({ k: 'erreur', u: pseudo || undefined, ou: 'catalogue des chaînes suivies', msg: e.message }); return json(res, { metas: [] }); }
     }
+    if (seg[0] === 'catalog' && seg[1] === 'tv' && strip(seg[2]) === 'twitch-fr' && F.catalog) { // lives dont la chaîne est en français (par jeu si un genre est choisi)
+      const genre = extraOf(seg[3]).get('genre') || '';
+      try {
+        const L = await frenchStreams(genre);
+        if (!L) { store.incr('err'); store.log({ k: 'erreur', u: pseudo || undefined, ou: 'catalogue des lives en français', msg: 'filtre de langue indisponible (ni Twitch ni l\'API officielle ne répondent)' }); return json(res, { metas: [] }); }
+        store.log({ k: 'catalog', u: pseudo || undefined, n: L.length, jeu: genre || 'populaires', langue: 'fr', dev });
+        return json(res, { metas: badge(L.map(catalogMeta), req) }, { 'Cache-Control': 'public, s-maxage=30' });
+      } catch (e) { store.incr('err'); store.log({ k: 'erreur', u: pseudo || undefined, ou: 'catalogue des lives en français', msg: e.message }); return json(res, { metas: [] }); }
+    }
     if (seg[0] === 'catalog' && seg[1] === 'tv' && (strip(seg[2]) === 'twitch-top' || strip(seg[2]) === 'twitch-find') && F.catalog) { // sans jeu : les plus regardés ; avec un jeu (menu ou recherche) : ses lives
       const ex = extraOf(seg[3]), genre = ex.get('genre'), q = (ex.get('search') || '').trim();
       try {
@@ -1347,6 +1389,11 @@ async function handler(req, res) {
       const info = await channelInfo(login);
       let meta = info ? metaFromInfo(login, info) : { id: 'twitch:' + login, type: 'tv', name: login, poster: 'https://static-cdn.jtvnw.net/previews-ttv/live_user_' + login + '-440x248.jpg', posterShape: 'landscape' };
       if (!info) { try { const s = (await helix('/streams', { user_login: login }))[0]; if (s) meta = metaOf(s); } catch { /* fiche minimale */ } }
+      // liens de la fiche : la chaîne sur Twitch, le catalogue du jeu en cours (dans cet addon), le Discord
+      const S = await siteLib.load(), game = info && info.live && info.game ? info.game : (meta.genres && meta.genres[0]) || '';
+      meta.links = [{ name: 'Ouvrir sur Twitch', category: 'Twitch', url: 'https://www.twitch.tv/' + login }];
+      if (game) meta.links.push({ name: game, category: 'Jeu en cours', url: 'stremio:///discover/' + encodeURIComponent(originOf(req) + base + '/manifest.json') + '/tv/twitch-top?genre=' + encodeURIComponent(game) });
+      if (S.dcOn && siteLib.DISCORD_RE.test(S.dcUrl)) meta.links.push({ name: 'Rejoins ' + S.name + ' sur Discord', category: 'Discord', url: S.dcUrl });
       return json(res, { meta });
     }
     if (seg[0] === 'stream' && seg[1] === 'tv') {
