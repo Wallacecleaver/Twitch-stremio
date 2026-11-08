@@ -411,10 +411,11 @@ async function helix(path, qs) {
 const thumb = u => String(u || '').replace('{width}', '440').replace('{height}', '248');
 const metaOf = s => ({
   id: 'twitch:' + s.user_login, type: 'tv', name: s.user_name, poster: thumb(s.thumbnail_url), posterShape: 'landscape', background: thumb(s.thumbnail_url),
-  description: s.title + '\n\n🎮 ' + s.game_name + ' · 👁 ' + fmtN(s.viewer_count) + ' spectateurs', genres: s.game_name ? [s.game_name] : [], releaseInfo: '🔴 ' + fmtN(s.viewer_count) + ' 👁',
+  description: s.title + '\n\n🎮 ' + s.game_name + ' · 👁 ' + fmtN(s.viewer_count) + ' spectateurs', genres: s.game_name ? [s.game_name] : [], releaseInfo: viewersTxt(s.viewer_count),
 });
 
 const fmtN = n => (n >= 1e6 ? (n / 1e6).toFixed(1).replace('.', ',').replace(',0', '') + ' M' : n >= 1000 ? (n / 1e3).toFixed(n >= 1e5 ? 0 : 1).replace('.', ',').replace(',0', '') + ' k' : String(n)); // 111882 → « 112 k »
+const viewersTxt = n => fmtN(n) + (n > 1 ? ' spectateurs' : ' spectateur'); // texte propre sous l'affiche (les emojis 🔴 👁 s'affichaient en petites icônes mal alignées dans Nuvio)
 const GAMES = ['Just Chatting', 'Fortnite', 'League of Legends', 'VALORANT', 'Counter-Strike', 'Garry\'s Mod', 'Grand Theft Auto V', 'Rocket League', 'Minecraft', 'Call of Duty: Warzone', 'World of Warcraft', 'Apex Legends', 'Rust', 'Overwatch 2', 'Teamfight Tactics', 'Escape from Tarkov', 'Dead by Daylight', 'Music', 'Sports']; // menu « jeu » de Stremio (la recherche accepte n'importe quel jeu)
 const ALIAS = { gmod: 'Garry\'s Mod', gta: 'Grand Theft Auto V', gta5: 'Grand Theft Auto V', gtav: 'Grand Theft Auto V', lol: 'League of Legends', cs: 'Counter-Strike', cs2: 'Counter-Strike', csgo: 'Counter-Strike', wow: 'World of Warcraft', cod: 'Call of Duty: Warzone', warzone: 'Call of Duty: Warzone', tft: 'Teamfight Tactics', ow: 'Overwatch 2', overwatch: 'Overwatch 2', rl: 'Rocket League', valo: 'VALORANT', jc: 'Just Chatting', tarkov: 'Escape from Tarkov', dbd: 'Dead by Daylight' };
 const byGame = (list, g, get) => (g ? list.filter(x => String(get(x) || '').toLowerCase().includes(g.toLowerCase())) : list);
@@ -441,7 +442,7 @@ const metaFromInfo = (login, i) => {
     id: 'twitch:' + login, type: 'tv', name: i.name, posterShape: 'landscape',
     poster: i.live ? live + '?t=' + Math.floor(Date.now() / 60000) : (i.preview || i.avatar || live), background: i.live ? live + '?t=' + Math.floor(Date.now() / 60000) : (i.preview || i.banner || i.avatar || undefined), ...(i.avatar ? { logo: i.avatar } : {}),
     description: i.live ? ((i.game ? '🎮 ' + i.game + ' · 👁 ' + nb + '\n\n' : '👁 ' + nb + '\n\n') + (i.title || '')).trim() : ('Hors ligne' + (i.bio ? '\n\n' + i.bio : '')),
-    genres: i.game ? [i.game] : [], releaseInfo: i.live ? '🔴 ' + fmtN(i.viewers) + ' 👁' : i.name,
+    genres: i.game ? [i.game] : [], releaseInfo: i.live ? viewersTxt(i.viewers) : i.name,
   };
 };
 
@@ -575,8 +576,8 @@ async function posterSvg(login) {
   return v;
 }
 // remplace l'affiche des lives d'un catalogue par l'affiche avec le jeu et les spectateurs
-const badge = (metas, req) => !POSTER_OVERLAY ? metas : metas.map(m => /^twitch:[a-z0-9_]{3,25}$/.test(m.id || '') && String(m.releaseInfo || '').startsWith('🔴') ? { ...m, poster: originOf(req) + '/poster/' + m.id.slice(7) + '.svg?v=' + Math.floor(Date.now() / 30000) } : m);
-const catalogMeta = x => { const m = metaFromInfo(x.login, x.info); delete m.logo; return { ...m, background: undefined, name: x.info.name, releaseInfo: '🔴 ' + fmtN(x.info.viewers) + ' 👁' }; };
+const badge = (metas, req) => !POSTER_OVERLAY ? metas : metas.map(m => /^twitch:[a-z0-9_]{3,25}$/.test(m.id || '') && / spectateurs?$/.test(String(m.releaseInfo || '')) ? { ...m, poster: originOf(req) + '/poster/' + m.id.slice(7) + '.svg?v=' + Math.floor(Date.now() / 30000) } : m);
+const catalogMeta = x => { const m = metaFromInfo(x.login, x.info); delete m.logo; return { ...m, background: undefined, name: x.info.name, releaseInfo: viewersTxt(x.info.viewers) }; };
 
 // Menu « Genre » : les catégories les plus regardées de Twitch (liste récupérée sans clé, gardée 6 h), complétées par la liste fixe.
 let gamesCache = { v: null, exp: 0 };
@@ -1304,7 +1305,7 @@ async function handler(req, res) {
           const ex = extraOf(seg[3]), q = (ex.get('search') || '').trim().toLowerCase(), skip = Math.max(0, parseInt(ex.get('skip'), 10) || 0);
           const all = (await followedAll(auth)).filter(x => !q || x.name.toLowerCase().includes(q) || x.login.includes(q));
           store.log({ k: 'catalog', u: pseudo || undefined, n: all.length, mesRediffs: true, dev });
-          return json(res, { metas: all.slice(skip, skip + 100).map(x => ({ id: 'twitchvod:' + x.login, type: 'series', name: x.name, poster: (logoCache.get(x.login) || {}).v || x.avatar, posterShape: 'square', description: x.live ? '🔴 En direct · ' + fmtN(x.viewers) + ' 👁' : 'Rediffusions de ' + x.name, releaseInfo: x.live ? '🔴 En direct' : undefined })) }, { 'Cache-Control': 'no-store' });
+          return json(res, { metas: all.slice(skip, skip + 100).map(x => ({ id: 'twitchvod:' + x.login, type: 'series', name: x.name, poster: (logoCache.get(x.login) || {}).v || x.avatar, posterShape: 'square', description: x.live ? '🔴 En direct · ' + fmtN(x.viewers) + ' 👁' : 'Rediffusions de ' + x.name, releaseInfo: x.live ? 'En direct' : undefined })) }, { 'Cache-Control': 'no-store' });
         }
         if (seg[0] === 'catalog') {
           const q = (extraOf(seg[3]).get('search') || '').trim().toLowerCase().replace(/^@/, '');
