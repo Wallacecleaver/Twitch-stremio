@@ -76,6 +76,8 @@ export default {
     if (req.method !== 'GET' && req.method !== 'HEAD') return text(405, 'Méthode refusée');
     const url = new URL(req.url);
     if (url.pathname === '/') return text(200, 'TwitchIO · relais de morceaux vidéo' + (env.SECRET ? '' : ' · SECRET manquant'));
+    const k = /^\/k\/([A-Za-z0-9_-]+)$/.exec(url.pathname); // test du SECRET : l'addon envoie un message chiffré, le Worker dit s'il sait l'ouvrir
+    if (k) return text(env.SECRET && (await open(k[1], env.SECRET)) === 'ok' ? 200 : 403, env.SECRET ? 'SECRET différent de celui de l\'addon' : 'SECRET manquant');
     const m = /^\/(m|s)\/([A-Za-z0-9_-]+)(?:\.[a-z0-9]{2,5})?$/.exec(url.pathname);
     if (!m || !env.SECRET) return text(404, 'Introuvable');
     const target = await open(m[2], env.SECRET);

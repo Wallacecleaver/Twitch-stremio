@@ -1000,7 +1000,12 @@ async function segmentsInfo() { // onglet « Vidéo » du dashboard : le Worker 
   const origin = segOrigin(); let worker = { set: !!origin };
   if (origin) {
     const t = Date.now();
-    try { const r = await fetch(origin + '/', { signal: AbortSignal.timeout(4000) }), txt = await r.text(), noKey = /SECRET manquant/.test(txt); worker = { set: true, ok: r.ok && !noKey, ms: Date.now() - t, note: noKey ? 'SECRET manquant dans le Worker' : r.ok ? 'répond' : 'HTTP ' + r.status }; }
+    try { const r = await fetch(origin + '/', { signal: AbortSignal.timeout(4000) }), txt = await r.text(), noKey = /SECRET manquant/.test(txt); worker = { set: true, ok: r.ok && !noKey, ms: Date.now() - t, note: noKey ? 'SECRET manquant dans le Worker' : r.ok ? 'répond' : 'HTTP ' + r.status };
+      if (worker.ok && sealLib.available()) { // le SECRET du Worker est-il le même que celui de l'addon ?
+        const k = await fetch(origin + '/k/' + sealLib.seal('ok'), { signal: AbortSignal.timeout(4000) });
+        if (k.status === 403) worker = { ...worker, ok: false, note: 'SECRET du Worker différent de celui de l\'addon (wrangler secret put SECRET)' };
+        else if (k.status === 404) worker = { ...worker, ok: false, note: 'Worker à redéployer (npx wrangler deploy) : ancienne version' };
+      } }
     catch (e) { worker = { set: true, ok: false, note: 'injoignable : ' + String(e.message).slice(0, 80) }; }
   }
   return { origin, worker, mix: await akeys.mix(), addonAllowed: segAddonOk(), env: { proxy: process.env.TWITCH_SEGMENTS_PROXY ?? '', debug: process.env.DEBUG_HTTP === '1', sealed: sealLib.available() }, cf: await cfUsage() };
