@@ -653,9 +653,9 @@ async function channelLogo(login, avatar) {
 async function channelVods(login) {
   const c = vodCache.get(login);
   if (c && c.exp > Date.now()) return c.v;
-  const d = await gqlRaw('query { user(login: ' + JSON.stringify(login) + ') { displayName login description profileImageURL(width: 300) offlineImageURL a: videos(first: 30, type: ARCHIVE, sort: TIME) { edges { node { ' + VIDEO_NODE + ' } } } h: videos(first: 10, type: HIGHLIGHT, sort: TIME) { edges { node { ' + VIDEO_NODE + ' } } } } }');
+  const d = await gqlRaw('query { user(login: ' + JSON.stringify(login) + ') { displayName login description profileImageURL(width: 300) offlineImageURL bannerImageURL a: videos(first: 30, type: ARCHIVE, sort: TIME) { edges { node { ' + VIDEO_NODE + ' } } } h: videos(first: 10, type: HIGHLIGHT, sort: TIME) { edges { node { ' + VIDEO_NODE + ' } } } } }');
   const u = d.user, nodes = k => ((u && u[k] || {}).edges || []).map(e => e && e.node).filter(n => n && n.id);
-  const v = u ? { logo: '', login: u.login || login, name: u.displayName || login, avatar: u.profileImageURL || '', banner: u.offlineImageURL || '', bio: u.description || '', archives: nodes('a'), highlights: nodes('h') } : null;
+  const v = u ? { logo: '', login: u.login || login, name: u.displayName || login, avatar: u.profileImageURL || '', banner: u.bannerImageURL || u.offlineImageURL || '', bio: u.description || '', archives: nodes('a'), highlights: nodes('h') } : null;
   if (v) v.logo = await channelLogo(v.login, v.avatar);
   vodCache.set(login, { v, exp: Date.now() + 120000 });
   if (vodCache.size > 100) vodCache.delete(vodCache.keys().next().value);
@@ -669,11 +669,16 @@ const ago = d => { // « aujourd'hui », « hier », « il y a 3 j », « il y a
 };
 const dur = s => { s = Number(s) || 0; const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60); return h ? h + ' h ' + String(m).padStart(2, '0') : m + ' min'; };
 const vodMeta = (v, withVideos) => {
-  const last = v.archives[0], logo = v.logo || v.avatar;
-  const lastTxt = last ? '📼 Dernière rediff : ' + new Date(last.publishedAt).toLocaleDateString('fr-FR') + (last.title ? ' · ' + last.title : '') + '\n\n' : '';
-  const m = { id: 'twitchvod:' + v.login, type: 'series', name: v.name, poster: logo, posterShape: 'square', background: v.banner || undefined, ...(logo ? { logo } : {}), description: lastTxt + (v.bio || 'Rediffusions de ' + v.name), releaseInfo: v.archives.length ? v.archives.length + ' rediffs' : undefined };
+  const last = v.archives[0], logo = v.logo || v.avatar, nA = v.archives.length, nH = v.highlights.length;
+  const games = {}; v.archives.forEach(n => { if (n.game && n.game.displayName) games[n.game.displayName] = (games[n.game.displayName] || 0) + 1; });
+  const top = Object.keys(games).sort((a, b) => games[b] - games[a]).slice(0, 3);
+  // Résumé en tête de fiche : dernière rediff (quand, durée, titre, jeu), puis les compteurs, puis la bio de la chaîne
+  const lastTxt = last ? ['📼 Dernière rediff · ' + [ago(last.publishedAt), dur(last.lengthSeconds)].filter(Boolean).join(' · '), last.title || '', last.game ? '🎮 ' + last.game.displayName : ''].filter(Boolean).join('\n') + '\n\n' : '';
+  const countTxt = nA || nH ? [nA ? '📼 ' + nA + ' rediff' + (nA > 1 ? 's' : '') : '', nH ? '⭐ ' + nH + ' temps fort' + (nH > 1 ? 's' : '') : ''].filter(Boolean).join('  ·  ') + '\n\n' : '';
+  const m = { id: 'twitchvod:' + v.login, type: 'series', name: v.name, poster: logo, posterShape: 'square', background: v.banner || undefined, ...(logo ? { logo } : {}), description: lastTxt + countTxt + (v.bio || 'Rediffusions de ' + v.name), releaseInfo: nA ? nA + ' rediff' + (nA > 1 ? 's' : '') + (nH ? ' · ' + nH + ' temps fort' + (nH > 1 ? 's' : '') : '') : undefined, ...(top.length ? { genres: top } : {}), links: [{ name: 'Ouvrir sur Twitch', category: 'Twitch', url: 'https://www.twitch.tv/' + v.login }] };
   if (!withVideos) return m;
-  const vid = (n, season, i, total) => ({ id: 'twitchvod:' + v.login + ':' + n.id, title: n.title || 'Rediffusion', season, episode: i + 1, released: n.publishedAt || new Date(0).toISOString(), thumbnail: n.previewThumbnailURL || undefined, overview: [dur(n.lengthSeconds), ago(n.publishedAt), n.game ? '🎮 ' + n.game.displayName : '', '👁 ' + fmtN(n.viewCount)].filter(Boolean).join(' · ') });
+  // Épisode : titre de la rediff, puis « durée · date · jeu · vues » dans le résumé (les temps forts n'ont pas toujours de jeu)
+  const vid = (n, season, i) => ({ id: 'twitchvod:' + v.login + ':' + n.id, title: n.title || 'Rediffusion', season, episode: i + 1, released: n.publishedAt || new Date(0).toISOString(), thumbnail: n.previewThumbnailURL || undefined, overview: [n.lengthSeconds ? '⏱ ' + dur(n.lengthSeconds) : '', n.publishedAt ? '📅 ' + ago(n.publishedAt) : '', n.game ? '🎮 ' + n.game.displayName : '', n.viewCount ? '👁 ' + fmtN(n.viewCount) : ''].filter(Boolean).join('  ·  ') });
   m.videos = [...v.archives.map((n, i) => vid(n, 1, i)), ...v.highlights.map((n, i) => vid(n, 2, i))];
   return m;
 };
@@ -1320,10 +1325,11 @@ async function handler(req, res) {
           if (F.maint) return maint();
           const m = /^twitchvod:([^:]+):(\d+)$/.exec(strip(seg[2]));
           if (!m) return json(res, { streams: [] });
-          const vm = await vodMaster(m[2], auth), vars = variantsOf(vm.text), video = vars.filter(v => !v.audio && cfgLib.keepVariant(v, cfg)).sort(byQuality);
+          const vinfo = (async () => { try { const cv = await withTimeout(channelVods(m[1]), 2500, null), n = cv && [...cv.archives, ...cv.highlights].find(x => x.id === m[2]); return n ? { dur: n.lengthSeconds ? dur(n.lengthSeconds) : '', when: ago(n.publishedAt), game: n.game ? n.game.displayName : '' } : {}; } catch { return {}; } })();
+          const [vm, vx] = await Promise.all([vodMaster(m[2], auth), vinfo]), vars = variantsOf(vm.text), video = vars.filter(v => !v.audio && cfgLib.keepVariant(v, cfg)).sort(byQuality);
           store.incr('vod'); store.user(pseudo, { ch: m[1], dev: cfg.device }); store.log({ k: 'stream', u: pseudo || undefined, ch: m[1], etat: 'rediff', ms: Date.now() - t0, dev });
-          const fixed = video.slice(0, cfg.fixed).map(v => ({ ...fmtLib.render(cfg.fmt, { brand: BR, kind: 'fixed', vod: true, h: v.h, fps: v.fps ? (v.fps > 30 ? v.fps : 30) : 0, short: v.h ? v.h + 'p' + (v.fps > 30 ? v.fps : '') : v.name, rawName: v.name }), url: pcOn(cfg) || (vm.direct && sealLib.available()) ? pcUrl(originOf(req), base, v.url, segMode(NOUA, cfg)) : v.url }));
-          const auto = { ...fmtLib.render(cfg.fmt, { brand: BR, kind: 'auto', vod: true, cap: cfg.cap }), url: originOf(req) + base + '/v/' + m[2] + '.m3u8' };
+          const fixed = video.slice(0, cfg.fixed).map(v => ({ ...fmtLib.render(cfg.fmt, { brand: BR, kind: 'fixed', vod: true, ...vx, h: v.h, fps: v.fps ? (v.fps > 30 ? v.fps : 30) : 0, short: v.h ? v.h + 'p' + (v.fps > 30 ? v.fps : '') : v.name, rawName: v.name }), url: pcOn(cfg) || (vm.direct && sealLib.available()) ? pcUrl(originOf(req), base, v.url, segMode(NOUA, cfg)) : v.url }));
+          const auto = { ...fmtLib.render(cfg.fmt, { brand: BR, kind: 'auto', vod: true, ...vx, cap: cfg.cap }), url: originOf(req) + base + '/v/' + m[2] + '.m3u8' };
           return json(res, { streams: [auto, ...fixed] });
         }
       } catch (e) { store.incr('err'); store.log({ k: 'erreur', u: pseudo || undefined, ou: 'rediffusions', msg: e.message });
