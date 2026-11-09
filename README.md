@@ -75,3 +75,5 @@ Désactivé par défaut. `CHAT_SUBS=1` (ou le réglage « Chat Twitch en sous-ti
 - `/chat/<chaîne>/debug` : état de la connexion, messages reçus, recalage vidéo.
 - `CHAT_DELAY_MS` règle le décalage entre le chat et l'image.
 - Dépend du lecteur : la piste doit apparaître dans le menu des sous-titres.
+
+Le chat est ajouté à **tous** les flux d'un live : « Auto » (liste principale) mais aussi chaque qualité fixe et l'audio seul, qui passent par `/q/…` (mini liste principale à une seule qualité, avec la piste de chat). Cela demande que `SECRET` (ou `ADMIN_PASSWORD`) soit défini, comme pour le mode ordinateur.

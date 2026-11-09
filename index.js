@@ -1270,6 +1270,15 @@ async function handler(req, res) {
       return json(res, out);
     }
 
+    if (seg[0] === 'q' && seg[1]) { // une seule qualité + piste de chat (CHAT_SUBS=1) : mini liste principale
+      if (!chatLib.enabled()) return send(res, 404, 'text/plain; charset=utf-8', 'Chat désactivé (CHAT_SUBS=1 pour l\'activer)');
+      let j = null; try { j = JSON.parse(sealLib.open(strip(seg[1]).replace(/\.m3u8$/, '')) || ''); } catch { /* lien illisible */ }
+      if (!j || !/^https:\/\//.test(j.o) || !LOGIN_RE.test(j.l || '')) return send(res, 400, 'text/plain; charset=utf-8', 'Lien invalide');
+      const sm = segMode(NOUA, cfg), u = j.p && (pcOn(cfg) || sm !== 'direct') ? pcUrl(originOf(req), base, j.o, sm) : j.o;
+      chatLib.watchUrl(j.l, j.o);
+      const inf = '#EXT-X-STREAM-INF:BANDWIDTH=' + (Number(j.b) > 0 ? Number(j.b) : 1000000) + (Number(j.f) > 0 ? ',FRAME-RATE=' + Number(j.f) + '.000' : '') + (j.a ? ',CODECS="mp4a.40.2"' : '');
+      return send(res, 200, 'application/vnd.apple.mpegurl', withChat('#EXTM3U\n' + inf + '\n' + u + '\n', originOf(req), base, j.l), { 'Cache-Control': 'no-store' });
+    }
     if (seg[0] === 'chat' && seg[1]) { // chat Twitch en sous-titres : /chat/<chaîne>.m3u8, /chat/<chaîne>/<n>.vtt, /chat/<chaîne>/debug
       if (!chatLib.enabled()) return send(res, 404, 'text/plain; charset=utf-8', 'Chat désactivé (CHAT_SUBS=1 pour l\'activer)');
       const login = strip(seg[1]).replace(/\.m3u8$/, '').toLowerCase();
@@ -1433,6 +1442,8 @@ async function handler(req, res) {
       const video = vars.filter(v => !v.audio && cfgLib.keepVariant(v, cfg)).sort(byQuality);
       // Affichage dans la liste des sources de Stremio : nom court à gauche, détails sur plusieurs lignes à droite.
       const sm0 = segMode(NOUA, cfg);
+      // Chat Twitch (CHAT_SUBS=1) : une qualité fixe passe par /q/, une mini liste principale (cette qualité + piste de chat), car une liste de segments seule ne peut pas porter de sous-titres
+      const chatQ = (v, prox) => (chatLib.enabled() && sealLib.available() ? originOf(req) + base + '/q/' + sealLib.seal(JSON.stringify({ o: v.url, b: v.bw, f: v.fps, a: v.audio ? 1 : 0, p: prox, l: login })) + '.m3u8' : null);
       try {
       // Colonne de droite étroite dans Stremio : lignes courtes (≈ 24 caractères) pour ne rien couper.
       const cut = (t, n) => (t.length > n ? t.slice(0, n - 1).trimEnd() + '…' : t);
@@ -1440,9 +1451,9 @@ async function handler(req, res) {
       // Mise en forme choisie par la personne (cfg.fmt) : voir lib/format.js
       const gameTxt = info && info.game ? cut(info.game, 22) : '';
       const dOf = v => { const m = /(\d{3,4})p(\d+)?/.exec(v.name) || [], h = Number(m[1] || v.h || 0), f = m[2] || (v.fps > 30 ? String(v.fps) : '30'); return { h, fps: Number(f), short: h ? h + 'p' + (m[2] || (v.fps > 30 ? v.fps : '')) : v.name.replace(/ \(source\)/, ''), rawName: v.name, viewers: nb, game: gameTxt, cap: cfg.cap }; };
-      const fixed = video.slice(0, cfg.fixed).map(v => ({ ...fmtLib.render(cfg.fmt, { brand: BR, kind: 'fixed', ...dOf(v), noAd: !!relayUrls && relayUrls.has(v.url) }), url: pcOn(cfg) || sm0 !== 'direct' ? pcUrl(originOf(req), base, v.url, sm0) : v.url }));
+      const fixed = video.slice(0, cfg.fixed).map(v => ({ ...fmtLib.render(cfg.fmt, { brand: BR, kind: 'fixed', ...dOf(v), noAd: !!relayUrls && relayUrls.has(v.url) }), url: chatQ(v, 1) || (pcOn(cfg) || sm0 !== 'direct' ? pcUrl(originOf(req), base, v.url, sm0) : v.url) }));
       const auto = { ...fmtLib.render(cfg.fmt, { brand: BR, kind: 'auto', viewers: nb, game: gameTxt, cap: cfg.cap, noAd: !!b }), url: originOf(req) + base + '/p/' + login + '.m3u8' };
-      const audio = cfg.audio ? vars.filter(v => v.audio).slice(0, 1).map(v => ({ ...fmtLib.render(cfg.fmt, { brand: BR, kind: 'audio', noAd: !!b }), url: v.url })) : [];
+      const audio = cfg.audio ? vars.filter(v => v.audio).slice(0, 1).map(v => ({ ...fmtLib.render(cfg.fmt, { brand: BR, kind: 'audio', noAd: !!b }), url: chatQ(v, 0) || v.url })) : [];
       return json(res, { streams: [auto, ...fixed, ...audio] });
       } catch (e) { // mise en forme impossible : liste simple, pour ne jamais perdre les flux
         store.log({ k: 'erreur', u: pseudo || undefined, ou: 'mise en forme des sources', msg: e.message });
