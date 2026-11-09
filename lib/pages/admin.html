@@ -536,7 +536,7 @@ const v1=D.map(d=>g('d:'+d+':stream')),v2=D.map(d=>g('d:'+d+':incident')),mx=Mat
  renderLogs();
 }
 const LV={INFO:['in','INFO'],WARN:['wa','ALERTE'],ERROR:['ko','ERREUR']};
-const KC={stream:'ok',play:'ok',test:'pr',incident:'wa',erreur:'ko',install:'in'};
+const KC={stream:'ok',play:'ok',test:'pr',incident:'wa',erreur:'ko',install:'in',deconnexion:'wa'};
 // Par quoi passe la lecture : un relais (proxy), le flux de secours sans pub (adblock) ou le flux officiel de Twitch.
 function via(l){const r=String(l.relais||'');
  if(/^Secours/i.test(r))return'<span class="pill ok">adblock</span> <span class="dim">('+esc(r.replace(/^Secours\s*/i,''))+')</span>';
@@ -551,6 +551,7 @@ function msg(l){const a=[];const P=(k,v)=>v!==undefined&&v!==''&&a.push('<span c
   case'install':a.push('Installation du profil');P('réglages',l.reglages);break;
   case'catalog':a.push('Catalogue chargé');P('chaînes',l.n);break;
   case'erreur':P('où',l.ou);a.push(esc(l.msg));break;
+  case'deconnexion':a.push('<span class="pill wa">autorisation retirée</span>');a.push(esc(l.msg));break;
   default:a.push(esc(JSON.stringify(l)))}
  return a.join(' ')}
 function renderLogs(){

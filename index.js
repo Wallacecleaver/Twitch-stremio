@@ -460,9 +460,29 @@ const metaFromInfo = (login, i) => {
 // Chaînes suivies du compte Twitch lié au profil (jeton « auth-token » déjà utilisé pour le 1440p), via l'API du site web de Twitch.
 const NODE_FIELDS = 'login displayName profileImageURL(width: 300) stream { title viewersCount previewImageURL(width: 640, height: 360) game { displayName } }';
 const followQuery = (field, after) => 'query Followed { currentUser { login ' + field + '(first: 100' + (after ? ', after: "' + after + '"' : '') + ') { edges { cursor node { ' + NODE_FIELDS + ' } } pageInfo { hasNextPage } } } }';
+// Autorisation retirée sur Twitch (ou jeton expiré) : on s'en souvient pour ne plus interroger Twitch avec ce jeton et on le note UNE fois dans le journal (niveau INFO, pas une erreur).
+const revokedTok = new Map(); // empreinte du jeton -> { t, logged }
+const REVOKED_MS = 6 * 36e5;
+const tokKey = oauth => crypto.createHash('sha1').update(oauth).digest('hex').slice(0, 10);
+function markRevoked(oauth) {
+  const k = tokKey(oauth), r = revokedTok.get(k);
+  if (!r || Date.now() - r.t >= REVOKED_MS) revokedTok.set(k, { t: Date.now(), logged: false });
+  if (revokedTok.size > 200) revokedTok.delete(revokedTok.keys().next().value);
+}
+function checkRevoked(oauth) {
+  const r = revokedTok.get(tokKey(oauth));
+  if (r && Date.now() - r.t < REVOKED_MS) throw Object.assign(new Error('Twitch (suivis) : autorisation retirée'), { revoked: true });
+}
+function noteRevoked(e, pseudo, oauth) { // true si l'erreur vient d'une autorisation retirée (déjà notée dans le journal) : l'appelant ne la compte pas comme une erreur
+  if (!e || !e.revoked) return false;
+  const r = oauth && revokedTok.get(tokKey(oauth));
+  if (r && !r.logged) { r.logged = true; store.log({ k: 'deconnexion', u: pseudo || undefined, msg: 'a retiré l\'autorisation de TwitchIO sur Twitch (ou son jeton a expiré) : ses chaînes suivies ne sont plus chargées tant qu\'il ne relie pas son compte' }); }
+  return true;
+}
 const followCache = new Map();
 async function followPage(oauth, field, after) {
   const r = await fetch(GQL, { method: 'POST', headers: { 'Client-ID': tokOf(oauth).cid, Authorization: 'OAuth ' + tokOf(oauth).raw, 'Content-Type': 'application/json', 'User-Agent': tokOf(oauth).ua, 'X-Device-Id': crypto.randomBytes(16).toString('hex') }, body: JSON.stringify({ operationName: 'Followed', query: followQuery(field, after) }), signal: AbortSignal.timeout(8000) });
+  if (r.status === 401) { markRevoked(oauth); throw Object.assign(new Error('Twitch (suivis) : autorisation retirée ou jeton expiré (HTTP 401)'), { revoked: true }); }
   if (!r.ok) throw new Error('Twitch (suivis) : HTTP ' + r.status);
   const j = await r.json().catch(() => ({})), u = j && j.data && j.data.currentUser, conn = u && u[field];
   if (!conn) throw new Error('Twitch n\'a pas renvoyé les chaînes suivies' + (j && j.errors && j.errors[0] ? ' : ' + String(j.errors[0].message).slice(0, 120) : ' (compte non reconnu ?)'));
@@ -471,6 +491,7 @@ async function followPage(oauth, field, after) {
 async function followedChannels(oauth) {
   const key = crypto.createHash('sha1').update(oauth).digest('hex').slice(0, 10), c = followCache.get(key);
   if (c && c.exp > Date.now()) return c.v;
+  checkRevoked(oauth);
   const collect = async (field, maxPages) => { // toutes les pages (100 par page) : un compte peut suivre des centaines de chaînes
     const out = []; let after = '';
     for (let i = 0; i < maxPages; i++) { const pg = await followPage(oauth, field, after); out.push(...pg.edges.map(e => e.node)); if (!pg.more || !pg.edges.length) break; after = pg.edges[pg.edges.length - 1].cursor; if (!after) break; }
@@ -478,7 +499,7 @@ async function followedChannels(oauth) {
   };
   let nodes;
   try { nodes = await collect('followedLiveUsers', 3); } // la liste « en direct » du site web de Twitch
-  catch (e1) { try { nodes = (await collect('follows', 8)).filter(n => n.stream); } catch (e2) { throw new Error(e1.message + ' | ' + e2.message); } }
+  catch (e1) { if (e1.revoked) throw e1; try { nodes = (await collect('follows', 8)).filter(n => n.stream); } catch (e2) { throw new Error(e1.message + ' | ' + e2.message); } }
   const v = nodes.filter(n => n.stream).map(n => ({ login: n.login, info: { name: n.displayName || n.login, avatar: n.profileImageURL || '', banner: '', bio: '', live: true, title: n.stream.title || '', game: n.stream.game ? n.stream.game.displayName : '', viewers: Number(n.stream.viewersCount) || 0, preview: n.stream.previewImageURL || '' } }));
   v.sort((a, b) => b.info.viewers - a.info.viewers);
   followCache.set(key, { v, exp: Date.now() + 30000 });
@@ -490,6 +511,7 @@ const followAllCache = new Map();
 async function followedAll(oauth) {
   const key = crypto.createHash('sha1').update(oauth).digest('hex').slice(0, 10), c = followAllCache.get(key);
   if (c && c.exp > Date.now()) return c.v;
+  checkRevoked(oauth);
   const nodes = []; let after = '';
   for (let i = 0; i < 12; i++) { const pg = await followPage(oauth, 'follows', after); nodes.push(...pg.edges.map(e => e.node)); if (!pg.more || !pg.edges.length) break; after = pg.edges[pg.edges.length - 1].cursor; if (!after) break; }
   const v = nodes.map(n => ({ login: n.login, name: n.displayName || n.login, avatar: n.profileImageURL || '', live: !!n.stream, viewers: n.stream ? Number(n.stream.viewersCount) || 0 : 0 }))
@@ -1340,7 +1362,7 @@ async function handler(req, res) {
           const q = (extraOf(seg[3]).get('search') || '').trim().toLowerCase().replace(/^@/, '');
           let logins = [];
           if (q) logins = LOGIN_RE.test(q) ? [q] : [];
-          else if (auth) logins = (await followedChannels(auth).catch(() => [])).slice(0, 24).map(x => x.login);
+          else if (auth) logins = (await followedChannels(auth).catch(e => { noteRevoked(e, pseudo, auth); return []; })).slice(0, 24).map(x => x.login);
           else logins = ((await liveStreams('').catch(() => [])) || []).slice(0, 24).map(x => x.login);
           const vs = (await withTimeout(Promise.all(logins.map(l => withTimeout(channelVods(l), 6000, null).catch(() => null))), 7000, [])).filter(Boolean);
           store.log({ k: 'catalog', u: pseudo || undefined, n: vs.length, rediffs: true, dev });
@@ -1362,7 +1384,7 @@ async function handler(req, res) {
           const auto = { ...fmtLib.render(cfg.fmt, { brand: BR, kind: 'auto', vod: true, ...vx, cap: cfg.cap }), url: originOf(req) + base + '/v/' + m[2] + '.m3u8' };
           return json(res, { streams: [auto, ...fixed] });
         }
-      } catch (e) { store.incr('err'); store.log({ k: 'erreur', u: pseudo || undefined, ou: 'rediffusions', msg: e.message });
+      } catch (e) { if (!noteRevoked(e, pseudo, auth)) { store.incr('err'); store.log({ k: 'erreur', u: pseudo || undefined, ou: 'rediffusions', msg: e.message }); }
         const vm = seg[0] === 'stream' && /^twitchvod:[^:]+:(\d+)$/.exec(strip(seg[2])); // rediff illisible (souvent réservée aux abonnés) : lien vers Twitch
         if (vm) return json(res, { streams: [{ name: BR + '\n🔒 Abonnés', title: '🔒 Rediff réservée\naux abonnés ou\nindisponible\n↗ Ouvrir sur Twitch', externalUrl: 'https://www.twitch.tv/videos/' + vm[1] }] });
         return json(res, seg[0] === 'catalog' ? { metas: [] } : seg[0] === 'meta' ? { meta: null } : { streams: [] }); }
@@ -1379,7 +1401,7 @@ async function handler(req, res) {
         const L = byGame((await followedChannels(auth)).filter(x => x.info.live), extraOf(seg[3]).get('genre'), x => x.info.game); // seules les chaînes en direct : les autres apparaissent quand elles passent en ligne
         store.log({ k: 'catalog', u: pseudo || undefined, n: L.length, suivis: true, dev });
         return json(res, { metas: badge(L.map(catalogMeta), req) }, { 'Cache-Control': 'no-store' });
-      } catch (e) { store.incr('err'); store.log({ k: 'erreur', u: pseudo || undefined, ou: 'catalogue des chaînes suivies', msg: e.message }); return json(res, { metas: [] }); }
+      } catch (e) { if (!noteRevoked(e, pseudo, auth)) { store.incr('err'); store.log({ k: 'erreur', u: pseudo || undefined, ou: 'catalogue des chaînes suivies', msg: e.message }); } return json(res, { metas: [] }); }
     }
     if (seg[0] === 'catalog' && seg[1] === 'tv' && strip(seg[2]) === 'twitch-fr' && F.catalog) { // lives dont la chaîne est en français (par jeu si un genre est choisi)
       const genre = extraOf(seg[3]).get('genre') || '';
