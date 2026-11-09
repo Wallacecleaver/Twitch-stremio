@@ -62,6 +62,7 @@ const fmtLib = require('./lib/format');
 const sealLib = require('./lib/seal');
 const akeys = require('./lib/akeys');
 const siteLib = require('./lib/site');
+const chatLib = require('./lib/chat'); // chat Twitch en sous-titres (expérimental, CHAT_SUBS=1)
 
 const PORT = process.env.PORT || 7000;
 const HOST = process.env.HOST || '0.0.0.0';
@@ -371,6 +372,17 @@ function pcMaster(text, origin, base, mode) {
       if (/audio_only/i.test(L[i] + u) || !/RESOLUTION=/.test(L[i])) { i++; continue; }
       out.push(L[i].replace(/,?AUDIO="[^"]*"/, '').replace(/,?VIDEO="[^"]*"/, ''), /^https?:/.test(u) ? pcUrl(origin, base, u, mode) : u); i++;
     } else out.push(L[i]);
+  }
+  return out.join('\n');
+}
+// Chat Twitch en sous-titres (CHAT_SUBS=1) : ajoute la piste « Chat Twitch » à la liste principale et la déclare dans chaque qualité
+function withChat(text, origin, base, login) {
+  if (!chatLib.enabled()) return text;
+  const out = []; let done = false;
+  for (const l of text.split(/\r?\n/)) {
+    if (l.startsWith('#EXT-X-STREAM-INF')) { out.push(l.replace(/,?SUBTITLES="[^"]*"/, '') + ',SUBTITLES="chat"'); continue; }
+    out.push(l);
+    if (!done && l.startsWith('#EXTM3U')) { out.push('#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="chat",NAME="Chat Twitch",LANGUAGE="fr",DEFAULT=NO,AUTOSELECT=NO,URI="' + origin + base + '/chat/' + login + '.m3u8"'); done = true; }
   }
   return out.join('\n');
 }
@@ -1258,6 +1270,15 @@ async function handler(req, res) {
       return json(res, out);
     }
 
+    if (seg[0] === 'chat' && seg[1]) { // chat Twitch en sous-titres : /chat/<chaîne>.m3u8, /chat/<chaîne>/<n>.vtt, /chat/<chaîne>/debug
+      if (!chatLib.enabled()) return send(res, 404, 'text/plain; charset=utf-8', 'Chat désactivé (CHAT_SUBS=1 pour l\'activer)');
+      const login = strip(seg[1]).replace(/\.m3u8$/, '').toLowerCase();
+      if (!LOGIN_RE.test(login)) return send(res, 400, 'text/plain; charset=utf-8', 'Nom de chaîne invalide');
+      const nc = { 'Cache-Control': 'no-store' };
+      if (seg[2] === 'debug') return json(res, chatLib.status(login), nc);
+      if (seg[2]) { const n = parseInt(seg[2], 10); if (!Number.isFinite(n)) return send(res, 400, 'text/plain; charset=utf-8', 'Segment invalide'); return send(res, 200, 'text/vtt; charset=utf-8', chatLib.segment(login, n), nc); }
+      return send(res, 200, 'application/vnd.apple.mpegurl', chatLib.playlist(login), nc);
+    }
     if (seg[0] === 'm' && seg[1]) { // liste de lecture d'une qualité, nettoyée (mode ordinateur)
       const u = sealLib.open(strip(seg[1]).replace(/\.m3u8$/, ''));
       if (!u || !/^https:\/\//.test(u)) return send(res, 400, 'text/plain; charset=utf-8', 'Lien invalide');
@@ -1282,7 +1303,7 @@ async function handler(req, res) {
       const login = strip(seg[1]).replace(/\.m3u8$/, '').toLowerCase();
       if (!LOGIN_RE.test(login)) return send(res, 400, 'text/plain; charset=utf-8', 'Nom de chaîne invalide');
       if (F.maint) return send(res, 503, 'text/plain; charset=utf-8', 'Addon en maintenance');
-      const sm = segMode(req, cfg), fin = m => pcOn(cfg) || sm !== 'direct' ? pcMaster(m, originOf(req), base, sm) : m;
+      const sm = segMode(req, cfg), fin = m => { chatLib.watch(login, m); return withChat(pcOn(cfg) || sm !== 'direct' ? pcMaster(m, originOf(req), base, sm) : m, originOf(req), base, login); };
       const [b, lv] = await Promise.all([cfg.relay ? bestProxy(login, cfg.hevc) : null, cfg.hevc && cfg.relay ? liveStream(login, true, auth).catch(() => null) : null]);
       store.incr('play'); store.top(login); store.user(pseudo, { ch: login, dev: cfg.device }); store.incr('seg_' + sm); store.incr('d:' + store.day() + ':seg_' + sm);
       store.log({ k: 'play', u: pseudo || undefined, ch: login, seg: sm, lecteur: String(req.headers['user-agent'] || '').slice(0, 40) || undefined, relais: b ? b.name : cfg.relay ? 'officiel (repli)' : 'officiel (relais coupés)', ms: Date.now() - t0, appareil: cfg.device || undefined, dev });

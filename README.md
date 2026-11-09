@@ -66,3 +66,12 @@ Les flux « sans pub » passent par des relais tiers (même liste que le script 
 ### 1440p (compte Twitch lié)
 
 Twitch ne donne le 1440p qu'au site web avec un compte connecté. Sur `/config`, la personne colle la valeur de son cookie `auth-token` (twitch.tv) : elle est vérifiée auprès de Twitch, chiffrée en AES-256-GCM (clé `SECRET`, sinon `ADMIN_PASSWORD`) et placée dans son lien d'installation. Les profils enregistrés (`/u/<id>`) gardent aussi ce jeton chiffré dans `data.json`. Changer `SECRET` invalide tous les liens. Activer aussi « Autoriser le 1440p ».
+
+## Chat Twitch en sous-titres (expérimental)
+
+Désactivé par défaut. `CHAT_SUBS=1` (ou le réglage « Chat Twitch en sous-titres » du dashboard) ajoute une piste **Chat Twitch** à la liste de lecture des lives : les messages arrivent comme des sous-titres WebVTT live, alignés sur la vidéo grâce au PTS d'un segment de référence (relu toutes les minutes).
+
+- La connexion au chat (IRC anonyme, sans compte) n'existe que pendant qu'une personne lit la piste, et se coupe après 90 s d'inactivité. `CHAT_MAX_ROOMS` limite le nombre de chaînes en même temps.
+- `/chat/<chaîne>/debug` : état de la connexion, messages reçus, recalage vidéo.
+- `CHAT_DELAY_MS` règle le décalage entre le chat et l'image.
+- Dépend du lecteur : la piste doit apparaître dans le menu des sous-titres.
