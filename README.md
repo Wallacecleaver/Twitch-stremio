@@ -79,3 +79,5 @@ Désactivé par défaut. `CHAT_SUBS=1` (ou le réglage « Chat Twitch en sous-ti
 Le chat est ajouté à **tous** les flux d'un live : « Auto » (liste principale) mais aussi chaque qualité fixe et l'audio seul, qui passent par `/q/…` (mini liste principale à une seule qualité, avec la piste de chat). Cela demande que `SECRET` (ou `ADMIN_PASSWORD`) soit défini, comme pour le mode ordinateur.
 
 Réglages de diagnostic (dashboard › Configuration) : **Chat : messages de test** (un message factice toutes les 3 s, pour vérifier l'affichage même si le chat est calme) et **Chat : heure des messages** (« Absolu » par défaut, ou « Norme HLS » avec X-TIMESTAMP-MAP si le lecteur n'affiche rien).
+
+Chaque personne choisit sur sa page **/config › Options** (« Chat Twitch intégré ») si elle veut la piste de chat ; le serveur doit l'autoriser (`CHAT_SUBS=1` ou « Autoriser le chat Twitch en sous-titres » dans le dashboard). Mise en page : texte seul, 8 lignes, sans émotes, en bas à gauche (ou à droite / centré, réglage « Chat : disposition »). Astuce : réduis la taille des sous-titres dans Stremio et augmente « Chat : largeur » en proportion (à 60 % de taille, ≈ 92).
