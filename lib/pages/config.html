@@ -17,6 +17,7 @@ html{font-size:15px;-webkit-font-smoothing:antialiased;color-scheme:dark;scroll-
 body{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;background:radial-gradient(900px 420px at 50% -120px,rgba(145,71,255,.2),transparent 70%) no-repeat,var(--bg);color:var(--t);min-height:100vh;line-height:1.6;overflow-x:hidden}
 .wrap{position:relative;z-index:1;max-width:740px;margin:0 auto;padding:30px 18px 70px}
 .brand{display:flex;align-items:center;gap:12px;font-family:'Space Grotesk','Inter',sans-serif;font-weight:700;font-size:1.12rem;letter-spacing:-.01em;margin-bottom:26px;animation:up .8s var(--ease) both}
+.vb{display:inline-flex;align-items:center;gap:6px;font-family:Inter,sans-serif;font-size:.78rem;font-weight:500;color:var(--t2);background:var(--el);border:1px solid var(--bs);padding:3px 10px;border-radius:99px}.vb svg{width:13px;height:13px;fill:currentColor}
 .brand img{width:34px;height:34px;border-radius:10px;box-shadow:0 6px 18px -6px var(--a)}
 .badge{margin-left:auto;font-size:.68rem;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:#d9c4ff;background:var(--as);border:1px solid rgba(157,92,255,.3);padding:4px 12px;border-radius:99px}
 .tabs{position:relative;display:flex;padding:5px;background:rgba(255,255,255,.04);border:1px solid var(--bs);border-radius:99px;margin:0 auto 24px;width:fit-content;animation:up .8s .05s var(--ease) both}.tabs.off{display:none}
@@ -142,7 +143,7 @@ ol.how{text-align:left;color:var(--t2);font-size:.86rem;padding-left:20px;displa
 .dcg{margin-left:auto;flex:none;display:inline-flex;align-items:center;gap:6px;font-size:.84rem;font-weight:600;color:#c4c9ff}.dcg svg{width:17px;height:17px;transition:transform .3s var(--ease)}.dc:hover .dcg svg{transform:translateX(4px)}
 @media(max-width:520px){.dcg span{display:none}.dc{padding:12px 14px}}
 footer{position:relative;z-index:1;display:grid;gap:10px;justify-items:center;text-align:center;margin-top:34px;padding-top:22px;border-top:1px solid var(--bs);font-size:.78rem;color:var(--t3);animation:up .6s .25s var(--ease) both}
-.credit{display:inline-flex;align-items:center;gap:9px;font-size:.88rem;color:var(--t2)}.credit img{border-radius:6px}.credit b{color:var(--t)}.ver{font-size:.72rem;color:var(--t3);opacity:.7;letter-spacing:.02em}.legal{font-size:.74rem;color:var(--t3);max-width:420px;line-height:1.5}
+.credit{display:inline-flex;align-items:center;gap:9px;font-size:.88rem;color:var(--t2)}.credit img{border-radius:6px}.credit b{color:var(--t)}.legal{font-size:.74rem;color:var(--t3);max-width:420px;line-height:1.5}
 .lnk{color:var(--a);cursor:pointer;text-decoration:none;background:none;border:0;font:inherit;text-align:left;transition:.2s}.lnk:hover{color:#c4a1ff;text-decoration:underline}
 :focus-visible{outline:2px solid var(--a);outline-offset:3px;border-radius:8px}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-delay:0s!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
@@ -152,13 +153,13 @@ footer{position:relative;z-index:1;display:grid;gap:10px;justify-items:center;te
 </head>
 <body>
 <div class="wrap">
-<div class="brand"><img src="/logo.png?v={{V}}" alt="" width="34" height="34">{{NAME}}<span class="badge" id="mode">Configuration</span></div>
+<div class="brand"><img src="/logo.png?v={{V}}" alt="" width="34" height="34">{{NAME}}<span class="vb" title="Version de l'addon"><svg viewBox="0 0 24 24"><path d="M21.41 11.58l-9-9A2 2 0 0 0 11 2H4a2 2 0 0 0-2 2v7a2 2 0 0 0 .59 1.42l9 9A2 2 0 0 0 13 22a2 2 0 0 0 1.41-.59l7-7A2 2 0 0 0 22 13a2 2 0 0 0-.59-1.42zM6.5 8A1.5 1.5 0 1 1 8 6.5 1.5 1.5 0 0 1 6.5 8z"/></svg>v{{VERSION}}</span><span class="badge" id="mode">Configuration</span></div>
 <div id="annBox"></div>
 <div class="tabs" id="tabs"><i class="ind" id="ind"></i><button class="tab on" data-tab="create">Créer un profil</button><button class="tab" data-tab="login">Se connecter</button></div>
 <div class="steps off" id="steps"></div>
 <div class="stage" id="stage"></div>
 {{DISCORD}}
-<footer><div id="foot"></div><div class="credit"><img src="/logo.png?v={{V}}" alt="" width="20" height="20"><span>{{CREDIT}}</span></div>{{LEGAL}}<div class="ver">v{{VERSION}}</div></footer>
+<footer><div id="foot"></div><div class="credit"><img src="/logo.png?v={{V}}" alt="" width="20" height="20"><span>{{CREDIT}}</span></div>{{LEGAL}}</footer>
 </div>
 <div class="toast" id="toast"></div>
 <script>
