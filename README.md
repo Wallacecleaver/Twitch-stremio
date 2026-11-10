@@ -84,9 +84,11 @@ Chaque personne choisit sur sa page **/config › Options** (« Chat Twitch int�
 
 ## Chat incrusté dans la vidéo (expérimental)
 
-Sur `/config › Options`, « Chat Twitch » propose maintenant **Incrusté dans la vidéo** : une source « Chat » s'ajoute à la liste. Le serveur lit le live avec **ffmpeg**, dessine le chat en panneau translucide sur le côté (pseudos colorés, messages qui défilent) et ré-encode en HLS. Comme le chat est dans l'image, ça marche dans tous les lecteurs.
+Sur `/config › Options`, « Chat Twitch » propose **Incrusté dans la vidéo** : une source « Chat » s'ajoute pour chaque qualité de la liste (jamais de 1440p). Le serveur lit le live avec **ffmpeg**, dessine le chat en panneau translucide en bas à droite (pseudos colorés, messages qui défilent) et ré-encode en HLS. Comme le chat est dans l'image, ça marche dans tous les lecteurs.
 
-- À activer côté serveur : `CHAT_BURN=1` (ou « Autoriser le chat incrusté » dans le dashboard) et **ffmpeg** (déjà dans le `Dockerfile` : `apk add ffmpeg`).
-- Coût : un ffmpeg par chaîne regardée, partagé entre toutes les personnes qui la regardent, arrêté 30 s après le dernier lecteur. Compter ≈ 0,5 à 1 cœur en 720p30 et ~10 s de retard en plus. `BURN_MAX` (défaut 1) limite le nombre de chaînes en même temps ; `BURN_HEIGHT=480` allège ; `BURN_SIDE=left` met le panneau à gauche ; `BURN_PRESET` règle le preset x264 (défaut `superfast`) ; `BURN_DELAY_MS` (défaut 8000) décale le chat pour coller à l'image.
-- Texte seul pour l'instant (les émotes sont retirées). `/burn/debug` montre les flux en cours et les derniers messages de ffmpeg.
+- À activer côté serveur : `CHAT_BURN=1` (ou « Autoriser le chat incrusté » dans le dashboard) et **ffmpeg** (déjà dans le `Dockerfile`).
+- Pensé pour un petit serveur : un seul ffmpeg par chaîne (partagé entre tous ceux qui la regardent, arrêté 20 s après le dernier lecteur), x264 `ultrafast`, 30 images/s au plus, 720p au plus (`BURN_HEIGHT`, les qualités au-dessus retombent sur 720p), priorité basse, segments écrits en mémoire (`/dev/shm`).
+- Budget de processeur : `BURN_BUDGET` (défaut 1,2, en « flux 720p30 » ; 480p ≈ 0,45, 360p ≈ 0,25) et `BURN_MAX` (défaut 3 chaînes). Au-delà, un nouveau flux avec chat est refusé plutôt que de ralentir tout le monde. Qui arrive sur une chaîne déjà en cours rejoint le flux existant, même avec une autre qualité.
+- Réglages : `BURN_PANEL` (hauteur du panneau en %, défaut 50), `BURN_SIDE=left`, `BURN_PRESET=superfast` (meilleure image, ≈ 40 % de processeur en plus), `BURN_DELAY_MS` (défaut 8000, décale le chat pour coller à l'image).
+- Texte seul pour l'instant (les émotes sont retirées). `/burn/debug` montre les flux en cours, le budget utilisé et les derniers messages de ffmpeg.
 - Le texte est dessiné à partir d'un atlas de glyphes pré-rendus de la police **Inter** (SIL OFL 1.1), régénérable avec `python3 tools/make-chatfont.py`.

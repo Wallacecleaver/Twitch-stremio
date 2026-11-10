@@ -1490,13 +1490,12 @@ async function handler(req, res) {
       const dOf = v => { const m = /(\d{3,4})p(\d+)?/.exec(v.name) || [], h = Number(m[1] || v.h || 0), f = m[2] || (v.fps > 30 ? String(v.fps) : '30'); return { h, fps: Number(f), short: h ? h + 'p' + (m[2] || (v.fps > 30 ? v.fps : '')) : v.name.replace(/ \(source\)/, ''), rawName: v.name, viewers: nb, game: gameTxt, cap: cfg.cap }; };
       const fixed = video.slice(0, cfg.fixed).map(v => ({ ...fmtLib.render(cfg.fmt, { brand: BR, kind: 'fixed', ...dOf(v), noAd: !!relayUrls && relayUrls.has(v.url) }), url: chatQ(v, 1) || (pcOn(cfg) || sm0 !== 'direct' ? pcUrl(originOf(req), base, v.url, sm0) : v.url) }));
       const auto = { ...fmtLib.render(cfg.fmt, { brand: BR, kind: 'auto', viewers: nb, game: gameTxt, cap: cfg.cap, noAd: !!b }), url: originOf(req) + base + '/p/' + login + '.m3u8' };
-      // Chat incrusté dans la vidéo (CHAT_BURN=1 + ffmpeg) : une source de plus, ré-encodée par le serveur (voir lib/burn.js)
-      const burn = cfg.chat === 'burn' && burnLib.enabled() && burnLib.available() && sealLib.available() ? (() => {
-        const v = burnLib.pickVariant(video, cfg);
-        if (!v) return [];
-        const d = dOf(v), r = fmtLib.render(cfg.fmt, { brand: BR, kind: 'fixed', ...d, short: 'Chat ' + (d.h ? d.h + 'p' : d.short), noAd: !!relayUrls && relayUrls.has(v.url) });
-        return [{ ...r, title: (cfg.fmt === 'sans-emoji' ? '' : '💬 ') + 'Chat incrusté\n' + r.title, url: originOf(req) + base + '/burn/' + login + '/index.m3u8?k=' + sealLib.seal(JSON.stringify({ u: v.url, h: d.h, f: d.fps, l: login })) }];
-      })() : [];
+      // Chat incrusté dans la vidéo (CHAT_BURN=1 + ffmpeg) : une source « Chat » par qualité de la liste (jamais de 1440p), ré-encodée par le serveur (voir lib/burn.js)
+      const burn = cfg.chat === 'burn' && burnLib.enabled() && burnLib.available() && sealLib.available()
+        ? burnLib.variants(video, cfg).slice(0, Math.max(1, cfg.fixed)).map(({ v, h, f }) => {
+          const r = fmtLib.render(cfg.fmt, { brand: BR, kind: 'fixed', ...dOf(v), h, fps: f, short: 'Chat ' + h + 'p', noAd: !!relayUrls && relayUrls.has(v.url) });
+          return { ...r, title: (cfg.fmt === 'sans-emoji' ? '' : '💬 ') + 'Chat incrusté\n' + r.title, url: originOf(req) + base + '/burn/' + login + '/index.m3u8?k=' + sealLib.seal(JSON.stringify({ u: v.url, h, f, l: login })) };
+        }) : [];
       const audio = cfg.audio ? vars.filter(v => v.audio).slice(0, 1).map(v => ({ ...fmtLib.render(cfg.fmt, { brand: BR, kind: 'audio', noAd: !!b }), url: chatQ(v, 0) || v.url })) : [];
       return json(res, { streams: [auto, ...burn, ...fixed, ...audio] });
       } catch (e) { // mise en forme impossible : liste simple, pour ne jamais perdre les flux
