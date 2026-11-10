@@ -1,6 +1,7 @@
-# TwitchIO : aucune dépendance npm, donc rien à installer.
+# TwitchIO : aucune dépendance npm. ffmpeg (paquet système) ne sert qu'au chat incrusté dans la vidéo (CHAT_BURN=1).
 FROM node:22-alpine
 WORKDIR /app
+RUN apk add --no-cache ffmpeg
 
 COPY package.json ./
 COPY index.js ./

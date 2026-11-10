@@ -63,6 +63,7 @@ const sealLib = require('./lib/seal');
 const akeys = require('./lib/akeys');
 const siteLib = require('./lib/site');
 const chatLib = require('./lib/chat'); // chat Twitch en sous-titres (expérimental, CHAT_SUBS=1)
+const burnLib = require('./lib/burn'); // chat incrusté dans la vidéo par ffmpeg (expérimental, CHAT_BURN=1)
 
 const PORT = process.env.PORT || 7000;
 const HOST = process.env.HOST || '0.0.0.0';
@@ -377,7 +378,7 @@ function pcMaster(text, origin, base, mode) {
 }
 // Chat Twitch en sous-titres (CHAT_SUBS=1) : ajoute la piste « Chat Twitch » à la liste principale et la déclare dans chaque qualité
 function withChat(text, origin, base, login, cfg) {
-  if (!chatLib.enabled() || !(cfg && cfg.chat)) return text;
+  if (!chatLib.enabled() || !(cfg && cfg.chat === 'sub')) return text;
   const out = []; let done = false;
   for (const l of text.split(/\r?\n/)) {
     if (l.startsWith('#EXT-X-STREAM-INF')) { out.push(l.replace(/,?SUBTITLES="[^"]*"/, '') + ',SUBTITLES="chat"'); continue; }
@@ -853,12 +854,12 @@ const accentCss = hex => { const rgb = [1, 3, 5].map(k => parseInt(hex.slice(k, 
 const DISCORD_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.317 4.37a19.79 19.79 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.74 19.74 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.1 13.1 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.3 12.3 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.84 19.84 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>';
 const discordCard = s => s.dcOn && siteLib.DISCORD_RE.test(s.dcUrl) ? '<a class="dc" href="' + escH(s.dcUrl) + '" target="_blank" rel="noopener noreferrer"><span class="dci">' + DISCORD_ICON + '</span><span class="dct"><b>' + escH(s.dcTitle) + '</b>' + (s.dcText ? '<small>' + escH(s.dcText) + '</small>' : '') + '</span><span class="dcg"><span>Rejoindre</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></a>' : '';
 async function configPage() { // page /config : nom, logo, couleur et textes viennent des réglages du site (dashboard)
-  const s = await siteLib.load(), pub = { name: s.name, color: s.color, title: s.title, text: s.text, ann: siteLib.annOf(s), open: s.open, needCode: !!s.code, def: s.def, v: s.logoV, fmts: fmtLib.samples(), segWorker: segWorkerOk(), segAddon: segAddonOk(), chat: chatLib.enabled() };
+  const s = await siteLib.load(), pub = { name: s.name, color: s.color, title: s.title, text: s.text, ann: siteLib.annOf(s), open: s.open, needCode: !!s.code, def: s.def, v: s.logoV, fmts: fmtLib.samples(), segWorker: segWorkerOk(), segAddon: segAddonOk(), chat: chatLib.enabled(), burn: burnLib.enabled() && burnLib.available() };
   const credit = s.credit ? escH(s.credit) : 'Créé par <b>Wallace</b>', legal = s.credit ? '' : '<p class="legal">' + escH(s.legal) + '</p>';
   return rawPage('config.html').replace('/*{{ANNCSS}}*/', () => rawPage('ann.css')).replace('/*{{ANNJS}}*/', () => rawPage('ann.js')).replace(/\{\{NAME\}\}/g, () => escH(s.name)).replace(/\{\{COLOR\}\}/g, () => s.color).replace('{{ACCENT}}', () => accentCss(s.color)).replace('{{CREDIT}}', () => credit).replace('{{LEGAL}}', () => legal).replace('{{DISCORD}}', () => discordCard(s)).replace(/\{\{V\}\}/g, () => String(s.logoV)).replace('{{SITE}}', () => JSON.stringify(pub).replace(/</g, '\\u003c'));
 }
 const asset = name => pageCache['a:' + name] ||= fs.readFileSync(path.join(__dirname, 'lib', 'assets', name));
-const summary = c => [c.cap ? 'max ' + c.cap + 'p' : 'qualité max', c.fps60 ? '60 i/s' : '30 i/s', c.relay ? 'relais' : 'sans relais', c.fixed + ' fixes', c.hevc ? '1440p' : '', c.tok ? 'compte lié' : '', c.audio ? 'audio' : '', c.chat ? 'chat' : '', c.seg && c.seg !== 'auto' ? 'segments ' + c.seg : '', c.fmt && c.fmt !== fmtLib.DEFAULT ? 'affichage ' + c.fmt : ''].filter(Boolean).join(' · ');
+const summary = c => [c.cap ? 'max ' + c.cap + 'p' : 'qualité max', c.fps60 ? '60 i/s' : '30 i/s', c.relay ? 'relais' : 'sans relais', c.fixed + ' fixes', c.hevc ? '1440p' : '', c.tok ? 'compte lié' : '', c.audio ? 'audio' : '', c.chat ? (c.chat === 'burn' ? 'chat incrusté' : 'chat sous-titres') : '', c.seg && c.seg !== 'auto' ? 'segments ' + c.seg : '', c.fmt && c.fmt !== fmtLib.DEFAULT ? 'affichage ' + c.fmt : ''].filter(Boolean).join(' · ');
 const readBody = req => new Promise(r => { let b = ''; req.on('data', c => { b += c; if (b.length > 8000) req.destroy(); }); req.on('end', () => r(b)); req.on('error', () => r(b)); });
 const text = (v, n) => String(v ?? '').replace(/[\u0000-\u001f]/g, ' ').slice(0, n);
 const hits = new Map(); // limite : 40 signalements / test par minute et par adresse
@@ -1299,7 +1300,21 @@ async function handler(req, res) {
       const sm = segMode(NOUA, cfg), u = j.p && (pcOn(cfg) || sm !== 'direct') ? pcUrl(originOf(req), base, j.o, sm) : j.o;
       chatLib.watchUrl(j.l, j.o);
       const inf = '#EXT-X-STREAM-INF:BANDWIDTH=' + (Number(j.b) > 0 ? Number(j.b) : 1000000) + (Number(j.f) > 0 ? ',FRAME-RATE=' + Number(j.f) + '.000' : '') + (j.a ? ',CODECS="mp4a.40.2"' : '');
-      return send(res, 200, 'application/vnd.apple.mpegurl', withChat('#EXTM3U\n' + inf + '\n' + u + '\n', originOf(req), base, j.l, { chat: true }), { 'Cache-Control': 'no-store' });
+      return send(res, 200, 'application/vnd.apple.mpegurl', withChat('#EXTM3U\n' + inf + '\n' + u + '\n', originOf(req), base, j.l, { chat: 'sub' }), { 'Cache-Control': 'no-store' });
+    }
+    if (seg[0] === 'burn' && seg[1]) { // chat incrusté : /burn/<chaîne>/index.m3u8?k=…, /burn/<chaîne>/s<n>.ts, /burn/debug
+      if (!burnLib.enabled()) return send(res, 404, 'text/plain; charset=utf-8', 'Chat incrusté désactivé (CHAT_BURN=1 pour l\'activer)');
+      if (seg[1] === 'debug') return json(res, burnLib.status());
+      const login = seg[1].toLowerCase(), nc = { 'Cache-Control': 'no-store' };
+      if (!LOGIN_RE.test(login) || !seg[2]) return send(res, 400, 'text/plain; charset=utf-8', 'Nom de chaîne invalide');
+      if (seg[2] === 'index.m3u8') {
+        let p = null; try { p = JSON.parse(sealLib.open(new URL(req.url, 'http://x').searchParams.get('k') || '') || ''); } catch { /* lien illisible */ }
+        if (p && p.l !== login) p = null;
+        const r = await burnLib.playlist(login, p);
+        return r.code === 200 ? send(res, 200, 'application/vnd.apple.mpegurl', r.body, nc) : send(res, r.code, 'text/plain; charset=utf-8', r.msg);
+      }
+      const buf = burnLib.segment(login, seg[2]);
+      return buf ? send(res, 200, 'video/mp2t', buf, nc) : send(res, 404, 'text/plain; charset=utf-8', 'Segment introuvable');
     }
     if (seg[0] === 'chat' && seg[1]) { // chat Twitch en sous-titres : /chat/<chaîne>.m3u8, /chat/<chaîne>/<n>.vtt, /chat/<chaîne>/debug
       if (!chatLib.enabled()) return send(res, 404, 'text/plain; charset=utf-8', 'Chat désactivé (CHAT_SUBS=1 pour l\'activer)');
@@ -1334,7 +1349,7 @@ async function handler(req, res) {
       const login = strip(seg[1]).replace(/\.m3u8$/, '').toLowerCase();
       if (!LOGIN_RE.test(login)) return send(res, 400, 'text/plain; charset=utf-8', 'Nom de chaîne invalide');
       if (F.maint) return send(res, 503, 'text/plain; charset=utf-8', 'Addon en maintenance');
-      const sm = segMode(req, cfg), fin = m => { if (cfg.chat) chatLib.watch(login, m); return withChat(pcOn(cfg) || sm !== 'direct' ? pcMaster(m, originOf(req), base, sm) : m, originOf(req), base, login, cfg); };
+      const sm = segMode(req, cfg), fin = m => { if (cfg.chat === 'sub') chatLib.watch(login, m); return withChat(pcOn(cfg) || sm !== 'direct' ? pcMaster(m, originOf(req), base, sm) : m, originOf(req), base, login, cfg); };
       const [b, lv] = await Promise.all([cfg.relay ? bestProxy(login, cfg.hevc) : null, cfg.hevc && cfg.relay ? liveStream(login, true, auth).catch(() => null) : null]);
       store.incr('play'); store.top(login); store.user(pseudo, { ch: login, dev: cfg.device }); store.incr('seg_' + sm); store.incr('d:' + store.day() + ':seg_' + sm);
       store.log({ k: 'play', u: pseudo || undefined, ch: login, seg: sm, lecteur: String(req.headers['user-agent'] || '').slice(0, 40) || undefined, relais: b ? b.name : cfg.relay ? 'officiel (repli)' : 'officiel (relais coupés)', ms: Date.now() - t0, appareil: cfg.device || undefined, dev });
@@ -1465,7 +1480,7 @@ async function handler(req, res) {
       // Affichage dans la liste des sources de Stremio : nom court à gauche, détails sur plusieurs lignes à droite.
       const sm0 = segMode(NOUA, cfg);
       // Chat Twitch (CHAT_SUBS=1) : une qualité fixe passe par /q/, une mini liste principale (cette qualité + piste de chat), car une liste de segments seule ne peut pas porter de sous-titres
-      const chatQ = (v, prox) => (chatLib.enabled() && cfg.chat && sealLib.available() ? originOf(req) + base + '/q/' + sealLib.seal(JSON.stringify({ o: v.url, b: v.bw, f: v.fps, a: v.audio ? 1 : 0, p: prox, l: login })) + '.m3u8' : null);
+      const chatQ = (v, prox) => (chatLib.enabled() && cfg.chat === 'sub' && sealLib.available() ? originOf(req) + base + '/q/' + sealLib.seal(JSON.stringify({ o: v.url, b: v.bw, f: v.fps, a: v.audio ? 1 : 0, p: prox, l: login })) + '.m3u8' : null);
       try {
       // Colonne de droite étroite dans Stremio : lignes courtes (≈ 24 caractères) pour ne rien couper.
       const cut = (t, n) => (t.length > n ? t.slice(0, n - 1).trimEnd() + '…' : t);
@@ -1475,8 +1490,15 @@ async function handler(req, res) {
       const dOf = v => { const m = /(\d{3,4})p(\d+)?/.exec(v.name) || [], h = Number(m[1] || v.h || 0), f = m[2] || (v.fps > 30 ? String(v.fps) : '30'); return { h, fps: Number(f), short: h ? h + 'p' + (m[2] || (v.fps > 30 ? v.fps : '')) : v.name.replace(/ \(source\)/, ''), rawName: v.name, viewers: nb, game: gameTxt, cap: cfg.cap }; };
       const fixed = video.slice(0, cfg.fixed).map(v => ({ ...fmtLib.render(cfg.fmt, { brand: BR, kind: 'fixed', ...dOf(v), noAd: !!relayUrls && relayUrls.has(v.url) }), url: chatQ(v, 1) || (pcOn(cfg) || sm0 !== 'direct' ? pcUrl(originOf(req), base, v.url, sm0) : v.url) }));
       const auto = { ...fmtLib.render(cfg.fmt, { brand: BR, kind: 'auto', viewers: nb, game: gameTxt, cap: cfg.cap, noAd: !!b }), url: originOf(req) + base + '/p/' + login + '.m3u8' };
+      // Chat incrusté dans la vidéo (CHAT_BURN=1 + ffmpeg) : une source de plus, ré-encodée par le serveur (voir lib/burn.js)
+      const burn = cfg.chat === 'burn' && burnLib.enabled() && burnLib.available() && sealLib.available() ? (() => {
+        const v = burnLib.pickVariant(video, cfg);
+        if (!v) return [];
+        const d = dOf(v), r = fmtLib.render(cfg.fmt, { brand: BR, kind: 'fixed', ...d, short: 'Chat ' + (d.h ? d.h + 'p' : d.short), noAd: !!relayUrls && relayUrls.has(v.url) });
+        return [{ ...r, title: (cfg.fmt === 'sans-emoji' ? '' : '💬 ') + 'Chat incrusté\n' + r.title, url: originOf(req) + base + '/burn/' + login + '/index.m3u8?k=' + sealLib.seal(JSON.stringify({ u: v.url, h: d.h, f: d.fps, l: login })) }];
+      })() : [];
       const audio = cfg.audio ? vars.filter(v => v.audio).slice(0, 1).map(v => ({ ...fmtLib.render(cfg.fmt, { brand: BR, kind: 'audio', noAd: !!b }), url: chatQ(v, 0) || v.url })) : [];
-      return json(res, { streams: [auto, ...fixed, ...audio] });
+      return json(res, { streams: [auto, ...burn, ...fixed, ...audio] });
       } catch (e) { // mise en forme impossible : liste simple, pour ne jamais perdre les flux
         store.log({ k: 'erreur', u: pseudo || undefined, ou: 'mise en forme des sources', msg: e.message });
         const plain = video.slice(0, cfg.fixed).map(v => ({ name: BR + ' ' + v.name.replace(/ \(source\)/, ''), title: 'En direct · qualité fixe' + (b ? ' · sans pub' : ''), url: pcOn(cfg) || sm0 !== 'direct' ? pcUrl(originOf(req), base, v.url, sm0) : v.url }));

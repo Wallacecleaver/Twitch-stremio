@@ -81,3 +81,12 @@ Le chat est ajouté à **tous** les flux d'un live : « Auto » (liste principal
 Réglages de diagnostic (dashboard › Configuration) : **Chat : messages de test** (un message factice toutes les 3 s, pour vérifier l'affichage même si le chat est calme) et **Chat : heure des messages** (« Absolu » par défaut, ou « Norme HLS » avec X-TIMESTAMP-MAP si le lecteur n'affiche rien).
 
 Chaque personne choisit sur sa page **/config › Options** (« Chat Twitch intégré ») si elle veut la piste de chat ; le serveur doit l'autoriser (`CHAT_SUBS=1` ou « Autoriser le chat Twitch en sous-titres » dans le dashboard). Mise en page : texte seul, 8 lignes, sans émotes, en bas à gauche (ou à droite / centré, réglage « Chat : disposition »). Astuce : réduis la taille des sous-titres dans Stremio et augmente « Chat : largeur » en proportion (à 60 % de taille, ≈ 92).
+
+## Chat incrusté dans la vidéo (expérimental)
+
+Sur `/config › Options`, « Chat Twitch » propose maintenant **Incrusté dans la vidéo** : une source « Chat » s'ajoute à la liste. Le serveur lit le live avec **ffmpeg**, dessine le chat en panneau translucide sur le côté (pseudos colorés, messages qui défilent) et ré-encode en HLS. Comme le chat est dans l'image, ça marche dans tous les lecteurs.
+
+- À activer côté serveur : `CHAT_BURN=1` (ou « Autoriser le chat incrusté » dans le dashboard) et **ffmpeg** (déjà dans le `Dockerfile` : `apk add ffmpeg`).
+- Coût : un ffmpeg par chaîne regardée, partagé entre toutes les personnes qui la regardent, arrêté 30 s après le dernier lecteur. Compter ≈ 0,5 à 1 cœur en 720p30 et ~10 s de retard en plus. `BURN_MAX` (défaut 1) limite le nombre de chaînes en même temps ; `BURN_HEIGHT=480` allège ; `BURN_SIDE=left` met le panneau à gauche ; `BURN_PRESET` règle le preset x264 (défaut `superfast`) ; `BURN_DELAY_MS` (défaut 8000) décale le chat pour coller à l'image.
+- Texte seul pour l'instant (les émotes sont retirées). `/burn/debug` montre les flux en cours et les derniers messages de ffmpeg.
+- Le texte est dessiné à partir d'un atlas de glyphes pré-rendus de la police **Inter** (SIL OFL 1.1), régénérable avec `python3 tools/make-chatfont.py`.

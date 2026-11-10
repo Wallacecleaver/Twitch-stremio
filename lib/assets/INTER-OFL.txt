@@ -1,0 +1,3 @@
+chatfont.json est dérivé de la police Inter (© The Inter Project Authors, https://github.com/rsms/inter),
+distribuée sous la licence SIL Open Font License 1.1 : https://openfontlicense.org
+Seuls des bitmaps de glyphes (régulier et gras) en sont extraits, par tools/make-chatfont.py.
