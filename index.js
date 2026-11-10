@@ -767,7 +767,7 @@ async function vodDirect(id) {
 
 /* ------------------------------------------------------------------ addon */
 const MANIFEST = {
-  id: 'community.twitch.lives', version: '0.1.0', name: 'TwitchIO', description: 'Lives Twitch dans Stremio',
+  id: 'community.twitch.lives', version: require('./package.json').version, name: 'TwitchIO', description: 'Lives Twitch dans Stremio',
   resources: ['catalog', 'meta', 'stream'], types: ['tv', 'series'], idPrefixes: ['twitch:', 'twitchvod:'],
   behaviorHints: { configurable: true, configurationRequired: false },
   catalogs: [{ type: 'tv', id: 'twitch-top', name: 'TwitchIO · Lives par jeu', extra: [{ name: 'genre', isRequired: false, options: GAMES }] }, { type: 'tv', id: 'twitch-fr', name: 'TwitchIO · Lives en français', extra: [{ name: 'genre', isRequired: false, options: GAMES }] }, { type: 'tv', id: 'twitch-find', name: 'TwitchIO · Lives', extra: [{ name: 'search', isRequired: true }] }],
