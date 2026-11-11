@@ -609,6 +609,29 @@ async function posterSvg(login) {
   if (posterCache.size > 150) posterCache.delete(posterCache.keys().next().value);
   return v;
 }
+// Même affiche en JPEG pour Stremio mobile (qui n'affiche pas les SVG) : lib/posterimg.js, sans dépendance. Cache court et borné, une seule génération à la fois par chaîne.
+const posterImg = require('./lib/posterimg');
+const posterJpgCache = new Map(), posterJpgBusy = new Map();
+let posterJpgRun = 0;
+async function posterJpeg(login) {
+  const c = posterJpgCache.get(login);
+  if (c && c.exp > Date.now()) return c.v;
+  if (posterJpgBusy.has(login)) return posterJpgBusy.get(login);
+  if (posterJpgRun >= 3) return null; // trop de générations en cours : vignette simple pour celle-ci
+  posterJpgRun++;
+  const job = (async () => {
+    const info = await channelInfo(login);
+    if (!info || !info.live) return null;
+    const r = await fetch('https://static-cdn.jtvnw.net/previews-ttv/live_user_' + login + '-440x248.jpg?t=' + Math.floor(Date.now() / 30000), { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(4000) });
+    const b = r.ok ? Buffer.from(await r.arrayBuffer()) : null;
+    if (!b || b.length > 600000) return null;
+    const v = posterImg.poster(b, fmtN(info.viewers), info.game); // null si JPEG progressif ou illisible
+    if (v) { posterJpgCache.set(login, { v, exp: Date.now() + 45000 }); while (posterJpgCache.size > 60) posterJpgCache.delete(posterJpgCache.keys().next().value); }
+    return v;
+  })().catch(() => null).finally(() => { posterJpgBusy.delete(login); posterJpgRun--; });
+  posterJpgBusy.set(login, job);
+  return job;
+}
 // remplace l'affiche des lives d'un catalogue par l'affiche avec le jeu et les spectateurs
 const badge = (metas, req) => !POSTER_OVERLAY ? metas : metas.map(m => /^twitch:[a-z0-9_]{3,25}$/.test(m.id || '') && String(m.releaseInfo || '').startsWith('🔴') ? { ...m, poster: originOf(req) + '/poster/' + m.id.slice(7) + '.svg?v=' + Math.floor(Date.now() / 30000) } : m);
 const catalogMeta = x => { const m = metaFromInfo(x.login, x.info); delete m.logo; return { ...m, background: undefined, name: x.info.name, releaseInfo: '🔴 ' + fmtN(x.info.viewers) + ' 👁' }; };
@@ -1241,12 +1264,13 @@ async function handler(req, res) {
     if (seg[0] === 'poster' && seg[1] && POSTER_OVERLAY) {
       const lg = strip(seg[1]).replace(/\.svg$/, '').toLowerCase();
       if (!LOGIN_RE.test(lg)) return send(res, 404, 'text/plain; charset=utf-8', 'Chaîne invalide');
-      // Stremio mobile (Android / iOS) ne sait pas afficher les SVG : on ne leur envoie que la vignette JPEG (sans le badge jeu / spectateurs).
+      // Stremio mobile (Android / iOS) ne sait pas afficher les SVG : on leur envoie un JPEG avec le même badge (posterJpeg), ou à défaut la vignette seule.
       // SVG uniquement pour un navigateur ou Stremio de bureau reconnu ; ?svg=1 / ?svg=0 force le choix pour tester.
       const ua = String(req.headers['user-agent'] || ''), force = new URL(req.url, 'http://x').searchParams.get('svg');
       const desktop = /(Windows NT|Macintosh|X11; Linux|CrOS)/i.test(ua) && !/(Android|iPhone|iPad|iPod|Mobile)/i.test(ua);
       const wantSvg = force === '1' ? true : force === '0' ? false : desktop;
       const svg = wantSvg ? await posterSvg(lg).catch(() => null) : null;
+      if (!wantSvg) { const jpg = await posterJpeg(lg); if (jpg) return send(res, 200, 'image/jpeg', jpg, { 'Cache-Control': 'private, max-age=45', Vary: 'User-Agent' }); }
       if (!svg) { res.writeHead(302, { Location: 'https://static-cdn.jtvnw.net/previews-ttv/live_user_' + lg + '-640x360.jpg?t=' + Math.floor(Date.now() / 60000), 'Cache-Control': 'no-store', Vary: 'User-Agent' }); return res.end(); }
       return send(res, 200, 'image/svg+xml', svg, { 'Cache-Control': 'private, max-age=45', Vary: 'User-Agent' });
     }
