@@ -1241,9 +1241,14 @@ async function handler(req, res) {
     if (seg[0] === 'poster' && seg[1] && POSTER_OVERLAY) {
       const lg = strip(seg[1]).replace(/\.svg$/, '').toLowerCase();
       if (!LOGIN_RE.test(lg)) return send(res, 404, 'text/plain; charset=utf-8', 'Chaîne invalide');
-      const svg = await posterSvg(lg).catch(() => null);
-      if (!svg) { res.writeHead(302, { Location: 'https://static-cdn.jtvnw.net/previews-ttv/live_user_' + lg + '-640x360.jpg', 'Cache-Control': 'no-store' }); return res.end(); }
-      return send(res, 200, 'image/svg+xml', svg, { 'Cache-Control': 'public, max-age=45' });
+      // Stremio mobile (Android / iOS) ne sait pas afficher les SVG : on ne leur envoie que la vignette JPEG (sans le badge jeu / spectateurs).
+      // SVG uniquement pour un navigateur ou Stremio de bureau reconnu ; ?svg=1 / ?svg=0 force le choix pour tester.
+      const ua = String(req.headers['user-agent'] || ''), force = new URL(req.url, 'http://x').searchParams.get('svg');
+      const desktop = /(Windows NT|Macintosh|X11; Linux|CrOS)/i.test(ua) && !/(Android|iPhone|iPad|iPod|Mobile)/i.test(ua);
+      const wantSvg = force === '1' ? true : force === '0' ? false : desktop;
+      const svg = wantSvg ? await posterSvg(lg).catch(() => null) : null;
+      if (!svg) { res.writeHead(302, { Location: 'https://static-cdn.jtvnw.net/previews-ttv/live_user_' + lg + '-640x360.jpg?t=' + Math.floor(Date.now() / 60000), 'Cache-Control': 'no-store', Vary: 'User-Agent' }); return res.end(); }
+      return send(res, 200, 'image/svg+xml', svg, { 'Cache-Control': 'private, max-age=45', Vary: 'User-Agent' });
     }
     if (seg[0] === 'logo.svg') return send(res, 200, 'image/svg+xml', asset('logo.svg'), { 'Cache-Control': 'public, max-age=86400' });
     if (seg[0] === 'config' || seg[0] === 'configure') return send(res, 200, 'text/html; charset=utf-8', await configPage(), { 'Cache-Control': 'no-cache' });
