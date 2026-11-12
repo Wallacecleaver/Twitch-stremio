@@ -57,6 +57,14 @@ Le fichier `.env` ne garde que :
 - `/test/<nom d'un streamer en direct>` : indique si ce serveur obtient bien le flux du live
 - `/relais/<nom d'un streamer en direct>` : indique quels relais répondent
 
+## Sécurité
+
+- **En-têtes** : l'addon envoie lui-même `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `Strict-Transport-Security` (en https) et une politique `Content-Security-Policy` sur `/config` et `/admin` : rien à ajouter dans le Caddyfile.
+- **Connexion à un profil** : le mot de passe n'est plus gardé dans le navigateur. Après la connexion, le serveur renvoie un jeton de session aléatoire (10 minutes, renouvelé à chaque usage) ; c'est lui qui est gardé dans l'onglet. Mot de passe d'au moins 8 caractères pour un nouveau mot de passe (les anciens restent valables), stocké haché (scrypt), 8 essais ratés par profil et 20 par adresse toutes les 10 minutes.
+- **Mot de passe oublié** : dans `/admin` → Utilisateurs, « Réinitialiser le mdp » affiche un **code à usage unique** (valable 24 h). La personne le tape à la place du mot de passe sur la page de connexion, puis en choisit un nouveau. Tant que le code n'est pas utilisé, le profil reste fermé : le lien d'installation seul ne donne plus accès aux réglages.
+- **CORS** : `Access-Control-Allow-Origin: *` n'est envoyé que pour ce dont Stremio a besoin (manifeste, catalogues, flux, lecture), jamais pour `/api` ni `/admin`.
+- **Clé d'accès** : `/api/akey` se vérifie en `POST` (la clé ne passe plus dans l'adresse, donc plus dans les journaux), avec une limite de 15 vérifications par minute et par adresse.
+
 ## Fonctionnement
 
 La lecture des lives utilise l'interface interne de Twitch : méthode non officielle, qui peut cesser de fonctionner.

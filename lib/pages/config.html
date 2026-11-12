@@ -172,9 +172,9 @@ const EYE='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="c
 const st={pseudo:'',device:'',cap:0,fps60:true,relay:true,hevc:false,tok:'',acct:'',fixed:3,audio:false,chat:'',pc:false,seg:'auto',akey:'',fmt:'classique'};
 let akOk=false,akT=0;
 Object.assign(st,SITE.def);
-let code='',step=0,id='',fresh=false,persistent=true,result=null,busy=false,legacy=false,nopw=true,curPw='',newPw='',newPw2='',locked=false,welcome=false,swapping=false,known=null;
+let code='',step=0,id='',fresh=false,persistent=true,result=null,busy=false,legacy=false,nopw=true,curPw='',curSess='',newPw='',newPw2='',locked=false,welcome=false,swapping=false,known=null;
 const clean=p=>String(p||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9_]/g,'').slice(0,20);
-const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const b64=o=>btoa(unescape(encodeURIComponent(JSON.stringify(o)))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
 const unb64=s=>JSON.parse(decodeURIComponent(escape(atob(s.replace(/-/g,'+').replace(/_/g,'/')))));
 const toast=m=>{const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.remove('show'),2600)};
@@ -185,7 +185,7 @@ const SEGDESC={auto:'L\'addon choisit : téléchargement direct par ton appareil
 const CHATOPT=()=>[['','Désactivé']].concat(SITE.chat?[['sub','Sous-titres (léger, texte seul)']]:[]).concat(SITE.burn?[['burn','Incrusté dans la vidéo (expérimental)']]:[]);
 const CHATDESC={'':'Pas de chat dans le lecteur.',sub:'Le chat devient une piste de sous-titres « Chat Twitch » à choisir dans le menu du lecteur. Texte seul, sans émotes ni couleurs ; dépend du lecteur.',burn:'Ajoute une source « Chat » : le serveur incruste le chat (pseudos colorés) sur le côté de la vidéo, en 720p30 max. Environ 10 s de retard en plus, et une seule chaîne à la fois selon le serveur.'};
 const sw=(k,t,d)=>'<div class="tg spot" data-t="'+k+'" role="switch" tabindex="0" aria-checked="'+!!st[k]+'" aria-label="'+t+'"><div><b>'+t+'</b><span>'+d+'</span></div><button class="sw'+(st[k]?' on':'')+'" tabindex="-1" aria-hidden="true"></button></div>';
-const pwField=(i,ph)=>'<div class="fld"><input type="password" id="'+i+'" placeholder="'+ph+'" autocomplete="new-password" spellcheck="false"><button class="eye" type="button" data-eye="'+i+'" aria-label="Afficher">'+EYE+'</button></div>';
+const pwField=(i,ph,ac)=>'<div class="fld"><input type="password" id="'+i+'" placeholder="'+ph+'" autocomplete="'+(ac||'new-password')+'" spellcheck="false"><button class="eye" type="button" data-eye="'+i+'" aria-label="Afficher">'+EYE+'</button></div>';
 const strength=p=>{let s=0;if(p.length>=6)s++;if(p.length>=10)s++;if(/[A-Z]/.test(p)&&/[a-z]/.test(p))s++;if(/\d/.test(p)&&/[^A-Za-z0-9]/.test(p)||p.length>=14)s++;return p?Math.max(1,s):0};
 const needPw=()=>!id||nopw||fresh;
 
@@ -205,7 +205,7 @@ function body(){
   +'<div class="row"><label class="lab" for="pseudo">Ton pseudo</label><input type="text" id="pseudo" maxlength="20" placeholder="ex : christophe" autocomplete="off" spellcheck="false" value="'+esc(st.pseudo)+'"><span class="err" id="e-pseudo">Choisis un pseudo de 2 caractères minimum.</span><span class="hint"><b>À quoi il sert ?</b> C\'est le nom de ton profil : il apparaît dans Stremio (« Twitch · '+esc(st.pseudo||'pseudo')+' ») et permet à l\'administrateur de retrouver tes lectures s\'il y a un souci. Ce n\'est <b>pas</b> un identifiant de connexion : mets ce que tu veux (2 à 20 lettres, chiffres ou _).</span></div>'
   +'<div class="row"><label class="lab" for="device">Appareil <span class="hint">(facultatif)</span></label><input type="text" id="device" maxlength="24" placeholder="ex : PC, TV salon, téléphone" value="'+esc(st.device)+'"><span class="hint">Le nom de l\'appareil où tu vas installer l\'addon. Pratique si tu fais un profil par appareil : on voit tout de suite lequel pose problème.</span></div>'
   +(edit?idRow:'')
-  +'<div class="row"><label class="lab" for="pw1">'+(needPw()?'Mot de passe':'Nouveau mot de passe <span class="hint">(laisse vide pour garder l\'actuel)</span>')+'</label>'+pwField('pw1',needPw()?'6 caractères minimum':'Nouveau mot de passe')+'<div class="meter" id="meter"><i></i><i></i><i></i><i></i></div><span class="err" id="e-pw1">6 caractères minimum.</span>'+(needPw()?'<span class="hint"><b>Pourquoi un mot de passe ?</b> Il protège ton profil : sans lui, personne ne peut modifier tes réglages ni utiliser ton compte Twitch lié. Tu le retapes quand tu te reconnectes. ⚠ Il ne peut pas être récupéré : note-le bien.</span>':'')+'</div>'
+  +'<div class="row"><label class="lab" for="pw1">'+(needPw()?'Mot de passe':'Nouveau mot de passe <span class="hint">(laisse vide pour garder l\'actuel)</span>')+'</label>'+pwField('pw1',needPw()?'8 caractères minimum':'Nouveau mot de passe')+'<div class="meter" id="meter"><i></i><i></i><i></i><i></i></div><span class="err" id="e-pw1">8 caractères minimum.</span>'+(needPw()?'<span class="hint"><b>Pourquoi un mot de passe ?</b> Il protège ton profil : sans lui, personne ne peut modifier tes réglages ni utiliser ton compte Twitch lié. Tu le retapes quand tu te reconnectes. ⚠ Il ne peut pas être récupéré : note-le bien.</span>':'')+'</div>'
   +(needPw()?'<div class="row"><label class="lab" for="pw2">Confirme le mot de passe</label>'+pwField('pw2','Retape-le')+'<span class="err" id="e-pw2">Les deux mots de passe ne correspondent pas.</span><span class="hint">Pour être sûr qu\'il n\'y a pas de faute de frappe.</span></div>':'')
   +(!id&&SITE.needCode?'<div class="row"><label class="lab" for="code">Code d\'invitation</label><input type="text" id="code" maxlength="40" autocomplete="off" spellcheck="false" value="'+esc(code)+'"><span class="err" id="e-code">Code requis.</span><span class="hint"><b>Pourquoi ?</b> La création de profil est réservée aux personnes invitées. Demande le code à l\'administrateur.</span></div>':'')
   +'</div>';
@@ -249,13 +249,13 @@ function body(){
 function loginHtml(){
  let last=null;try{last=JSON.parse(localStorage.twprofile||'null')}catch{}
  return '<div class="pane"><h1>Se connecter à mon profil</h1><p class="sub">Retrouve ton profil pour changer tes réglages. <b>Pas besoin de réinstaller</b> l\'addon : les changements sont pris en compte tout de suite dans Stremio.</p><div class="grid">'+sessBanner()
- +'<div class="row"><label class="lab" for="lid">Identifiant du profil</label><input type="text" id="lid" placeholder="ex : Ow9Rf28HA40fExULUG44yw" autocomplete="off" spellcheck="false" value="'+esc(last&&last.id||'')+'"><span class="err" id="e-lid">Identifiant non reconnu.</span><span class="hint">'+(last&&last.pseudo?'Rempli avec le profil <b>'+esc(last.pseudo)+'</b> de cet appareil. ':'')+'C\'est le code affiché à la fin de la création de ton profil. Tu peux aussi coller ton lien de configuration ou d\'installation en entier : je retrouve le code dedans.</span></div>'
- +'<div class="row"><label class="lab" for="lpw">Mot de passe</label>'+pwField('lpw','Ton mot de passe')+'<span class="err" id="e-lpw"></span><span class="hint">Celui choisi à la création du profil. Si tu l\'as oublié, contacte l\'administrateur : il peut le réinitialiser, et tu pourras alors te connecter avec ce champ vide pour en choisir un nouveau.</span></div></div>'
+ +'<div class="row"><label class="lab" for="lid">Identifiant du profil</label><input type="text" id="lid" name="username" placeholder="ex : Ow9Rf28HA40fExULUG44yw" autocomplete="username" spellcheck="false" value="'+esc(last&&last.id||'')+'"><span class="err" id="e-lid">Identifiant non reconnu.</span><span class="hint">'+(last&&last.pseudo?'Rempli avec le profil <b>'+esc(last.pseudo)+'</b> de cet appareil. ':'')+'C\'est le code affiché à la fin de la création de ton profil. Tu peux aussi coller ton lien de configuration ou d\'installation en entier : je retrouve le code dedans.</span></div>'
+ +'<div class="row"><label class="lab" for="lpw">Mot de passe</label>'+pwField('lpw','Mot de passe ou code de réinitialisation','current-password')+'<span class="err" id="e-lpw"></span><span class="hint">Celui choisi à la création du profil. Si tu l\'as oublié, contacte l\'administrateur : il peut le réinitialiser : il te donnera un code à usage unique, à taper ici à la place du mot de passe, puis tu en choisiras un nouveau.</span></div></div>'
  +'<div class="nav" style="justify-content:flex-end"><button class="btn pr big" id="login">Se connecter</button></div></div>';
 }
 
 
-const SS={get(){try{const o=JSON.parse(sessionStorage.twsess||'null');return o&&o.id&&Date.now()-o.t<600000?o:null}catch{return null}},set(i,pw,ps){try{sessionStorage.twsess=JSON.stringify({id:i,pw,pseudo:ps,t:Date.now()})}catch{}},clear(){try{sessionStorage.removeItem('twsess')}catch{}}};
+const SS={get(){try{const o=JSON.parse(sessionStorage.twsess||'null');return o&&o.id&&Date.now()-o.t<600000?o:null}catch{return null}},set(i,sess,ps){try{sessionStorage.twsess=JSON.stringify({id:i,sess,pseudo:ps,t:Date.now()})}catch{}},clear(){try{sessionStorage.removeItem('twsess')}catch{}}};
 const FOOT='';
 function foot(){const f=$('#foot');if(f)f.innerHTML=id?'Connecté : <b>'+esc(st.pseudo)+'</b> · <button class="lnk" id="logout">Se déconnecter</button> · session gardée 10 min dans cet onglet':FOOT}
 document.addEventListener('click',e=>{if(e.target.id==='logout'){SS.clear();location.href='/config'}});
@@ -268,14 +268,14 @@ function welcomeHtml(){
  +'<div class="nav" style="justify-content:flex-end">'+(LOCK?'<button class="btn big" id="start" disabled>🔒 Configuration indisponible</button>':SITE.open?'<button class="btn pr big" id="start">Commencer →</button>':'')+'</div></div>';
 }
 async function enter(i,pw,r){
- id=i;curPw=pw;nopw=!!r.nopw;fresh=false;welcome=false;locked=false;Object.assign(st,r.cfg,{pseudo:r.pseudo});SS.set(id,pw,r.pseudo);
+ id=i;curPw=pw;nopw=!!r.nopw;fresh=false;welcome=false;locked=false;Object.assign(st,r.cfg,{pseudo:r.pseudo});curSess=r.session||'';SS.set(id,curSess,r.pseudo);
  try{localStorage.twprofile=JSON.stringify({id,pseudo:r.pseudo})}catch{}
  $('#tabs').classList.add('off');$('#mode').textContent='Modifier';$('#steps').classList.remove('off');foot();step=0;await show(body(),1);
 }
-async function resume(){const o=SS.get();if(!o)return;try{const r=await api('/api/profile',{id:o.id,action:'open',password:o.pw});if(r.ok)return enter(o.id,o.pw,r);SS.clear();toast('Session expirée : reconnecte-toi')}catch(e){toast('Erreur : '+e.message)}}
+async function resume(){const o=SS.get();if(!o)return;try{const r=await api('/api/profile',{id:o.id,action:'open',session:o.sess});if(r.ok)return enter(o.id,'',r);SS.clear();toast('Session expirée : reconnecte-toi')}catch(e){toast('Erreur : '+e.message)}}
 function akShow(){const r=document.getElementById('akRow');if(r)r.style.display=st.pc&&st.seg==='addon'?'':'none'}
 async function akCheck(){const v=String(st.akey||'').trim(),m=document.getElementById('akMsg'),e=document.getElementById('e-akey');if(e)e.classList.remove('show');if(!m)return;if(!v){akOk=false;m.textContent='Donnée par l\'administrateur de l\'addon.';m.style.color='';return}
- m.textContent='Vérification…';m.style.color='';const t=++akT;let r;try{r=await api('/api/akey?k='+encodeURIComponent(v))}catch{r={ok:false,why:'vérification impossible'}}if(t!==akT)return;
+ m.textContent='Vérification…';m.style.color='';const t=++akT;let r;try{r=await api('/api/akey',{k:v})}catch{r={ok:false,why:'vérification impossible'}}if(t!==akT)return;
  akOk=!!r.ok;m.textContent=r.ok?'✓ Clé valide':'✗ Clé '+(r.why||'invalide');m.style.color=r.ok?'#4ade80':'#f87171'}
 function pcSeg(){const r=document.getElementById('segRow');if(r)r.style.display=st.pc?'':'none';akShow();if(!st.pc){st.seg='auto';const s=document.getElementById('seg');if(s){s.value='auto';s.dispatchEvent(new Event('change'))}}}
 function setSw(k,v){st[k]=v;document.querySelectorAll('[data-t="'+k+'"]').forEach(el=>{el.setAttribute('aria-checked',v);el.querySelector('.sw').classList.toggle('on',v)});if(k==='pc')pcSeg()}
@@ -302,7 +302,7 @@ async function doLogin(){
   if(r.bad)bad('lpw',r.error);else if(/introuvable/i.test(r.error||''))bad('lid','Aucun profil avec cet identifiant.');else bad('lpw',r.error||'Échec');
  }catch(e){b.disabled=false;b.textContent='Se connecter';toast('Erreur : '+e.message)}
 }
-function lockHtml(msg){return '<div class="pane"><div class="lock"><div class="ico"><svg viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div><div><h1>Configuration protégée</h1><p class="sub" style="margin:0">Entre ton mot de passe pour modifier tes réglages.</p></div><div class="row"><label class="lab" for="pwo">Mot de passe</label><div class="fld"><input type="password" id="pwo" autocomplete="current-password" spellcheck="false"><button class="eye" type="button" data-eye="pwo" aria-label="Afficher">'+EYE+'</button></div><span class="err'+(msg?' show':'')+'" id="e-pwo">'+esc(msg||'')+'</span></div><button class="btn pr big" id="unlock" style="width:100%">Déverrouiller</button></div></div>';}
+function lockHtml(msg){return '<div class="pane"><div class="lock"><div class="ico"><svg viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div><div><h1>Configuration protégée</h1><p class="sub" style="margin:0">Entre ton mot de passe (ou ton code de réinitialisation) pour modifier tes réglages.</p></div><div class="row"><input type="text" name="username" autocomplete="username" value="'+esc(id||'')+'" readonly tabindex="-1" aria-hidden="true" style="position:absolute;opacity:0;width:0;height:0;pointer-events:none"><label class="lab" for="pwo">Mot de passe</label><div class="fld"><input type="password" id="pwo" autocomplete="current-password" spellcheck="false"><button class="eye" type="button" data-eye="pwo" aria-label="Afficher">'+EYE+'</button></div><span class="err'+(msg?' show':'')+'" id="e-pwo">'+esc(msg||'')+'</span></div><button class="btn pr big" id="unlock" style="width:100%">Déverrouiller</button></div></div>';}
 
 // transition fluide : sortie → mesure → hauteur animée → entrée
 async function show(html,dir=1){
@@ -382,9 +382,9 @@ function bad(i,m){const e=$('#'+i);if(e){e.classList.remove('bad');void e.offset
 function validate(s){  if(s===4&&st.pc&&st.seg==='addon'&&!akOk){bad('akey');return false}
   if(s!==0)return true;
  if(clean(st.pseudo).length<2)return bad('pseudo');
- if(needPw()){if(newPw.length<6)return bad('pw1');if(newPw!==newPw2)return bad('pw2')}
+ if(needPw()){if(newPw.length<8)return bad('pw1');if(newPw!==newPw2)return bad('pw2')}
  if(!id&&SITE.needCode&&!code.trim())return bad('code');
- else if(newPw&&newPw.length<6)return bad('pw1');
+ else if(newPw&&newPw.length<8)return bad('pw1');
  return true;
 }
 async function save(){
@@ -392,11 +392,11 @@ async function save(){
  busy=true;const g=$('#go');g.disabled=true;g.innerHTML='<span class="sp2"></span> Un instant…';
  try{
   if(persistent){
-   const r=await api('/api/profile',{id,password:curPw,newPassword:newPw||undefined,pseudo:st.pseudo,cfg:opts(),code});
+   const r=await api('/api/profile',{id,password:curPw,session:curSess||undefined,newPassword:newPw||undefined,pseudo:st.pseudo,cfg:opts(),code});
    if(r.bad==='code'){busy=false;await go(0,true);return bad('code',r.error)}
-   if(!r.ok){if(r.persistent===false){persistent=false;busy=false;return save2()}toast(r.error||'Échec');busy=false;g.disabled=false;g.textContent=id?'Enregistrer':'Créer mon lien';return}
-   if(!id)fresh=true;id=r.id;if(newPw){curPw=newPw;nopw=false}newPw=newPw2='';
-   try{localStorage.twprofile=JSON.stringify({id,pseudo:st.pseudo})}catch{}SS.set(id,curPw,st.pseudo);foot();
+   if(!r.ok){if(r.persistent===false){persistent=false;busy=false;return save2()}if(r.bad&&!curPw){SS.clear();toast('Session expirée : reconnecte-toi')}else toast(r.error||'Échec');busy=false;g.disabled=false;g.textContent=id?'Enregistrer':'Créer mon lien';return}
+   if(!id)fresh=true;id=r.id;if(newPw){curPw=newPw;nopw=false}if(r.session)curSess=r.session;newPw=newPw2='';
+   try{localStorage.twprofile=JSON.stringify({id,pseudo:st.pseudo})}catch{}SS.set(id,curSess,st.pseudo);foot();
    const o=location.origin;result={link:o+'/u/'+id+'/manifest.json',stremio:'stremio://'+location.host+'/u/'+id+'/manifest.json',cfgLink:o+'/u/'+id+'/configure'};
   }else return save2();
  }catch(e){toast('Erreur : '+e.message);busy=false;g.disabled=false;return}
@@ -469,7 +469,7 @@ const annHash=a=>{let h=0;for(const c of (a.type+'|'+a.title+'|'+a.text))h=(h*31
   if(m){
    if(!p.ok){await show('<div class="pane"><h1>Profil introuvable</h1><p class="sub">Ce lien de configuration n\'existe pas. <a class="lnk" href="/config">Créer un nouveau lien</a></p></div>');return}
    id=m[1];$('#mode').textContent='Modifier';
-   if(p.locked){const o=SS.get();if(o&&o.id===m[1]){const r=await api('/api/profile',{id:o.id,action:'open',password:o.pw});if(r.ok){moveInd();return enter(o.id,o.pw,r)}SS.clear()}locked=true;$('#tabs').classList.add('off');await show(lockHtml());return}
+   if(p.locked){const o=SS.get();if(o&&o.id===m[1]){const r=await api('/api/profile',{id:o.id,action:'open',session:o.sess});if(r.ok){moveInd();return enter(o.id,'',r)}SS.clear()}locked=true;$('#tabs').classList.add('off');await show(lockHtml());return}
    nopw=true;Object.assign(st,p.cfg,{pseudo:p.pseudo});
   }else if(c){try{Object.assign(st,unb64(c[2]),{pseudo:clean(decodeURIComponent(c[1]))});legacy=true;$('#mode').textContent='Migration'}catch{}}
  }catch{}

@@ -588,7 +588,7 @@ async function loadProf(){try{const r=await api('profiles');PROF=r.profils||[];r
 $('#pfRef').onclick=loadProf;
 $('#users').onclick=async e=>{const b=e.target.closest('[data-pf]');if(!b)return;const del=b.dataset.pf==='delete',t0=del?'Supprimer':'Réinitialiser le mdp';
  if(b.dataset.sure!=='1'){b.dataset.sure='1';b.textContent=del?'Confirmer la suppression':'Confirmer';setTimeout(()=>{if(b.isConnected){b.dataset.sure='';b.textContent=t0}},4000);return}
- b.disabled=true;await api('profiles',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ref:b.dataset.r,action:b.dataset.pf})});toast(del?'Profil supprimé':'Mot de passe réinitialisé');loadProf();load()};
+ b.disabled=true;const rr=await api('profiles',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ref:b.dataset.r,action:b.dataset.pf})});toast(del?'Profil supprimé':'Mot de passe réinitialisé');if(!del&&rr&&rr.code)prompt('Code de réinitialisation à usage unique pour '+(rr.pseudo||'ce profil')+' (valable 24 h, affiché une seule fois). Donne-le à la personne : elle le tape à la place du mot de passe, puis en choisit un nouveau.',rr.code);loadProf();load()};
 async function load(){try{S=await api('state?n=500');if(S.stats)render()}catch(e){}}
 function schedule(){clearInterval(timer);timer=setInterval(()=>{if(!paused&&!document.hidden)load()},+$('#rf').value)}
 $('#rf').onchange=schedule;

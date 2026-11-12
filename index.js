@@ -533,6 +533,12 @@ async function gqlRaw(query) {
   return j.data;
 }
 const toLive = n => n && n.broadcaster && n.broadcaster.login ? { login: n.broadcaster.login, info: { name: n.broadcaster.displayName || n.broadcaster.login, avatar: n.broadcaster.profileImageURL || '', banner: '', bio: '', live: true, title: n.title || '', game: n.game ? n.game.displayName : '', viewers: Number(n.viewersCount) || 0, preview: n.previewImageURL || '' } } : null;
+// Les infos des lives déjà reçues pour un catalogue servent aussi aux vignettes : évite ~60 requêtes Twitch supplémentaires par affichage du catalogue
+function seedInfo(list) {
+  const now = Date.now();
+  for (const x of list || []) { const c = infoCache.get(x.login); if (!c || !c.v || c.exp < now) infoCache.set(x.login, { v: x.info, exp: now + 45000 }); }
+  while (infoCache.size > 300) infoCache.delete(infoCache.keys().next().value);
+}
 async function liveStreams(game) { // game vide = les plus regardés de tout Twitch ; null si le jeu n'existe pas
   const k = game.toLowerCase(), c = streamsCache.get(k);
   if (c && c.exp > Date.now()) return c.v;
@@ -543,6 +549,7 @@ async function liveStreams(game) { // game vide = les plus regardés de tout Twi
     const g = rs.map(r => r.game).find(Boolean); if (g) edges = (g.streams || {}).edges || [];
   }
   v = edges ? edges.map(e => toLive(e && e.node)).filter(Boolean).sort((a, b) => b.info.viewers - a.info.viewers) : null;
+  seedInfo(v);
   streamsCache.set(k, { v, exp: Date.now() + 30000 });
   if (streamsCache.size > 80) streamsCache.delete(streamsCache.keys().next().value);
   return v;
@@ -563,6 +570,7 @@ async function frenchStreams(game) {
     try { v = toL(edgesOf(await run('(first: 100)', STREAM_NODE + ' broadcaster { broadcastSettings { language } }')).filter(e => e && e.node && e.node.broadcaster && e.node.broadcaster.broadcastSettings && /^fr/i.test(String(e.node.broadcaster.broadcastSettings.language || '')))); }
     catch (e) { errs.push('langue des chaînes : ' + String(e.message).slice(0, 110)); }
   }
+  if (v) seedInfo(v);
   frErr = v ? '' : errs.join(' | ');
   streamsCache.set(key, { v, exp: Date.now() + (v ? 30000 : 10000) });
   if (streamsCache.size > 80) streamsCache.delete(streamsCache.keys().next().value);
@@ -611,6 +619,20 @@ async function posterSvg(login) {
 }
 // Même affiche en JPEG pour Stremio mobile (qui n'affiche pas les SVG) : lib/posterimg.js, sans dépendance. Cache court et borné, une seule génération à la fois par chaîne.
 const posterImg = require('./lib/posterimg');
+// Vignettes SVG (PC) : comme pour le JPEG des mobiles, au plus 4 générations en même temps et une seule par chaîne.
+// Sans cette limite, un catalogue de 60 lives lançait 60 générations d'un coup (infos + image de chaque chaîne) : l'affichage restait « en chargement » sur PC.
+// Quand c'est plein, on renvoie null : la route redirige alors vers la vignette simple de Twitch, sans attendre.
+const posterSvgBusy = new Map(); let posterSvgRun = 0;
+async function posterSvgLimited(login) {
+  const c = posterCache.get(login);
+  if (c && c.exp > Date.now()) return c.v;
+  if (posterSvgBusy.has(login)) return posterSvgBusy.get(login);
+  if (posterSvgRun >= 4) return null;
+  posterSvgRun++;
+  const job = posterSvg(login).catch(() => null).finally(() => { posterSvgBusy.delete(login); posterSvgRun--; });
+  posterSvgBusy.set(login, job);
+  return job;
+}
 const posterJpgCache = new Map(), posterJpgBusy = new Map();
 let posterJpgRun = 0;
 async function posterJpeg(login) {
@@ -906,7 +928,9 @@ async function deviceStart(req) {
       if (DEVICES.size > 300) DEVICES.clear();
       const sid = crypto.randomBytes(12).toString('base64url'), ttl = Math.min(Number(j.expires_in) || 1800, 1800);
       DEVICES.set(sid, { dc: j.device_code, exp: Date.now() + ttl * 1000, c });
-      return { ok: true, sid, user_code: String(j.user_code), url: /^https:\/\/(www\.)?twitch\.tv\//.test(j.verification_uri || '') ? j.verification_uri : 'https://www.twitch.tv/activate', interval: Math.max(3, Number(j.interval) || 5), expires_in: ttl };
+      // lien direct avec le code déjà rempli (twitch.tv/activate?device-code=…) : plus rien à recopier
+      const vuri = /^https:\/\/(www\.)?twitch\.tv\//.test(j.verification_uri || '') ? String(j.verification_uri).split('?')[0] : 'https://www.twitch.tv/activate';
+      return { ok: true, sid, user_code: String(j.user_code), url: vuri + '?device-code=' + encodeURIComponent(String(j.user_code)), interval: Math.max(3, Number(j.interval) || 5), expires_in: ttl };
     } catch (e) { errs.push(c.k + ' : ' + e.message); }
   }
   return { ok: false, error: 'Twitch refuse la demande de code (' + errs.join(' ; ') + '). Utilise la méthode avancée.' };
@@ -1106,7 +1130,7 @@ async function segmentsInfo() { // onglet « Vidéo » du dashboard : le Worker 
   }
   return { origin, worker, mix: await akeys.mix(), addonAllowed: segAddonOk(), env: { proxy: process.env.TWITCH_SEGMENTS_PROXY ?? '', debug: process.env.DEBUG_HTTP === '1', sealed: sealLib.available() }, cf: await cfUsage() };
 }
-const adminRoute = makeAdmin({ send, json, relayReport, probe, segments: segmentsInfo, akeys, check: async (login, c, u) => { const n = cfgLib.normalize(c || {}); return checkStream(login, n, u || 'admin', 'admin', n.hevc ? await ownerToken() : null); }, account, config: () => ({
+const adminRoute = makeAdmin({ pwHash: pw => pwHash(pw), send, json, relayReport, probe, segments: segmentsInfo, akeys, check: async (login, c, u) => { const n = cfgLib.normalize(c || {}); return checkStream(login, n, u || 'admin', 'admin', n.hevc ? await ownerToken() : null); }, account, config: () => ({
   relais: allProxies(),
   rows: [
     ['Version', require('./package.json').version, null],
@@ -1121,12 +1145,36 @@ const adminRoute = makeAdmin({ send, json, relayReport, probe, segments: segment
 
 // Profils enregistrés : /u/<id>/… (l'identifiant est le secret). Les réglages sont modifiables sans réinstaller l'addon.
 const ID_RE = /^[A-Za-z0-9_-]{16,40}$/;
+// Politique de sécurité de la page /config : scripts et styles de la page elle-même, polices Google Fonts, appels réseau uniquement vers l'addon.
+// (pour retirer 'unsafe-inline' des scripts : sortir le <script> de lib/pages/config.html dans un fichier .js servi par l'addon)
+const CONFIG_CSP = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'";
 async function loadProfile(id) {
-  try { const raw = await store.getKey('p:' + id); if (!raw) return null; const p = JSON.parse(raw); return { pseudo: cfgLib.cleanPseudo(p.pseudo), cfg: cfgLib.normalize(p.cfg), pw: typeof p.pw === 'string' ? p.pw : '' }; } catch { return null; }
+  try { const raw = await store.getKey('p:' + id); if (!raw) return null; const p = JSON.parse(raw); return { pseudo: cfgLib.cleanPseudo(p.pseudo), cfg: cfgLib.normalize(p.cfg), pw: typeof p.pw === 'string' ? p.pw : '', reset: p.reset && typeof p.reset.h === 'string' ? { h: p.reset.h, exp: Number(p.reset.exp) || 0 } : null }; } catch { return null; }
 }
 const pwHash = pw => { const salt = crypto.randomBytes(16); return salt.toString('base64url') + ':' + crypto.scryptSync(String(pw), salt, 32).toString('base64url'); };
 const pwCheck = (pw, h) => { try { const [s, k] = String(h).split(':'), a = crypto.scryptSync(String(pw), Buffer.from(s, 'base64url'), 32), b = Buffer.from(k, 'base64url'); return a.length === b.length && crypto.timingSafeEqual(a, b); } catch { return false; } };
+const MIN_PW = 8; // longueur minimale d'un NOUVEAU mot de passe (les anciens mots de passe de 6 caractères restent valables)
 const fails = new Map(); // essais de mot de passe ratés : 8 par profil et par 10 minutes
+const ipFails = new Map(); // et 20 par adresse et par 10 minutes (un même lien d'installation ne permet pas d'essayer des mots de passe sans fin)
+const akHits = new Map(); // vérification d'une clé d'accès : 15 par minute et par adresse
+const akeyLimited = req => { const ip = store.ipOf(req), n = (akHits.get(ip) || 0) + 1; akHits.set(ip, n); if (akHits.size > 500) akHits.clear(); setTimeout(() => akHits.delete(ip), 60000).unref?.(); return n > 15; };
+const ipLocked = ip => { const f = ipFails.get(ip); return !!f && f.n >= 20 && Date.now() - f.t < 600000; };
+const ipFailed = ip => { const f = ipFails.get(ip), now = Date.now(); ipFails.set(ip, f && now - f.t < 600000 ? { n: f.n + 1, t: f.t } : { n: 1, t: now }); if (ipFails.size > 2000) ipFails.clear(); };
+// Session : après une connexion réussie, le navigateur reçoit un jeton aléatoire (10 min, renouvelé à chaque usage) et garde ça à la place du mot de passe.
+const SESS = new Map(), SESS_TTL = 600000;
+function newSession(id) {
+  const now = Date.now(); for (const [k, v] of SESS) if (v.exp < now) SESS.delete(k);
+  if (SESS.size > 2000) SESS.clear();
+  const t = crypto.randomBytes(24).toString('base64url'); SESS.set(t, { id, exp: now + SESS_TTL }); return t;
+}
+function checkSession(t, id) {
+  const k = String(t || ''), s = k && SESS.get(k);
+  if (!s) return false;
+  if (s.exp < Date.now() || s.id !== id) { if (s.exp < Date.now()) SESS.delete(k); return false; }
+  s.exp = Date.now() + SESS_TTL; return true;
+}
+// Code de réinitialisation à usage unique, créé par l'administrateur (valable 24 h) : il remplace le mot de passe pour une seule connexion, on doit alors en choisir un nouveau.
+const resetOk = (code, r) => !!r && r.exp > Date.now() && pwCheck(String(code || '').toUpperCase().replace(/[^A-Z0-9]/g, ''), r.h);
 const locked = id => { const f = fails.get(id); return !!f && f.n >= 8 && Date.now() - f.t < 600000; };
 const failed = id => { const f = fails.get(id), now = Date.now(); fails.set(id, f && now - f.t < 600000 ? { n: f.n + 1, t: f.t } : { n: 1, t: now }); if (fails.size > 500) fails.clear(); };
 async function profileApi(req) {
@@ -1140,27 +1188,31 @@ async function profileApi(req) {
     if (!ID_RE.test(id)) return { ok: false, error: 'Lien inconnu' };
     const p = await loadProfile(id);
     if (!p) return { ok: false, error: 'Profil introuvable' };
-    return p.pw ? { ok: true, persistent: store.persistent, locked: true } : { ok: true, persistent: store.persistent, locked: false, nopw: true, pseudo: p.pseudo, cfg: p.cfg };
+    return { ok: true, persistent: store.persistent, locked: true }; // jamais de réglages sans mot de passe (ou code de réinitialisation) : l'identifiant seul ne suffit pas
   }
   if (!store.persistent) return { ok: false, persistent: false, error: 'La base de données n\'est pas configurée : utilise le lien classique.' };
   let b = {}; try { b = JSON.parse(await readBody(req)); } catch { return { ok: false, error: 'requête invalide' }; }
   const id0 = String(b.id || ''), pw = String(b.password || '').slice(0, 100), npw = String(b.newPassword || '').slice(0, 100);
-  let old = null;
+  let old = null, sess = '';
   if (id0) {
     if (!ID_RE.test(id0) || !(old = await loadProfile(id0))) return { ok: false, error: 'Profil introuvable' };
-    if (old.pw) {
-      if (locked(id0)) return { ok: false, error: 'Trop d\'essais : réessaie dans 10 minutes.' };
-      if (!pwCheck(pw, old.pw)) { failed(id0); return { ok: false, bad: true, error: 'Mot de passe incorrect' }; }
+    if (checkSession(b.session, id0)) sess = String(b.session);
+    else {
+      const ip = store.ipOf(req);
+      if (locked(id0) || ipLocked(ip)) return { ok: false, error: 'Trop d\'essais : réessaie dans 10 minutes.' };
+      if (!old.pw && !(old.reset && old.reset.exp > Date.now())) return { ok: false, error: 'Ce profil n\'a pas de mot de passe : demande un code de réinitialisation à l\'administrateur.' };
+      if (!(old.pw ? pwCheck(pw, old.pw) : resetOk(pw, old.reset))) { failed(id0); ipFailed(ip); return { ok: false, bad: true, error: old.pw ? 'Mot de passe incorrect' : 'Code de réinitialisation incorrect' }; }
+      sess = newSession(id0);
     }
-    if (b.action === 'open') return { ok: true, pseudo: old.pseudo, cfg: old.cfg, nopw: !old.pw };
+    if (b.action === 'open') return { ok: true, pseudo: old.pseudo, cfg: old.cfg, nopw: !old.pw, session: sess };
   }
   if (!id0) {
     const S = await siteLib.load();
     if (!S.open) return { ok: false, error: 'Les inscriptions sont fermées pour le moment.' };
     if (S.code && String(b.code || '').trim() !== S.code) return { ok: false, bad: 'code', error: 'Code d\'invitation incorrect' };
   }
-  if ((!old || !old.pw) && npw.length < 6) return { ok: false, error: 'Choisis un mot de passe d\'au moins 6 caractères' };
-  if (npw && npw.length < 6) return { ok: false, error: 'Mot de passe : 6 caractères minimum' };
+  if ((!old || !old.pw) && npw.length < MIN_PW) return { ok: false, error: 'Choisis un mot de passe d\'au moins ' + MIN_PW + ' caractères' };
+  if (npw && npw.length < MIN_PW) return { ok: false, error: 'Mot de passe : ' + MIN_PW + ' caractères minimum' };
   const pseudo = cfgLib.cleanPseudo(b.pseudo);
   if (pseudo.length < 2) return { ok: false, error: 'Pseudo trop court (2 caractères minimum)' };
   const cfg = cfgLib.normalize(b.cfg);
@@ -1172,10 +1224,10 @@ async function profileApi(req) {
     if (used >= ck.rec.max) return { ok: false, bad: 'akey', error: 'Cette clé est déjà utilisée par ' + used + ' profil' + (used > 1 ? 's' : '') + ' (maximum ' + ck.rec.max + ').' };
   }
   const id = id0 || crypto.randomBytes(16).toString('base64url');
-  await store.setKey('p:' + id, JSON.stringify({ pseudo, cfg, pw: npw ? pwHash(npw) : old.pw, maj: Date.now() }));
+  await store.setKey('p:' + id, JSON.stringify({ pseudo, cfg, pw: npw ? pwHash(npw) : old.pw, maj: Date.now() })); // le code de réinitialisation (s'il y en avait un) est supprimé : à usage unique
   akeys.forget();
   store.log({ k: 'config', u: pseudo, niveau: 'INFO', reglages: summary(cfg), action: id0 ? 'modifiée' : 'créée' });
-  return { ok: true, id, pseudo };
+  return { ok: true, id, pseudo, session: sess || newSession(id) };
 }
 
 // Liste de lecture d'une qualité : plusieurs lecteurs de la même chaîne (ou un lecteur qui rafraîchit) partagent UNE requête vers Twitch pendant 0,7 s.
@@ -1244,7 +1296,14 @@ async function handler(req, res) {
       seg = seg.slice(2);
     }
     const strip = s => String(s || '').replace(/\.json$/, '');
-    res.setHeader('Access-Control-Allow-Origin', '*');
+    // En-têtes de sécurité sur toutes les réponses (la page de configuration ajoute en plus sa politique CSP, voir plus bas)
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Referrer-Policy', 'no-referrer');
+    if (originOf(req).startsWith('https://')) res.setHeader('Strict-Transport-Security', 'max-age=31536000');
+    // CORS ouvert (*) seulement pour ce dont Stremio a besoin (manifeste, catalogues, flux, lecture) : jamais pour /api ni /admin,
+    // sinon n'importe quel site web pourrait faire appeler ces routes par ses visiteurs. Les pages de l'addon s'appellent elles-mêmes (même origine).
+    if (seg[0] !== 'api' && seg[0] !== 'admin') res.setHeader('Access-Control-Allow-Origin', '*');
     if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
     if (await adminRoute(req, res, seg)) return;
     const SS = await siteLib.load(), F = FEAT = SS.feat, BR = SS.name.slice(0, 14); store.setLog(F.logs);
@@ -1269,15 +1328,20 @@ async function handler(req, res) {
       const ua = String(req.headers['user-agent'] || ''), force = new URL(req.url, 'http://x').searchParams.get('svg');
       const desktop = /(Windows NT|Macintosh|X11; Linux|CrOS)/i.test(ua) && !/(Android|iPhone|iPad|iPod|Mobile)/i.test(ua);
       const wantSvg = force === '1' ? true : force === '0' ? false : desktop;
-      const svg = wantSvg ? await posterSvg(lg).catch(() => null) : null;
+      const svg = wantSvg ? await posterSvgLimited(lg) : null;
       if (!wantSvg) { const jpg = await posterJpeg(lg); if (jpg) return send(res, 200, 'image/jpeg', jpg, { 'Cache-Control': 'private, max-age=45', Vary: 'User-Agent' }); }
       if (!svg) { res.writeHead(302, { Location: 'https://static-cdn.jtvnw.net/previews-ttv/live_user_' + lg + '-640x360.jpg?t=' + Math.floor(Date.now() / 60000), 'Cache-Control': 'no-store', Vary: 'User-Agent' }); return res.end(); }
       return send(res, 200, 'image/svg+xml', svg, { 'Cache-Control': 'private, max-age=45', Vary: 'User-Agent' });
     }
     if (seg[0] === 'logo.svg') return send(res, 200, 'image/svg+xml', asset('logo.svg'), { 'Cache-Control': 'public, max-age=86400' });
-    if (seg[0] === 'config' || seg[0] === 'configure') return send(res, 200, 'text/html; charset=utf-8', await configPage(), { 'Cache-Control': 'no-cache' });
+    if (seg[0] === 'config' || seg[0] === 'configure') return send(res, 200, 'text/html; charset=utf-8', await configPage(), { 'Cache-Control': 'no-cache', 'Content-Security-Policy': CONFIG_CSP });
     if (seg[0] === 'api' && seg[1] === 'profile') return json(res, await profileApi(req));
-    if (seg[0] === 'api' && seg[1] === 'akey' && req.method === 'GET') { if (tooMany(req)) return json(res, { ok: false, why: 'trop de demandes' }); const ck = akeys.check(new URL(req.url, 'http://x').searchParams.get('k')); return json(res, ck.ok ? { ok: true } : { ok: false, why: ck.why }); }
+    if (seg[0] === 'api' && seg[1] === 'akey') { // POST { k } : la clé ne passe plus dans l'adresse (donc plus dans les journaux d'accès)
+      if (req.method !== 'POST') return send(res, 405, 'text/plain; charset=utf-8', 'Méthode non autorisée', { Allow: 'POST' });
+      if (tooMany(req) || akeyLimited(req)) return json(res, { ok: false, why: 'trop de demandes' });
+      let kb = {}; try { kb = JSON.parse(await readBody(req)); } catch { return json(res, { ok: false, why: 'requête invalide' }); }
+      const ck = akeys.check(String(kb.k || '').slice(0, 40)); return json(res, ck.ok ? { ok: true } : { ok: false, why: ck.why });
+    }
     if (seg[0] === 'api' && seg[1] === 'seal' && req.method === 'POST') return json(res, await sealToken(req));
     if (seg[0] === 'api' && seg[1] === 'twitch' && seg[2] === 'start' && req.method === 'POST') return json(res, await deviceStart(req));
     if (seg[0] === 'api' && seg[1] === 'twitch' && seg[2] === 'poll' && req.method === 'POST') return json(res, await devicePoll(req));
