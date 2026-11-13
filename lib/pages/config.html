@@ -20,6 +20,21 @@ body{font-family:'Inter',-apple-system,'Segoe UI',sans-serif;background:radial-g
 .vb{display:inline-flex;align-items:center;gap:6px;font-family:Inter,sans-serif;font-size:.78rem;font-weight:500;color:var(--t2);background:var(--el);border:1px solid var(--bs);padding:3px 10px;border-radius:99px}.vb svg{width:13px;height:13px;fill:currentColor}
 .brand img{width:34px;height:34px;border-radius:10px;box-shadow:0 6px 18px -6px var(--a)}
 .badge{margin-left:auto;font-size:.68rem;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:#d9c4ff;background:var(--as);border:1px solid rgba(157,92,255,.3);padding:4px 12px;border-radius:99px}
+.pnb{position:relative;display:inline-flex;align-items:center;gap:6px;font:500 .78rem Inter,sans-serif;color:var(--t2);background:var(--el);border:1px solid var(--bs);padding:3px 11px;border-radius:99px;cursor:pointer;transition:color .2s,border-color .2s,background .2s}
+.pnb:hover{color:var(--t);border-color:var(--bd);background:var(--el2)}.pnb:focus-visible{outline:2px solid var(--a);outline-offset:2px}.pnb svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.pnb .dot{width:7px;height:7px;border-radius:50%;background:var(--a2);box-shadow:0 0 0 3px rgba(56,189,248,.18)}
+.pn-ov{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;padding:18px;background:rgba(7,7,10,.74);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);animation:pnf .25s ease both}.pn-ov[hidden]{display:none}
+.pn{display:flex;flex-direction:column;width:100%;max-width:580px;max-height:min(82vh,720px);background:#121218;border:1px solid var(--bd);border-radius:var(--rl);box-shadow:0 30px 80px -20px rgba(0,0,0,.8);animation:pnp .35s var(--ease) both}
+.pn-h{display:flex;align-items:center;gap:10px;padding:18px 20px 14px;border-bottom:1px solid var(--bs)}.pn-h h2{font:700 1.1rem 'Space Grotesk','Inter',sans-serif;letter-spacing:-.01em}.pn-h .vb{margin-right:auto}
+.pn-x{display:grid;place-items:center;width:32px;height:32px;border-radius:10px;border:1px solid var(--bs);background:var(--el);color:var(--t2);cursor:pointer}.pn-x:hover{color:var(--t);background:var(--el2)}.pn-x:focus-visible,.pn-b:focus-visible{outline:2px solid var(--a);outline-offset:2px}.pn-x svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
+.pn-b{overflow-y:auto;padding:6px 20px 22px;overscroll-behavior:contain}
+.pn-e{padding:18px 0;border-bottom:1px solid var(--bs)}.pn-e:last-child{border-bottom:0}
+.pn-d{display:inline-block;font-size:.7rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#d9c4ff;background:var(--as);border:1px solid rgba(157,92,255,.3);padding:2px 10px;border-radius:99px}
+.pn-e h3{font:700 1.05rem 'Space Grotesk','Inter',sans-serif;margin:10px 0 2px}.pn-e h4{font-size:.72rem;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--a2);margin:14px 0 6px}
+.pn-e ul{list-style:none;display:grid;gap:6px}.pn-e li{position:relative;padding-left:16px;color:var(--t2);font-size:.92rem}.pn-e li::before{content:'';position:absolute;left:2px;top:.62em;width:5px;height:5px;border-radius:50%;background:var(--a)}.pn-e li b{color:var(--t);font-weight:600}
+@keyframes pnf{from{opacity:0}to{opacity:1}}@keyframes pnp{from{opacity:0;transform:translateY(14px) scale(.98)}to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){.pn-ov,.pn{animation:none}}
+@media(max-width:520px){.brand{flex-wrap:wrap}.pn-h{padding:16px 16px 12px}.pn-b{padding:4px 16px 18px}}
 .tabs{position:relative;display:flex;padding:5px;background:rgba(255,255,255,.04);border:1px solid var(--bs);border-radius:99px;margin:0 auto 24px;width:fit-content;animation:up .8s .05s var(--ease) both}.tabs.off{display:none}
 .ind{position:absolute;top:5px;left:0;height:calc(100% - 10px);width:0;border-radius:99px;background:linear-gradient(135deg,color-mix(in srgb,var(--a),#fff 25%),var(--a) 55%,var(--ah));box-shadow:0 8px 26px -8px var(--a),inset 0 1px 0 rgba(255,255,255,.3);transition:transform .55s var(--spring),width .45s var(--ease)}
 .tab{position:relative;z-index:1;font:inherit;font-weight:600;font-size:.88rem;color:var(--t2);background:none;border:0;border-radius:99px;padding:10px 22px;cursor:pointer;transition:color .3s}.tab:hover{color:var(--t)}.tab.on{color:#fff}
@@ -153,7 +168,7 @@ footer{position:relative;z-index:1;display:grid;gap:10px;justify-items:center;te
 </head>
 <body>
 <div class="wrap">
-<div class="brand"><img src="/logo.png?v={{V}}" alt="" width="34" height="34">{{NAME}}<span class="vb" title="Version de l'addon"><svg viewBox="0 0 24 24"><path d="M21.41 11.58l-9-9A2 2 0 0 0 11 2H4a2 2 0 0 0-2 2v7a2 2 0 0 0 .59 1.42l9 9A2 2 0 0 0 13 22a2 2 0 0 0 1.41-.59l7-7A2 2 0 0 0 22 13a2 2 0 0 0-.59-1.42zM6.5 8A1.5 1.5 0 1 1 8 6.5 1.5 1.5 0 0 1 6.5 8z"/></svg>v{{VERSION}}</span><span class="badge" id="mode">Configuration</span></div>
+<div class="brand"><img src="/logo.png?v={{V}}" alt="" width="34" height="34">{{NAME}}<span class="vb" title="Version de l'addon"><svg viewBox="0 0 24 24"><path d="M21.41 11.58l-9-9A2 2 0 0 0 11 2H4a2 2 0 0 0-2 2v7a2 2 0 0 0 .59 1.42l9 9A2 2 0 0 0 13 22a2 2 0 0 0 1.41-.59l7-7A2 2 0 0 0 22 13a2 2 0 0 0-.59-1.42zM6.5 8A1.5 1.5 0 1 1 8 6.5 1.5 1.5 0 0 1 6.5 8z"/></svg>v{{VERSION}}</span><button type="button" class="pnb" id="pnBtn" aria-haspopup="dialog" title="Voir les nouveautés de l'addon"><svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>Patch notes<i class="dot" id="pnDot" hidden></i></button><span class="badge" id="mode">Configuration</span></div>
 <div id="annBox"></div>
 <div class="tabs" id="tabs"><i class="ind" id="ind"></i><button class="tab on" data-tab="create">Créer un profil</button><button class="tab" data-tab="login">Se connecter</button></div>
 <div class="steps off" id="steps"></div>
@@ -161,6 +176,7 @@ footer{position:relative;z-index:1;display:grid;gap:10px;justify-items:center;te
 {{DISCORD}}
 <footer><div id="foot"></div><div class="credit"><img src="/logo.png?v={{V}}" alt="" width="20" height="20"><span>{{CREDIT}}</span></div>{{LEGAL}}</footer>
 </div>
+<div class="pn-ov" id="pnOv" hidden><div class="pn" role="dialog" aria-modal="true" aria-labelledby="pnT"><div class="pn-h"><h2 id="pnT">Patch notes</h2><span class="vb" id="pnV"></span><button type="button" class="pn-x" id="pnX" aria-label="Fermer"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div><div class="pn-b" id="pnB" tabindex="0"></div></div></div>
 <div class="toast" id="toast"></div>
 <script>
 /*{{ANNJS}}*/
@@ -477,6 +493,49 @@ const annHash=a=>{let h=0;for(const c of (a.type+'|'+a.title+'|'+a.text))h=(h*31
  if(location.hash==='#connexion'){tabs('login');await show(loginHtml());return}
  if(!id&&!legacy){welcome=true;await show(welcomeHtml());return}
  $('#steps').classList.remove('off');steps();await show(body());
+})();
+/* ===== Patch notes : ajoute une entrée EN HAUT de la liste à chaque mise à jour ===== */
+const PATCHNOTES=[
+ {id:'2026-11-12',date:'12 novembre 2026',title:'Confort et sécurité',groups:[
+  ['Améliorations',[
+   '**Connexion du compte Twitch** : le lien twitch.tv/activate s\'ouvre avec ton code déjà pré-rempli.',
+   '**Affiches des lives** plus fluides : génération des vignettes plus rapide et plus légère.',
+   '**Formulaires de connexion** compatibles avec les gestionnaires de mots de passe.']],
+  ['Sécurité',[
+   'En-têtes de sécurité renforcés, accès extérieur limité aux seules routes de Stremio.',
+   'Ta session ne garde plus ton mot de passe dans le navigateur : elle utilise un jeton temporaire.',
+   'Code de réinitialisation à usage unique, mot de passe de 8 caractères minimum, limite de tentatives par IP.',
+   'Liens des annonces en https uniquement.']]]},
+ {id:'2026-11-11',date:'27 octobre – 11 novembre 2026',title:'Lives en français, affiches et rediffs',groups:[
+  ['Nouveautés',[
+   '**Catalogue « Lives en français »** (jusqu\'à 100 lives) et recherche de chaînes par nom partiel.',
+   '**Affiches des lives** : jeu et nombre de spectateurs dessinés dessus, compatibles avec Stremio mobile, vignettes plus à jour.',
+   '**Rediffusions** : fiche de chaîne plus claire, durée / date / jeu / vues sur chaque épisode, logo de la chaîne.',
+   '**Fiche d\'une chaîne** : liens vers Twitch, le jeu en cours et le Discord.',
+   '**Connexion du compte Twitch par code** (twitch.tv/activate), sans copier de cookie.',
+   '**Page de configuration** : nouvelle étape « Affichage » (Classique, Compact, Détaillé, Sans emoji), version de l\'addon affichée.',
+   'L\'addon s\'appelle désormais **TwitchIO** partout.']],
+  ['Lecture et performances',[
+   '**Lecture dans Nuvio / mpv** corrigée.',
+   '**Flux de secours sans pub** quand aucun relais ne répond.',
+   'Une chaîne protégée ne bloque plus les relais : passage direct au flux de secours.',
+   'Serveur optimisé (relais des segments en flux, compression gzip).']],
+  ['Sécurité',[
+   'L\'installation exige un lien généré depuis /config.',
+   'La vidéo n\'est relayée qu\'avec une clé d\'accès valide.']]]}
+];
+(function(){
+ const ov=$('#pnOv'),btn=$('#pnBtn'),dot=$('#pnDot'),x=$('#pnX'),bd=$('#pnB');if(!ov||!btn)return;
+ const KEY='tio_pn_seen',last=PATCHNOTES[0]&&PATCHNOTES[0].id,rich=t=>esc(t).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');
+ const bv=$('.brand .vb');if(bv)$('#pnV').textContent=bv.textContent;
+ let seen=null;try{seen=localStorage.getItem(KEY)}catch{}
+ if(last&&seen!==last)dot.hidden=false;
+ bd.innerHTML=PATCHNOTES.map(p=>'<section class="pn-e"><span class="pn-d">'+esc(p.date)+'</span><h3>'+esc(p.title)+'</h3>'
+  +p.groups.map(g=>'<h4>'+esc(g[0])+'</h4><ul>'+g[1].map(i=>'<li>'+rich(i)+'</li>').join('')+'</ul>').join('')+'</section>').join('');
+ const close=()=>{ov.hidden=true;document.body.style.overflow='';document.removeEventListener('keydown',key);btn.focus()};
+ const key=e=>{if(e.key==='Escape'){e.preventDefault();close()}else if(e.key==='Tab'){const f=[x,bd],i=f.indexOf(document.activeElement);e.preventDefault();f[(i+(e.shiftKey?-1:1)+f.length)%f.length].focus()}};
+ btn.onclick=()=>{ov.hidden=false;document.body.style.overflow='hidden';bd.scrollTop=0;dot.hidden=true;try{localStorage.setItem(KEY,last)}catch{}document.addEventListener('keydown',key);x.focus()};
+ x.onclick=close;ov.onclick=e=>{if(e.target===ov)close()};
 })();
 </script>
 </body>
