@@ -539,16 +539,32 @@ function seedInfo(list) {
   for (const x of list || []) { const c = infoCache.get(x.login); if (!c || !c.v || c.exp < now) infoCache.set(x.login, { v: x.info, exp: now + 45000 }); }
   while (infoCache.size > 300) infoCache.delete(infoCache.keys().next().value);
 }
+// Lives sans jeu choisi. Twitch renvoie parfois une liste vide pour la requête globale « streams » (c'était le cas de « Lives par jeu » et « Lives en français » : 0 chaîne pour tout le monde) :
+// on essaie la requête telle quelle, puis triée par spectateurs, puis on regroupe les lives des jeux les plus regardés (les requêtes par jeu, elles, fonctionnent).
+const byViewers = (a, b) => b.info.viewers - a.info.viewers;
+async function gamesMerge(opt, per) {
+  const rs = await Promise.all(GAMES.slice(0, 14).map(g => gqlRaw('query { game(name: ' + JSON.stringify(g) + ') { streams(first: ' + per + opt + ') { edges { node { ' + STREAM_NODE + ' } } } } }').then(d => ((d.game || {}).streams || {}).edges || []).catch(() => [])));
+  const seen = new Set(), out = [];
+  for (const e of rs.flat()) { const l = toLive(e && e.node); if (l && !seen.has(l.login)) { seen.add(l.login); out.push(l); } }
+  return out.sort(byViewers).slice(0, 60);
+}
+async function topLives() {
+  const q = o => 'query { streams(first: 60' + o + ') { edges { node { ' + STREAM_NODE + ' } } } }';
+  for (const o of ['', ', options: { sort: VIEWER_COUNT }']) {
+    try { const v = (((await gqlRaw(q(o))).streams || {}).edges || []).map(e => toLive(e && e.node)).filter(Boolean).sort(byViewers); if (v.length) return v; } catch { /* essai suivant */ }
+  }
+  return gamesMerge('', 30);
+}
 async function liveStreams(game) { // game vide = les plus regardés de tout Twitch ; null si le jeu n'existe pas
   const k = game.toLowerCase(), c = streamsCache.get(k);
   if (c && c.exp > Date.now()) return c.v;
   let edges, v;
-  if (!game) edges = ((await gqlRaw('query { streams(first: 60) { edges { node { ' + STREAM_NODE + ' } } } }')).streams || {}).edges;
+  if (!game) v = await topLives();
   else {
     const rs = await Promise.all([...new Set([game, game.toLowerCase(), game.toUpperCase()])].map(name => gqlRaw('query { game(name: ' + JSON.stringify(name) + ') { streams(first: 60) { edges { node { ' + STREAM_NODE + ' } } } } }').catch(() => ({}))));
     const g = rs.map(r => r.game).find(Boolean); if (g) edges = (g.streams || {}).edges || [];
   }
-  v = edges ? edges.map(e => toLive(e && e.node)).filter(Boolean).sort((a, b) => b.info.viewers - a.info.viewers) : null;
+  if (!v) v = edges ? edges.map(e => toLive(e && e.node)).filter(Boolean).sort((a, b) => b.info.viewers - a.info.viewers) : null;
   seedInfo(v);
   streamsCache.set(k, { v, exp: Date.now() + 30000 });
   if (streamsCache.size > 80) streamsCache.delete(streamsCache.keys().next().value);
@@ -570,6 +586,7 @@ async function frenchStreams(game) {
     try { v = toL(edgesOf(await run('(first: 100)', STREAM_NODE + ' broadcaster { broadcastSettings { language } }')).filter(e => e && e.node && e.node.broadcaster && e.node.broadcaster.broadcastSettings && /^fr/i.test(String(e.node.broadcaster.broadcastSettings.language || '')))); }
     catch (e) { errs.push('langue des chaînes : ' + String(e.message).slice(0, 110)); }
   }
+  if (!game && (!v || !v.length)) { try { const m = await gamesMerge(', options: { broadcasterLanguages: [FR] }', 40); if (m.length) v = m; } catch (e) { errs.push('regroupement par jeu : ' + String(e.message).slice(0, 110)); } } // requête globale vide : on regroupe les lives français des jeux les plus regardés
   if (v) seedInfo(v);
   frErr = v ? '' : errs.join(' | ');
   streamsCache.set(key, { v, exp: Date.now() + (v ? 30000 : 10000) });
