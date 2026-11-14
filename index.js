@@ -376,6 +376,26 @@ function pcMaster(text, origin, base, mode) {
   }
   return out.join('\n');
 }
+// Une seule piste audio pour les lecteurs mpv/ffmpeg (AUDIO_SINGLE=1). Le son de Twitch est mélangé à chaque qualité vidéo ; mpv liste le son de chaque qualité (« Track 1 … Track 5 »).
+// On ne laisse que la meilleure qualité permise (plafond de la personne déjà appliqué) : c'est celle que mpv lit par défaut, donc la lecture ne change pas, et il n'y a plus qu'une piste.
+const MPV_RE = /libmpv|mpv|ffmpeg|lavf/i;
+function oneAudio(text, req) {
+  if (process.env.AUDIO_SINGLE !== '1' || !MPV_RE.test(String((req.headers || {})['user-agent'] || ''))) return text;
+  const L = text.split(/\r?\n/); let best = -1, bw = -1;
+  for (let i = 0; i < L.length; i++) {
+    if (!L[i].startsWith('#EXT-X-STREAM-INF') || !/RESOLUTION=/.test(L[i]) || /audio_only/i.test(L[i] + (L[i + 1] || ''))) continue;
+    const b = Number((L[i].match(/(?:^|[:,])BANDWIDTH=(\d+)/) || [])[1] || 0);
+    if (b > bw) { bw = b; best = i; }
+  }
+  if (best < 0) return text;
+  const grp = (L[best].match(/VIDEO="([^"]+)"/) || [])[1], out = [];
+  for (let i = 0; i < L.length; i++) {
+    if (L[i].startsWith('#EXT-X-STREAM-INF')) { if (i === best) out.push(L[i], L[i + 1]); i++; continue; }
+    if (/^#EXT-X-MEDIA:.*TYPE=VIDEO/.test(L[i]) && grp && !L[i].includes('GROUP-ID="' + grp + '"')) continue;
+    out.push(L[i]);
+  }
+  return out.join('\n');
+}
 // Chat Twitch en sous-titres (CHAT_SUBS=1) : ajoute la piste « Chat Twitch » à la liste principale et la déclare dans chaque qualité
 function withChat(text, origin, base, login, cfg) {
   if (!chatLib.enabled() || !(cfg && cfg.chat === 'sub')) return text;
@@ -1459,7 +1479,7 @@ async function handler(req, res) {
       const login = strip(seg[1]).replace(/\.m3u8$/, '').toLowerCase();
       if (!LOGIN_RE.test(login)) return send(res, 400, 'text/plain; charset=utf-8', 'Nom de chaîne invalide');
       if (F.maint) return send(res, 503, 'text/plain; charset=utf-8', 'Addon en maintenance');
-      const sm = segMode(req, cfg), fin = m => { if (cfg.chat === 'sub') chatLib.watch(login, m); return withChat(pcOn(cfg) || sm !== 'direct' ? pcMaster(m, originOf(req), base, sm) : m, originOf(req), base, login, cfg); };
+      const sm = segMode(req, cfg), fin = m => { if (cfg.chat === 'sub') chatLib.watch(login, m); return withChat(oneAudio(pcOn(cfg) || sm !== 'direct' ? pcMaster(m, originOf(req), base, sm) : m, req), originOf(req), base, login, cfg); };
       const [b, lv] = await Promise.all([cfg.relay ? bestProxy(login, cfg.hevc) : null, cfg.hevc && cfg.relay ? liveStream(login, true, auth).catch(() => null) : null]);
       store.incr('play'); store.top(login); store.user(pseudo, { ch: login, dev: cfg.device }); store.incr('seg_' + sm); store.incr('d:' + store.day() + ':seg_' + sm);
       store.log({ k: 'play', u: pseudo || undefined, ch: login, seg: sm, lecteur: String(req.headers['user-agent'] || '').slice(0, 40) || undefined, relais: b ? b.name : cfg.relay ? 'officiel (repli)' : 'officiel (relais coupés)', ms: Date.now() - t0, appareil: cfg.device || undefined, dev });
