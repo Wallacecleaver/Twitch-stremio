@@ -730,10 +730,14 @@ function checkerPng(buf) { // true si le coin haut-gauche d'un PNG est un damier
     return grey > px.length * 0.85 && white > px.length * 0.25 && mid > px.length * 0.25;
   } catch { return false; }
 }
+async function channelSocials(login) {
+  const d = await gqlRaw('query { user(login: ' + JSON.stringify(login) + ') { channel { socialMedias { name url } } } }');
+  const socials = d.user?.channel?.socialMedias;
+  return Array.isArray(socials) ? socials : [];
+}
 async function youtubeLogo(login) {
   try {
-    const d = await gqlRaw('query { user(login: ' + JSON.stringify(login) + ') { channel { socialMedias { name url } } } }');
-    const yt = (((d.user || {}).channel || {}).socialMedias || []).map(x => x && x.url).find(u => /^https?:\/\/(www\.|m\.)?youtube\.com\//i.test(u || ''));
+    const yt = (await channelSocials(login)).map(x => x && x.url).find(u => /^https?:\/\/(www\.|m\.)?youtube\.com\//i.test(u || ''));
     if (!yt) return '';
     const r = await fetch(yt, { headers: { 'User-Agent': UA, 'Accept-Language': 'fr-FR,fr;q=0.9' }, signal: AbortSignal.timeout(5000) });
     const html = r.ok ? (await r.text()).slice(0, 400000) : '';
@@ -758,9 +762,9 @@ async function channelVods(login) {
   const c = vodCache.get(login);
   if (c && c.exp > Date.now()) return c.v;
   const userQuery = fields => gqlRaw('query { user(login: ' + JSON.stringify(login) + ') { ' + fields + ' } }');
-  const { user: u } = await userQuery('id displayName login description profileImageURL(width: 300) offlineImageURL bannerImageURL channel { socialMedias { url } } a: videos(first: 30, type: ARCHIVE, sort: TIME) { edges { node { ' + VIDEO_NODE + ' } } } h: videos(first: 10, type: HIGHLIGHT, sort: TIME) { edges { node { ' + VIDEO_NODE + ' } } }');
+  const { user: u } = await userQuery('id displayName login description profileImageURL(width: 300) offlineImageURL bannerImageURL a: videos(first: 30, type: ARCHIVE, sort: TIME) { edges { node { ' + VIDEO_NODE + ' } } } h: videos(first: 10, type: HIGHLIGHT, sort: TIME) { edges { node { ' + VIDEO_NODE + ' } } }');
   const nodes = connection => (connection?.edges || []).map(e => e?.node).filter(n => n?.id);
-  const v = u ? { logo: '', login: u.login || login, name: u.displayName || login, avatar: u.profileImageURL || '', banner: u.bannerImageURL || u.offlineImageURL || '', bio: u.description || '', socials: u.channel?.socialMedias || [], archives: nodes(u.a), highlights: nodes(u.h) } : null;
+  const v = u ? { logo: '', login: u.login || login, name: u.displayName || login, avatar: u.profileImageURL || '', banner: u.bannerImageURL || u.offlineImageURL || '', bio: u.description || '', archives: nodes(u.a), highlights: nodes(u.h) } : null;
   if (v && !v.archives.length && !v.highlights.length) {
     // Le filtre par type peut renvoyer une fiche vide. Demande la liste générale, puis trie les vidéos ici.
     const other = await userQuery('videos(first: 40, sort: TIME) { edges { node { ' + VIDEO_NODE + ' broadcastType } } }').catch(() => null);
@@ -811,7 +815,7 @@ function vodSocialLinks(socials) {
   }
   return [...links.values()];
 }
-const vodMeta = (v, withVideos) => {
+const vodMeta = (v, withVideos, socials = []) => {
   const last = v.archives[0], logo = v.logo || v.avatar, nA = v.archives.length, nH = v.highlights.length;
   const games = {}; v.archives.forEach(n => { if (n.game && n.game.displayName) games[n.game.displayName] = (games[n.game.displayName] || 0) + 1; });
   const top = Object.keys(games).sort((a, b) => games[b] - games[a]).slice(0, 3);
@@ -830,7 +834,7 @@ const vodMeta = (v, withVideos) => {
   const description = [summary + separator, bio].filter(Boolean).join('\n\n') || 'Rediffusions de ' + v.name;
   const m = { id: 'twitchvod:' + v.login, type: 'series', name: v.name, poster: logo, posterShape: 'square', background: v.banner || undefined, ...(logo ? { logo } : {}), description, releaseInfo: releaseInfo || undefined, ...(top.length ? { genres: top } : {}), links: [{ name: 'Voir les rediffs sur Twitch', category: 'Twitch', url: 'https://www.twitch.tv/' + v.login + '/videos?filter=archives&sort=time' }] };
   if (!withVideos) return m;
-  m.links.push(...vodSocialLinks(v.socials));
+  m.links.push(...vodSocialLinks(socials));
   // Épisode : titre de la rediff, puis « durée · date · jeu · vues » dans le résumé (les temps forts n'ont pas toujours de jeu)
   const vid = (n, season, i) => ({ id: 'twitchvod:' + v.login + ':' + n.id, title: vodTitle(n.title) || 'Rediffusion', season, episode: i + 1, released: n.publishedAt || new Date(0).toISOString(), thumbnail: n.previewThumbnailURL || undefined, overview: [n.lengthSeconds ? '⏱ ' + dur(n.lengthSeconds) : '', n.publishedAt ? '📅 ' + ago(n.publishedAt) : '', n.game ? '🎮 ' + n.game.displayName : '', n.viewCount ? '👁 ' + fmtN(n.viewCount) : ''].filter(Boolean).join('  ·  ') });
   m.videos = [...v.archives.map((n, i) => vid(n, 1, i)), ...v.highlights.map((n, i) => vid(n, 2, i))];
@@ -1520,8 +1524,12 @@ async function handler(req, res) {
         }
         if (seg[0] === 'meta') {
           const login = strip(seg[2]).replace(/^twitchvod:/, '').toLowerCase();
-          const v = LOGIN_RE.test(login) ? await channelVods(login) : null;
-          return json(res, { meta: v ? vodMeta(v, true) : null });
+          if (!LOGIN_RE.test(login)) return json(res, { meta: null });
+          const [v, socials] = await Promise.all([
+            channelVods(login),
+            withTimeout(channelSocials(login).catch(() => []), 1500, []),
+          ]);
+          return json(res, { meta: v ? vodMeta(v, true, socials) : null });
         }
         if (seg[0] === 'stream') {
           if (F.maint) return maint();
