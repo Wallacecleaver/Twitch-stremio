@@ -190,7 +190,9 @@ Les alertes arrivent page fermée, tant que le navigateur et le système autoris
 2. Ouvre **Dashboard → Alertes → Bot Telegram**, colle le jeton complet, puis clique sur **Vérifier et enregistrer**. Le jeton est chiffré et la modification s’applique immédiatement. **Vérifier le bot** permet de contrôler le jeton enregistré.
 3. Sur `/alerte`, choisis tes chaînes et clique sur **Connecter Telegram**. Ouvre le bot et appuie sur **Démarrer**, puis reviens sur la page et clique sur **Tester Telegram**.
 
-Telegram marche seul ou avec les notifications du navigateur. Envoie `/stop` au bot pour arrêter tes notifications Telegram. Utilise un bot dédié à cette instance de TwitchIO, qui reçoit ses messages via `getUpdates`. La variable `TELEGRAM_BOT_TOKEN` reste utilisable. Dès que tu enregistres ou désactives le bot dans le dashboard, ce réglage prend la priorité sur la variable.
+Telegram marche seul ou avec les notifications du navigateur. Le bot répond à `/start`, `/statut` (chaînes surveillées et mises en sourdine), `/aide` et `/stop` (désactiver les alertes Telegram). Chaque alerte de live inclut un bouton pour ouvrir Twitch. Pour afficher aussi le bouton **Ouvrir mes alertes** dans les messages de configuration, renseigne l’**Adresse publique de l’addon** dans **Dashboard → Paramètres → Configuration**.
+
+Utilise un bot dédié à cette instance de TwitchIO, qui reçoit ses messages via `getUpdates`. La variable `TELEGRAM_BOT_TOKEN` reste utilisable. Dès que tu enregistres ou désactives le bot dans le dashboard, ce réglage prend la priorité sur la variable.
 
 </details>
 
