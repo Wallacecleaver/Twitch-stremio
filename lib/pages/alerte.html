@@ -371,6 +371,16 @@ dialog input:focus { border-color: var(--violet); outline: 0; box-shadow: 0 0 0 
 .watch-filter { margin-top: 12px; }
 .watch-filter button[aria-pressed="true"] { border-color: var(--violet); color: #ede0ff; }
 .share-note { margin-top: 8px; }
+.watch-agenda { margin-top: 22px; }
+.watch-agenda .section-head, .watch-agenda .rail-controls { flex-wrap: wrap; }
+.agenda-day + .agenda-day { margin-top: 16px; }
+.agenda-day h3 { margin: 0; font-size: .95rem; color: #e3d5ff; }
+.agenda-day ul { margin: 7px 0 0; }
+.agenda-day li { display: flex; gap: 12px; justify-content: space-between; align-items: center; padding: 10px 0; }
+.agenda-summary { min-width: 0; display: grid; gap: 3px; overflow-wrap: anywhere; }
+.agenda-summary small { color: var(--muted); }
+.agenda-summary a { color: #e2d2ff; }
+.agenda-day button { flex: none; }
 @media (max-width: 620px) {
   .streamer-hero { padding: 18px 17px 14px; }
   .streamer-identity .avatar { width: 51px; height: 51px; border-radius: 13px; }
@@ -448,7 +458,7 @@ dialog input:focus { border-color: var(--violet); outline: 0; box-shadow: 0 0 0 
           <strong>Aucune chaîne pour l’instant</strong>
           <p>Ajoute une première chaîne pour recevoir ses alertes de live.</p>
         </div>
-        <div class="list-tools"><button type="button" id="clear-all" hidden>Tout retirer</button></div>
+        <div class="list-tools"><a class="back" id="agenda-jump" href="#watch-agenda" hidden>Voir l’agenda ↓</a><button type="button" id="clear-all" hidden>Tout retirer</button></div>
       </section>
       <section class="panel alerts" aria-labelledby="push-title">
         <div class="head">
@@ -491,6 +501,17 @@ dialog input:focus { border-color: var(--violet); outline: 0; box-shadow: 0 0 0 
         <details><summary>Sur iPhone ou iPad</summary><p>Dans Safari, ajoute cette page à l’écran d’accueil depuis le menu de partage. Ouvre ensuite l’icône pour activer les notifications.</p></details>
       </section>
     </div>
+    <section class="panel watch-agenda" id="watch-agenda" aria-labelledby="watch-agenda-title">
+      <div class="section-head">
+        <h2 id="watch-agenda-title">Prochains lives</h2>
+        <div class="rail-controls">
+          <button id="agenda-refresh" type="button" hidden>Actualiser</button>
+          <button id="agenda-export" type="button" hidden>Exporter l’agenda</button>
+        </div>
+      </div>
+      <p id="agenda-status" class="search-status" role="status"></p>
+      <div id="agenda-days"></div>
+    </section>
   </main>
   <div class="savebar" id="savebar" role="region" aria-label="Modifications non enregistrées">
     <span>Modifications non enregistrées</span>

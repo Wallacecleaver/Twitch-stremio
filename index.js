@@ -1582,6 +1582,18 @@ async function handler(req, res) {
       if (!info) return json(res, { error: 'Cette chaîne est introuvable ou indisponible.' });
       return json(res, { channel: { login, ...info }, schedule });
     }
+    if (!base && seg.length === 3 && seg[0] === 'api' && seg[1] === 'alerts' && seg[2] === 'schedule' && req.method === 'GET') {
+      if (tooMany(req)) return json(res, { error: 'Trop de demandes. Réessaie dans un instant.' });
+      const logins = [...new Set((new URL(req.url, 'http://x').searchParams.get('channels') || '').split(','))];
+      if (logins.length > 12 || !logins.every(login => LOGIN_RE.test(login))) return json(res, { error: 'Choisis entre 1 et 12 chaînes valides.' });
+      const schedules = [];
+      for (let i = 0; i < logins.length; i += 4) {
+        schedules.push(...await Promise.all(logins.slice(i, i + 4).map(async login => ({
+          login, ...await alertSchedule(login),
+        }))));
+      }
+      return json(res, { schedules });
+    }
     if (!base && seg.length === 3 && seg[0] === 'api' && seg[1] === 'alerts' && seg[2] === 'search' && req.method === 'GET') {
       if (tooMany(req)) return json(res, { error: 'Trop de recherches. Réessaie dans un instant.' });
       const term = new URL(req.url, 'http://x').searchParams.get('q') || '';
