@@ -186,11 +186,11 @@ Les alertes arrivent page fermée, tant que le navigateur et le système autoris
 
 <br>
 
-1. Crée un bot **dédié** dans [BotFather](https://t.me/BotFather).
-2. Renseigne `TELEGRAM_BOT_TOKEN` dans les variables du VPS, puis redéploie.
-3. Sur `/alerte`, choisis tes chaînes, clique sur **Connecter Telegram**, ouvre le bot et appuie sur **Démarrer**.
+1. Envoie `/newbot` à [BotFather](https://t.me/BotFather). Choisis un nom et un identifiant qui se termine par `bot`.
+2. Ouvre **Dashboard → Alertes → Bot Telegram**, colle le jeton complet, puis clique sur **Vérifier et enregistrer**. Le jeton est chiffré et la modification s’applique immédiatement. **Vérifier le bot** permet de contrôler le jeton enregistré.
+3. Sur `/alerte`, choisis tes chaînes et clique sur **Connecter Telegram**. Ouvre le bot et appuie sur **Démarrer**, puis reviens sur la page et clique sur **Tester Telegram**.
 
-Telegram marche seul ou avec les notifications du navigateur. Envoie `/stop` au bot pour arrêter. Le bot doit être dédié à TwitchIO, qui reçoit ses messages via `getUpdates`.
+Telegram marche seul ou avec les notifications du navigateur. Envoie `/stop` au bot pour arrêter tes notifications Telegram. Utilise un bot dédié à cette instance de TwitchIO, qui reçoit ses messages via `getUpdates`. La variable `TELEGRAM_BOT_TOKEN` reste utilisable. Dès que tu enregistres ou désactives le bot dans le dashboard, ce réglage prend la priorité sur la variable.
 
 </details>
 
