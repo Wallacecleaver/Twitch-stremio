@@ -791,13 +791,14 @@ const ago = d => { // « aujourd'hui », « hier », « il y a 3 j », « il y a
   return n <= 0 ? "aujourd'hui" : n === 1 ? 'hier' : n < 7 ? 'il y a ' + n + ' j' : n < 35 ? 'il y a ' + Math.floor(n / 7) + ' sem' : t.toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' });
 };
 const dur = s => { s = Number(s) || 0; const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60); return h ? h + ' h ' + String(m).padStart(2, '0') : m + ' min'; };
+const vodTitle = title => (title || '').trim().replace(/(?:^|\s)![\w-]+(?:\s+![\w-]+)*$/u, '').trimEnd();
 const vodMeta = (v, withVideos) => {
   const last = v.archives[0], logo = v.logo || v.avatar, nA = v.archives.length, nH = v.highlights.length;
   const games = {}; v.archives.forEach(n => { if (n.game && n.game.displayName) games[n.game.displayName] = (games[n.game.displayName] || 0) + 1; });
   const top = Object.keys(games).sort((a, b) => games[b] - games[a]).slice(0, 3);
   // Stremio peut aplatir les retours à la ligne. Le résumé se lit aussi en texte continu.
   const releaseInfo = [nA && nA + ' rediff' + (nA > 1 ? 's' : ''), nH && nH + ' temps fort' + (nH > 1 ? 's' : '')].filter(Boolean).join(' · ');
-  const title = (last?.title || '').trim().replace(/(?:\s+![\w-]+)+$/u, '');
+  const title = vodTitle(last?.title);
   const date = last ? ago(last.publishedAt) : '';
   const details = last ? [
     date && '📅 ' + date,
@@ -805,11 +806,13 @@ const vodMeta = (v, withVideos) => {
     last.game?.displayName && '🎮 ' + last.game.displayName,
   ].filter(Boolean).join(' · ') : '';
   const summary = last ? ['📼 Dernière rediff' + (title ? ' · ' + title : ''), details].filter(Boolean).join('\n') : '';
-  const description = [summary, v.bio.replace(/\s+/g, ' ').trim()].filter(Boolean).join('\n\n') || 'Rediffusions de ' + v.name;
+  const bio = v.bio.replace(/\s+/g, ' ').trim();
+  const separator = summary && bio && !/[.!?…]$/u.test(summary) ? '.' : '';
+  const description = [summary + separator, bio].filter(Boolean).join('\n\n') || 'Rediffusions de ' + v.name;
   const m = { id: 'twitchvod:' + v.login, type: 'series', name: v.name, poster: logo, posterShape: 'square', background: v.banner || undefined, ...(logo ? { logo } : {}), description, releaseInfo: releaseInfo || undefined, ...(top.length ? { genres: top } : {}), links: [{ name: 'Voir les rediffs sur Twitch', category: 'Twitch', url: 'https://www.twitch.tv/' + v.login + '/videos?filter=archives&sort=time' }] };
   if (!withVideos) return m;
   // Épisode : titre de la rediff, puis « durée · date · jeu · vues » dans le résumé (les temps forts n'ont pas toujours de jeu)
-  const vid = (n, season, i) => ({ id: 'twitchvod:' + v.login + ':' + n.id, title: n.title || 'Rediffusion', season, episode: i + 1, released: n.publishedAt || new Date(0).toISOString(), thumbnail: n.previewThumbnailURL || undefined, overview: [n.lengthSeconds ? '⏱ ' + dur(n.lengthSeconds) : '', n.publishedAt ? '📅 ' + ago(n.publishedAt) : '', n.game ? '🎮 ' + n.game.displayName : '', n.viewCount ? '👁 ' + fmtN(n.viewCount) : ''].filter(Boolean).join('  ·  ') });
+  const vid = (n, season, i) => ({ id: 'twitchvod:' + v.login + ':' + n.id, title: vodTitle(n.title) || 'Rediffusion', season, episode: i + 1, released: n.publishedAt || new Date(0).toISOString(), thumbnail: n.previewThumbnailURL || undefined, overview: [n.lengthSeconds ? '⏱ ' + dur(n.lengthSeconds) : '', n.publishedAt ? '📅 ' + ago(n.publishedAt) : '', n.game ? '🎮 ' + n.game.displayName : '', n.viewCount ? '👁 ' + fmtN(n.viewCount) : ''].filter(Boolean).join('  ·  ') });
   m.videos = [...v.archives.map((n, i) => vid(n, 1, i)), ...v.highlights.map((n, i) => vid(n, 2, i))];
   return m;
 };
