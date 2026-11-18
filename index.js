@@ -1529,10 +1529,12 @@ async function handler(req, res) {
     }
     if (!base && seg.length === 3 && seg[0] === 'api' && seg[1] === 'alerts' && seg[2] === 'discover' && req.method === 'GET') {
       if (tooMany(req)) return json(res, { error: 'Trop de demandes. Réessaie dans un instant.' });
-      const lives = await frenchStreams('').catch(() => []) || [];
-      const suggestions = lives.length ? lives : await liveStreams('').catch(() => []) || [];
-      return json(res, { channels: suggestions.slice(0, 8).map(({ login, info }) => ({
-        login, name: info.name, avatar: info.avatar, live: true, game: info.game, viewers: info.viewers || 0,
+      // mode=top : les lives les plus regardés de tout Twitch ; sinon lives français (repli sur le top mondial si Twitch n'en renvoie aucun)
+      const top = new URL(req.url, 'http://x').searchParams.get('mode') === 'top';
+      let lives = top ? await liveStreams('').catch(() => []) || [] : await frenchStreams('').catch(() => []) || [];
+      if (!lives.length && !top) lives = await liveStreams('').catch(() => []) || [];
+      return json(res, { mode: top ? 'top' : 'fr', channels: lives.slice(0, 24).map(({ login, info }) => ({
+        login, name: info.name, avatar: info.avatar, live: true, game: info.game, title: info.title || '', viewers: info.viewers || 0,
       })) });
     }
     if (!base && seg.length === 3 && seg[0] === 'api' && seg[1] === 'alerts' && seg[2] === 'search' && req.method === 'GET') {

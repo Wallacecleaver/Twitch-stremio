@@ -263,6 +263,21 @@ dialog input:focus { border-color: var(--violet); outline: 0; box-shadow: 0 0 0 
 #follow-results .result .top { flex: 1; }
 #follow-results .result button { width: auto; }
 
+
+/* Onglets + vignettes */
+.tabs { display: inline-flex; gap: 4px; padding: 4px; margin: 0 0 14px; border: 1px solid var(--line); border-radius: 13px; background: #15121f; max-width: 100%; overflow-x: auto; }
+.tabs button { padding: 7px 14px; border-color: transparent; background: transparent; color: var(--muted); font-size: .84rem; white-space: nowrap; }
+.tabs button[aria-selected="true"] { background: #2d2246; border-color: #4d3a6e; color: var(--text); }
+.more-row { display: flex; justify-content: center; margin-top: 14px; }
+.thumb { position: relative; aspect-ratio: 16 / 9; border-radius: 11px; overflow: hidden; background: linear-gradient(135deg, #241e38, #1a1727); }
+.thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: transform .5s var(--ease); }
+.result:hover .thumb img { transform: scale(1.05); }
+.thumb::after { content: ""; position: absolute; inset: auto 0 0; height: 55%; background: linear-gradient(transparent, #0a0813cc); pointer-events: none; }
+.tag { position: absolute; bottom: 7px; z-index: 1; padding: 2px 7px; border-radius: 6px; font-size: .7rem; font-weight: 750; letter-spacing: .02em; }
+.tag.live { left: 7px; background: #e5384b; color: #fff; }
+.tag.views { right: 7px; background: #0b0812b8; color: #fff; backdrop-filter: blur(4px); }
+.profile-grid .skeleton { height: 232px; }
+
 @media (max-width: 960px) { .profile-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 760px) {
   .grid { grid-template-columns: 1fr; }
@@ -316,8 +331,13 @@ dialog input:focus { border-color: var(--violet); outline: 0; box-shadow: 0 0 0 
           <a class="back" href="#watchlist">Ma liste ↓</a>
         </div>
       </div>
+      <div class="tabs" id="tabs" role="tablist" aria-label="Type de lives">
+        <button type="button" role="tab" id="tab-fr" aria-selected="true">🇫🇷 En français</button>
+        <button type="button" role="tab" id="tab-top" aria-selected="false">🔥 Populaires dans le monde</button>
+      </div>
       <p id="search-status" class="search-status" role="status"></p>
       <ul id="search-results" class="profile-grid results"></ul>
+      <div class="more-row"><button type="button" id="discover-more" class="ghost" hidden>Voir plus de lives</button></div>
       <button type="button" id="manual-add" class="ghost" hidden>Ajouter ce pseudo</button>
     </section>
     <div class="grid">
