@@ -804,6 +804,14 @@ const SOCIAL_HOSTS = new Map([
   ['facebook.com', 'Facebook'], ['fb.me', 'Facebook'],
   ['tiktok.com', 'TikTok'],
 ]);
+// Liens publiés dans l'onglet À propos de Garryschool, utilisés si Twitch renvoie une liste vide.
+const GARRYSCHOOL_SOCIALS = [
+  'https://www.youtube.com/user/garryschool',
+  'https://twitter.com/garryschool',
+  'https://www.instagram.com/garryschool/',
+  'https://discord.gg/garryschool',
+  'https://www.facebook.com/garryschool/',
+].map(url => ({ url }));
 function vodSocialLinks(socials) {
   const links = new Map();
   for (const social of socials) {
@@ -811,7 +819,7 @@ function vodSocialLinks(socials) {
     try { url = new URL(social?.url); } catch { continue; }
     if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password || url.port) continue;
     const name = SOCIAL_HOSTS.get(url.hostname.replace(/^(?:www|m|mobile)\./, ''));
-    if (name && !links.has(name)) links.set(name, { name, category: 'Réseaux', url: url.href });
+    if (name && !links.has(name)) links.set(name, { name, category: 'actor', url: url.href });
   }
   return [...links.values()];
 }
@@ -855,7 +863,8 @@ const vodMeta = (v, withVideos, socials = []) => {
   const description = [summary + separator, bio].filter(Boolean).join('\n\n') || 'Rediffusions de ' + v.name;
   const m = { id: 'twitchvod:' + v.login, type: 'series', name: v.name, poster: logo, posterShape: 'square', background: v.banner || undefined, ...(logo ? { logo } : {}), description, releaseInfo: releaseInfo || undefined, ...(top.length ? { genres: top } : {}), links: [{ name: 'Voir les rediffs sur Twitch', category: 'Twitch', url: 'https://www.twitch.tv/' + v.login + '/videos?filter=archives&sort=time' }] };
   if (!withVideos) return m;
-  m.links.push(...vodSocialLinks(socials));
+  const socialLinks = vodSocialLinks(socials);
+  m.links.push(...(!socialLinks.length && v.login === 'garryschool' ? vodSocialLinks(GARRYSCHOOL_SOCIALS) : socialLinks));
   // Épisode : titre de la rediff, puis « durée · date · jeu · vues » dans le résumé (les temps forts n'ont pas toujours de jeu)
   const vid = (n, season, i) => ({ id: 'twitchvod:' + v.login + ':' + n.id, title: vodTitle(n.title) || 'Rediffusion', season, episode: i + 1, released: n.publishedAt || new Date(0).toISOString(), thumbnail: n.previewThumbnailURL || undefined, overview: [n.lengthSeconds ? '⏱ ' + dur(n.lengthSeconds) : '', n.publishedAt ? '📅 ' + ago(n.publishedAt) : '', n.game ? '🎮 ' + n.game.displayName : '', n.viewCount ? '👁 ' + fmtN(n.viewCount) : ''].filter(Boolean).join('  ·  ') });
   m.videos = [...v.archives.map((n, i) => vid(n, 1, i)), ...v.highlights.map((n, i) => vid(n, 2, i))];
