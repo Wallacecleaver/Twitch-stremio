@@ -1255,7 +1255,7 @@ async function segmentsInfo() { // onglet « Vidéo » du dashboard : le Worker 
   }
   return { origin, worker, mix: await akeys.mix(), addonAllowed: segAddonOk(), env: { proxy: process.env.TWITCH_SEGMENTS_PROXY ?? '', debug: process.env.DEBUG_HTTP === '1', sealed: sealLib.available() }, cf: await cfUsage() };
 }
-const adminRoute = makeAdmin({ pwHash: pw => pwHash(pw), send, json, relayReport, probe, segments: segmentsInfo, akeys, check: async (login, c, u) => { const n = cfgLib.normalize(c || {}); return checkStream(login, n, u || 'admin', 'admin', n.hevc ? await ownerToken() : null); }, account, config: () => ({
+const adminRoute = makeAdmin({ pwHash: pw => pwHash(pw), send, json, relayReport, probe, segments: segmentsInfo, akeys, check: async (login, c, u) => { const n = cfgLib.normalize(c || {}); return checkStream(login, n, u || 'admin', 'admin', n.hevc ? await ownerToken() : null); }, account, alerts, config: () => ({
   relais: allProxies(),
   rows: [
     ['Version', require('./package.json').version, null],
@@ -1460,7 +1460,10 @@ async function handler(req, res) {
     }
     if (seg[0] === 'logo.svg') return send(res, 200, 'image/svg+xml', asset('logo.svg'), { 'Cache-Control': 'public, max-age=86400' });
     if (!base && seg.length === 1 && seg[0] === 'alerte') {
-      return send(res, 200, 'text/html; charset=utf-8', rawPage('alerte.html').replace(/\{\{NAME\}\}/g, () => escH(SS.name)), { 'Cache-Control': 'no-cache', 'Content-Security-Policy': CONFIG_CSP });
+      const page = alerts.publicSettings();
+      const fields = { NAME: SS.name, TITLE: page.title, INTRO: page.intro, COLOR: SS.color };
+      const html = rawPage('alerte.html').replace(/\{\{(NAME|TITLE|INTRO|COLOR)\}\}/g, (_, key) => escH(fields[key]));
+      return send(res, 200, 'text/html; charset=utf-8', html, { 'Cache-Control': 'no-cache', 'Content-Security-Policy': CONFIG_CSP });
     }
     if (!base && seg.length === 1 && ['alerte.js', 'alerte-sw.js'].includes(seg[0])) {
       return send(res, 200, 'text/javascript; charset=utf-8', rawPage(seg[0]), { 'Cache-Control': 'no-cache' });
@@ -1472,7 +1475,7 @@ async function handler(req, res) {
       }), { 'Cache-Control': 'no-cache' });
     }
     if (!base && seg.length === 2 && seg[0] === 'api' && seg[1] === 'alerts') {
-      if (req.method === 'GET') return json(res, { publicKey: await alerts.publicKey() });
+      if (req.method === 'GET') return json(res, { publicKey: await alerts.publicKey(), paused: alerts.publicSettings().paused });
       if (req.method !== 'POST') return send(res, 405, 'text/plain; charset=utf-8', 'Méthode non autorisée', { Allow: 'GET, POST' });
       if (!/^application\/json(?:;|$)/i.test(req.headers['content-type'] || '')) return send(res, 415, 'text/plain; charset=utf-8', 'JSON attendu');
       if (tooMany(req)) return json(res, { error: 'Trop de demandes. Réessaie dans un instant.' });

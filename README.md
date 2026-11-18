@@ -16,6 +16,8 @@ Sur `/alerte`, ajoute jusqu’à 12 chaînes par navigateur, puis active les not
 
 Les alertes arrivent même quand la page est fermée, tant que le navigateur et le système autorisent les notifications en arrière-plan. Utilise l’adresse HTTPS de l’addon. Sur iPhone ou iPad, ajoute la page à l’écran d’accueil avant d’activer les alertes. Les abonnements et la clé Push sont enregistrés dans le dossier de données.
 
+L’onglet « Alertes » du dashboard permet de modifier le titre et l’introduction de la page, de mettre les envois en pause et de consulter le nombre de navigateurs abonnés et de chaînes surveillées. Les diffusions commencées pendant la pause ne déclenchent pas d’alerte à la reprise.
+
 ## Sur un VPS (Docker / WDook)
 
 Le repo contient un `Dockerfile` (Node 22 Alpine) et un `.env.example`.

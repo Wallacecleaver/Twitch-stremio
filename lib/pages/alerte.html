@@ -3,45 +3,147 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#10111a">
-<title>{{NAME}} · Alertes Twitch</title>
+<meta name="theme-color" content="#111019">
+<title>{{NAME}} · {{TITLE}}</title>
 <link rel="manifest" href="/alerte.webmanifest">
 <link rel="icon" href="/logo.svg">
 <link rel="apple-touch-icon" href="/logo.png">
 <style>
-:root{color-scheme:dark;--bg:#10111a;--card:#191a27;--line:#313247;--muted:#b1b1c7;--white:#f5f3ff;--purple:#a178ff;--green:#80e5af}
-*{box-sizing:border-box}body{margin:0;color:var(--white);background:radial-gradient(ellipse at top right,#282047 0,transparent 48%),var(--bg);min-height:100vh;font:16px/1.5 system-ui,sans-serif}
-a{color:inherit;text-decoration:none}a:hover{text-decoration:underline}button,input{font:inherit}button{cursor:pointer}button:disabled{opacity:.55;cursor:default}button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid var(--purple);outline-offset:3px}
-header,main{width:min(100% - 36px,760px);margin:auto}header{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:24px 0;border-bottom:1px solid var(--line)}.brand{display:flex;align-items:center;gap:10px;font-weight:750}.back{color:var(--muted);font-size:.9rem}main{padding:44px 0 60px}h1{font-size:clamp(2rem,7vw,3.35rem);line-height:1.1;letter-spacing:-.045em;margin:0 0 12px}h2{font-size:1.1rem;margin:0}p{margin:0;color:var(--muted)}
-.intro{max-width:58ch}.panel{margin-top:26px;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px}.head,.actions,form,li{display:flex;align-items:center;gap:12px}.head{justify-content:space-between;margin-bottom:16px}.pill{border-radius:999px;padding:4px 10px;background:#2d2b40;color:var(--muted);font-size:.8rem;white-space:nowrap}.pill.active{background:#19372f;color:var(--green)}
-form input{min-width:0;flex:1;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#121321;color:var(--white)}button{border:1px solid var(--line);background:#252638;color:var(--white);font-weight:640;border-radius:10px;padding:10px 13px}button:hover:not(:disabled){background:#34354b}.primary{background:#7950e8;border-color:#a07aff;color:#fff}.primary:hover:not(:disabled){background:#8b63f5}.actions{flex-wrap:wrap;margin-top:16px}[hidden]{display:none!important}
-ul{list-style:none;margin:16px 0 0;padding:0}li{border-top:1px solid var(--line);padding:10px 0;justify-content:space-between}.channel{display:grid;min-width:0}.channel small{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.tail{display:flex;align-items:center;gap:8px;flex-shrink:0}.remove{padding:4px 9px;color:var(--muted);font-size:.85rem}.tip{margin-top:16px;font-size:.9rem}.message{min-height:1.5em;margin-top:14px;color:#d8c8ff}.message[data-error]{color:#ffabb6}
-@media(max-width:460px){main{padding-top:30px}.panel{padding:16px}.head{align-items:flex-start}.tail{gap:4px}.pill{padding:3px 7px}}
+:root {
+  color-scheme: dark;
+  --accent: {{COLOR}};
+  --bg: #111019;
+  --panel: #1b1926;
+  --line: #363144;
+  --text: #f8f5ff;
+  --muted: #bcb5cc;
+  --green: #91ecc0;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--text);
+  background: radial-gradient(ellipse at 78% 0, #2e2043, transparent 45rem), var(--bg);
+  font: 16px/1.55 system-ui, sans-serif;
+}
+a { color: inherit; text-decoration: none; }
+a:hover { text-decoration: underline; }
+button, input { font: inherit; }
+button:focus-visible, a:focus-visible, input:focus-visible, summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+.wrap { width: min(100% - 40px, 1020px); margin: auto; }
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-height: 74px;
+  border-bottom: 1px solid var(--line);
+}
+.brand { display: flex; gap: 10px; align-items: center; font-weight: 750; }
+.brand img { border-radius: 9px; }
+.back { color: var(--muted); font-size: .9rem; }
+main { padding: clamp(36px, 7vw, 74px) 0 64px; }
+h1, h2, p { margin: 0; }
+h1 { font-size: clamp(2.35rem, 7vw, 4.5rem); line-height: 1.03; letter-spacing: -.055em; overflow-wrap: anywhere; }
+h2 { font-size: 1.1rem; letter-spacing: -.015em; }
+p { color: var(--muted); }
+.intro { max-width: 58ch; margin: 18px 0 32px; font-size: 1.04rem; overflow-wrap: anywhere; }
+.grid { display: grid; grid-template-columns: minmax(0, 1.52fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+.panel { border: 1px solid var(--line); border-radius: 18px; padding: 22px; background: var(--panel); }
+.head, .actions, form, li { display: flex; align-items: center; gap: 10px; }
+.head { justify-content: space-between; margin-bottom: 16px; }
+.pill {
+  flex: none;
+  border-radius: 999px;
+  padding: 4px 10px;
+  background: #302a3f;
+  color: var(--muted);
+  font-size: .78rem;
+  white-space: nowrap;
+}
+.pill.active { background: #1d3933; color: var(--green); }
+input {
+  min-width: 0;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #14121e;
+  color: var(--text);
+}
+button {
+  flex: none;
+  cursor: pointer;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 9px 12px;
+  background: #30293e;
+  color: var(--text);
+  font-weight: 650;
+  font-size: .88rem;
+}
+button:hover:not(:disabled) { filter: brightness(1.18); }
+button:disabled { opacity: .5; cursor: default; }
+.primary { border-color: #9d73ff; background: #7548db; color: #fff; }
+.alerts .primary { width: 100%; padding: 11px 12px; }
+.actions { flex-wrap: wrap; margin-top: 12px; }
+ul { margin: 16px 0 0; list-style: none; padding: 0; }
+li { justify-content: space-between; padding: 11px 0; border-top: 1px solid var(--line); }
+.channel { min-width: 0; display: grid; }
+.channel strong, .channel small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.channel small { color: var(--muted); }
+.tail { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.remove { background: transparent; padding: 4px 8px; color: var(--muted); font-size: .78rem; }
+.empty { padding-top: 12px; }
+.hint, details, .message { margin-top: 12px; font-size: .86rem; }
+.message { color: #e2d3ff; }
+.message:empty { display: none; }
+.message[data-error] { color: #ffb2bd; }
+details { border-top: 1px solid var(--line); padding-top: 12px; color: var(--muted); }
+summary { cursor: pointer; color: var(--text); }
+details p { margin-top: 8px; }
+[hidden] { display: none !important; }
+@media (max-width: 710px) {
+  .grid { grid-template-columns: 1fr; }
+  .panel { padding: 16px; }
+}
 </style>
 <script src="/alerte.js" defer></script>
 </head>
 <body>
-<header><a class="brand" href="/config"><img src="/logo.png" alt="" width="32" height="32">{{NAME}}</a><a class="back" href="/config">Configuration Stremio</a></header>
-<main>
-  <h1>Alertes Twitch</h1>
-  <p class="intro">Reçois une notification quand un streamer de ta liste démarre un live, même quand cette page est fermée.</p>
-  <section class="panel" aria-labelledby="channels-title">
-    <div class="head"><h2 id="channels-title">Chaînes surveillées</h2><span class="pill" id="state">Désactivées</span></div>
-    <form id="add">
-      <label for="channel" hidden>Nom ou lien Twitch</label>
-      <input id="channel" required maxlength="180" placeholder="Nom ou lien Twitch" aria-label="Nom ou lien Twitch" autocomplete="off" spellcheck="false">
-      <button type="submit">Ajouter</button>
-    </form>
-    <ul id="channels"></ul>
-    <p id="empty" class="tip">Ajoute jusqu’à 12 chaînes Twitch.</p>
-    <div class="actions">
-      <button class="primary" type="button" id="enable" disabled>Activer les notifications</button>
-      <button type="button" id="test" hidden>Envoyer un test</button>
-      <button type="button" id="stop" hidden>Désactiver</button>
+  <header class="wrap">
+    <a class="brand" href="/config"><img src="/logo.png" alt="" width="34" height="34">{{NAME}}</a>
+    <a class="back" href="/config">Configuration Stremio ↗</a>
+  </header>
+  <main class="wrap">
+    <h1>{{TITLE}}</h1>
+    <p class="intro">{{INTRO}}</p>
+    <div class="grid">
+      <section class="panel" aria-labelledby="channels-title">
+        <div class="head"><h2 id="channels-title">Chaînes surveillées</h2><span class="pill" id="count">0 / 12</span></div>
+        <form id="add">
+          <input id="channel" required maxlength="180" placeholder="Pseudo ou lien Twitch" aria-label="Pseudo ou lien Twitch" autocomplete="off" spellcheck="false">
+          <button type="submit">Ajouter</button>
+        </form>
+        <ul id="channels"></ul>
+        <p id="empty" class="empty">Ajoute une première chaîne pour recevoir ses alertes de live.</p>
+      </section>
+      <section class="panel alerts" aria-labelledby="push-title">
+        <div class="head"><h2 id="push-title">Notifications</h2><span class="pill" id="state">Désactivées</span></div>
+        <button class="primary" type="button" id="enable" disabled>Activer les notifications</button>
+        <div class="actions" id="notification-actions" hidden>
+          <button type="button" id="test">Envoyer un test</button>
+          <button type="button" id="stop">Désactiver</button>
+        </div>
+        <p id="hint" class="hint">Les alertes sont propres à ce navigateur.</p>
+        <p id="message" class="message" role="status" aria-live="polite"></p>
+        <details><summary>Sur iPhone ou iPad</summary><p>Dans Safari, ajoute cette page à l’écran d’accueil depuis le menu de partage. Ouvre ensuite l’icône pour activer les notifications.</p></details>
+      </section>
     </div>
-    <p id="message" class="message" role="status" aria-live="polite"></p>
-    <p class="tip">Sur iPhone ou iPad, ajoute la page à l’écran d’accueil, puis ouvre-la depuis son icône pour activer les notifications.</p>
-  </section>
-</main>
+  </main>
 </body>
 </html>
