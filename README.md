@@ -14,6 +14,8 @@ Sur le même PC, Stremio accepte `http://localhost:7000`. Pour tes amis (ou Stre
 
 Sur `/alerte`, ajoute jusqu’à 12 chaînes par navigateur, puis active les notifications. Le serveur vérifie les directs environ toutes les minutes et envoie une notification quand une chaîne surveillée démarre un nouveau live. Le bouton « Envoyer un test » permet de vérifier la réception.
 
+Tu peux rechercher des streamers par pseudo ou coller le lien d’une chaîne Twitch. Dans « Mes suivis », connecte-toi avec l’identifiant ou le lien d’installation et le mot de passe de ton profil TwitchIO. Si un compte Twitch est lié à ce profil, sélectionne les suivis à ajouter. Tes choix sont enregistrés pour ce navigateur au moment où tu actives ou mets à jour les notifications.
+
 Les alertes arrivent même quand la page est fermée, tant que le navigateur et le système autorisent les notifications en arrière-plan. Utilise l’adresse HTTPS de l’addon. Sur iPhone ou iPad, ajoute la page à l’écran d’accueil avant d’activer les alertes. Les abonnements et la clé Push sont enregistrés dans le dossier de données.
 
 L’onglet « Alertes » du dashboard permet de modifier le titre et l’introduction de la page, de mettre les envois en pause et de consulter le nombre de navigateurs abonnés et de chaînes surveillées. Les diffusions commencées pendant la pause ne déclenchent pas d’alerte à la reprise.

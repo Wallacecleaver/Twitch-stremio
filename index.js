@@ -540,6 +540,37 @@ async function gqlRaw(query) {
   if (!j.data) throw new Error('Twitch n\'a pas renvoyé de lives' + (j.errors && j.errors[0] ? ' : ' + String(j.errors[0].message).slice(0, 120) : ''));
   return j.data;
 }
+const alertSearchCache = new Map();
+async function searchAlertChannels(term) {
+  const query = term.trim().toLowerCase();
+  if (query.length < 2 || query.length > 60 || !/^[\p{L}\p{N}_ .-]+$/u.test(query)) return [];
+  const cached = alertSearchCache.get(query);
+  if (cached && cached.exp > Date.now()) return cached.channels;
+  const found = new Map();
+  try {
+    const data = await gqlRaw('query { searchFor(userQuery: ' + JSON.stringify(query) + ', platform: "web") { channels { edges { item { ... on User { login displayName profileImageURL(width: 70) stream { id } } } } } } }');
+    for (const edge of data.searchFor?.channels?.edges || []) {
+      const item = edge?.item;
+      if (item && LOGIN_RE.test(item.login || '')) found.set(item.login, { login: item.login, name: item.displayName || item.login, avatar: item.profileImageURL || '', live: !!item.stream });
+    }
+  } catch {
+    if (process.env.TWITCH_CLIENT_ID && process.env.TWITCH_CLIENT_SECRET) {
+      const results = await helix('/search/channels', { query, first: 12 }).catch(() => []);
+      for (const item of results) {
+        const login = item.broadcaster_login;
+        if (LOGIN_RE.test(login || '')) found.set(login, { login, name: item.display_name || login, avatar: item.thumbnail_url || '', live: !!item.is_live });
+      }
+    }
+  }
+  if (!found.size && LOGIN_RE.test(query)) {
+    const info = await channelInfo(query);
+    if (info) found.set(query, { login: query, name: info.name, avatar: info.avatar, live: info.live });
+  }
+  const channels = [...found.values()].slice(0, 12);
+  alertSearchCache.set(query, { channels, exp: Date.now() + (channels.length ? 60000 : 10000) });
+  if (alertSearchCache.size > 100) alertSearchCache.delete(alertSearchCache.keys().next().value);
+  return channels;
+}
 const alerts = createAlerts({
   async scan(logins) {
     const result = new Map();
@@ -1318,16 +1349,29 @@ async function profileApi(req) {
   if (!store.persistent) return { ok: false, persistent: false, error: 'La base de données n\'est pas configurée : utilise le lien classique.' };
   let b = {}; try { b = JSON.parse(await readBody(req)); } catch { return { ok: false, error: 'requête invalide' }; }
   const id0 = String(b.id || ''), pw = String(b.password || '').slice(0, 100), npw = String(b.newPassword || '').slice(0, 100);
+  if (b.action === 'alert-follows' && !ID_RE.test(id0)) return { ok: false, error: 'Identifiant de config invalide.' };
   let old = null, sess = '';
   if (id0) {
     if (!ID_RE.test(id0) || !(old = await loadProfile(id0))) return { ok: false, error: 'Profil introuvable' };
     if (checkSession(b.session, id0)) sess = String(b.session);
     else {
+      if (b.action === 'alert-follows' && b.session && !pw) return { ok: false, expired: true, error: 'Session expirée. Reconnecte ton profil.' };
       const ip = store.ipOf(req);
       if (locked(id0) || ipLocked(ip)) return { ok: false, error: 'Trop d\'essais : réessaie dans 10 minutes.' };
       if (!old.pw && !(old.reset && old.reset.exp > Date.now())) return { ok: false, error: 'Ce profil n\'a pas de mot de passe : demande un code de réinitialisation à l\'administrateur.' };
       if (!(old.pw ? pwCheck(pw, old.pw) : resetOk(pw, old.reset))) { failed(id0); ipFailed(ip); return { ok: false, bad: true, error: old.pw ? 'Mot de passe incorrect' : 'Code de réinitialisation incorrect' }; }
       sess = newSession(id0);
+    }
+    if (b.action === 'alert-follows') {
+      if (!old.pw) return { ok: false, error: 'Termine la réinitialisation du mot de passe dans /config.' };
+      const oauth = old.cfg.tok && sealLib.open(old.cfg.tok);
+      if (!oauth) return { ok: false, error: 'Lie ton compte Twitch à ce profil dans /config pour importer tes suivis.' };
+      try {
+        const channels = await followedAll(oauth);
+        return { ok: true, pseudo: old.pseudo, session: sess, channels };
+      } catch (e) {
+        return { ok: false, error: e.revoked ? 'Le compte Twitch doit être relié dans /config.' : 'Impossible de charger tes suivis Twitch pour le moment.' };
+      }
     }
     if (b.action === 'open') return { ok: true, pseudo: old.pseudo, cfg: old.cfg, nopw: !old.pw, session: sess };
   }
@@ -1482,6 +1526,11 @@ async function handler(req, res) {
       let body;
       try { body = JSON.parse(await readBody(req)); } catch { return json(res, { error: 'Requête invalide.' }); }
       return json(res, await alerts.action(body));
+    }
+    if (!base && seg.length === 3 && seg[0] === 'api' && seg[1] === 'alerts' && seg[2] === 'search' && req.method === 'GET') {
+      if (tooMany(req)) return json(res, { error: 'Trop de recherches. Réessaie dans un instant.' });
+      const term = new URL(req.url, 'http://x').searchParams.get('q') || '';
+      return json(res, { channels: await searchAlertChannels(term) });
     }
     if (seg[0] === 'config' || seg[0] === 'configure') return send(res, 200, 'text/html; charset=utf-8', await configPage(), { 'Cache-Control': 'no-cache', 'Content-Security-Policy': CONFIG_CSP });
     if (seg[0] === 'api' && seg[1] === 'profile') return json(res, await profileApi(req));

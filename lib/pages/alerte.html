@@ -111,6 +111,25 @@ details p { margin-top: 8px; }
   .grid { grid-template-columns: 1fr; }
   .panel { padding: 16px; }
 }
+
+.stack { display: grid; gap: 18px; min-width: 0; }
+.sources { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 16px; }
+.sources button[aria-pressed="true"] { border-color: var(--accent); background: #3a2852; }
+.results { margin-top: 10px; }
+.result { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.result .channel { flex: 1; }
+.avatar { width: 36px; height: 36px; flex: none; border-radius: 10px; object-fit: cover; background: #322a42; }
+.result small { font-size: .76rem; }
+.profile-form { display: grid; gap: 10px; align-items: start; margin-top: 10px; }
+.profile-form label { display: grid; gap: 4px; color: var(--muted); font-size: .87rem; }
+.profile-form button { justify-self: start; }
+.profile-note { font-size: .85rem; margin-bottom: 12px; }
+.profile-note a { text-decoration: underline; }
+.profile-tools { display: flex; flex-wrap: wrap; gap: 8px; }
+.profile-tools input { flex: 1 1 160px; }
+.ghost { background: transparent; }
+.search-status { margin-top: 8px; color: var(--muted); font-size: .84rem; }
+.search-status:empty { display: none; }
 </style>
 <script src="/alerte.js" defer></script>
 </head>
@@ -123,15 +142,53 @@ details p { margin-top: 8px; }
     <h1>{{TITLE}}</h1>
     <p class="intro">{{INTRO}}</p>
     <div class="grid">
+      <div class="stack">
+      <section class="panel" aria-labelledby="find-title">
+        <div class="head"><h2 id="find-title">Trouver des streamers</h2></div>
+        <div class="sources" aria-label="Source des chaînes">
+          <button type="button" id="source-search" aria-pressed="true">Rechercher sur Twitch</button>
+          <button type="button" id="source-follows" aria-pressed="false">Mes suivis</button>
+        </div>
+        <div id="search-panel">
+          <form id="add" role="search">
+            <input id="channel" required maxlength="180" placeholder="Pseudo ou lien Twitch" aria-label="Pseudo ou lien Twitch" autocomplete="off" spellcheck="false">
+            <button type="submit">Rechercher</button>
+          </form>
+          <p id="search-status" class="search-status" role="status"></p>
+          <ul id="search-results" class="results"></ul>
+          <button type="button" id="manual-add" class="ghost" hidden>Ajouter ce pseudo</button>
+        </div>
+        <div id="follows-panel" hidden>
+          <div id="profile-signin">
+            <p class="profile-note">Connecte ton profil TwitchIO pour retrouver les chaînes du compte Twitch lié dans <a href="/config">ta configuration</a>.</p>
+            <form id="profile-form" class="profile-form">
+              <label>Identifiant de config ou lien d’installation<input id="profile-id" required maxlength="260" autocomplete="username" spellcheck="false"></label>
+              <label>Mot de passe du profil<input id="profile-password" type="password" required maxlength="100" autocomplete="current-password"></label>
+              <button class="primary" type="submit">Charger mes suivis</button>
+            </form>
+          </div>
+          <div id="profile-connected" hidden>
+            <div class="head">
+              <strong id="profile-name"></strong>
+              <button type="button" id="profile-logout" class="ghost">Déconnecter</button>
+            </div>
+            <div class="profile-tools">
+              <input id="follow-filter" placeholder="Filtrer mes suivis" aria-label="Filtrer mes suivis">
+              <button type="button" id="profile-refresh">Actualiser</button>
+                <button type="button" id="follow-add">Ajouter à ma liste</button>
+            </div>
+            <ul id="follow-results" class="results"></ul>
+            <button type="button" id="follow-more" class="ghost" hidden>Voir plus</button>
+          </div>
+          <p id="profile-status" class="search-status" role="status"></p>
+        </div>
+      </section>
       <section class="panel" aria-labelledby="channels-title">
         <div class="head"><h2 id="channels-title">Chaînes surveillées</h2><span class="pill" id="count">0 / 12</span></div>
-        <form id="add">
-          <input id="channel" required maxlength="180" placeholder="Pseudo ou lien Twitch" aria-label="Pseudo ou lien Twitch" autocomplete="off" spellcheck="false">
-          <button type="submit">Ajouter</button>
-        </form>
         <ul id="channels"></ul>
         <p id="empty" class="empty">Ajoute une première chaîne pour recevoir ses alertes de live.</p>
       </section>
+      </div>
       <section class="panel alerts" aria-labelledby="push-title">
         <div class="head"><h2 id="push-title">Notifications</h2><span class="pill" id="state">Désactivées</span></div>
         <button class="primary" type="button" id="enable" disabled>Activer les notifications</button>
