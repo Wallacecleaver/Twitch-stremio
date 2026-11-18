@@ -36,14 +36,22 @@ Un addon auto-hébergé : catalogues de lives, rediffusions, flux sans pub, qual
 
 ## 🏗️ Architecture
 
+Stremio parle à l'addon pour les catalogues et les sources. La vidéo, elle, passe soit par le Worker Cloudflare, soit directement chez Twitch (voir [Worker Cloudflare](#-worker-cloudflare)).
+
 ```mermaid
-flowchart LR
-    S["Stremio · Nuvio"] -->|catalogues, liste de lecture| A["TwitchIO<br/>(PC ou VPS)"]
-    A -->|GraphQL, API| T[("Twitch")]
-    A -.->|liste de lecture sans pub| R["Relais"]
-    S -->|"morceaux vidéo (mpv/ffmpeg)"| W["Worker Cloudflare"]
-    W --> T
-    B["Navigateur · Telegram"] -.->|/alerte| A
+flowchart TB
+    S["📺 Stremio · Nuvio"]
+    A["TwitchIO<br/>(PC ou VPS)"]
+    W["☁️ Worker Cloudflare"]
+    R["Relais sans pub"]
+    T[("Twitch")]
+    S -->|"1 · catalogues et sources"| A
+    A -->|"GraphQL, API"| T
+    A -.->|"liste de lecture sans pub"| R
+    S ==>|"2 · listes de lecture et morceaux<br/>(mpv/ffmpeg, mode Cloudflare)"| W
+    W -->|"CDN vidéo"| T
+    S -.->|"mode Direct : chez Twitch"| T
+    B["🌐 Navigateur · Telegram"] -.->|"/alerte"| A
 ```
 
 ## 🚀 Démarrage rapide
