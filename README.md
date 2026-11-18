@@ -4,9 +4,9 @@
 
 # TwitchIO
 
-**Regarde Twitch dans Stremio, et ne rate plus jamais un live.**
+**Les lives Twitch directement dans Stremio.**
 
-Un addon Stremio auto-hébergé, une page d'alertes (navigateur et Telegram) et un dashboard d'administration.
+Un addon auto-hébergé : catalogues de lives, rediffusions, flux sans pub, qualité réglable jusqu'au 1440p, et un dashboard pour l'administrer.
 
 [![Node.js](https://img.shields.io/badge/Node.js-%E2%89%A5%2018-5fa04e?logo=nodedotjs&logoColor=white)](https://nodejs.org)
 [![Docker](https://img.shields.io/badge/Docker-pr%C3%AAt-2496ed?logo=docker&logoColor=white)](#-sur-un-vps-docker--wdook)
@@ -14,11 +14,7 @@ Un addon Stremio auto-hébergé, une page d'alertes (navigateur et Telegram) et 
 [![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers-f38020?logo=cloudflare&logoColor=white)](#-worker-cloudflare)
 [![Twitch](https://img.shields.io/badge/Twitch-lives-9146ff?logo=twitch&logoColor=white)](https://www.twitch.tv)
 
-[Démarrage rapide](#-démarrage-rapide) · [Alertes](#-alertes-de-live) · [VPS](#-sur-un-vps-docker--wdook) · [Worker Cloudflare](#-worker-cloudflare) · [Configuration](#-configuration) · [Sécurité](#-sécurité)
-
-<br>
-
-<img src="docs/alerte.png" alt="Page Alertes Twitch : recherche de streamers et rangée « Tendance en français »" width="860">
+[Démarrage rapide](#-démarrage-rapide) · [Dans Stremio](#-dans-stremio) · [VPS](#-sur-un-vps-docker--wdook) · [Worker Cloudflare](#-worker-cloudflare) · [Configuration](#-configuration) · [Sécurité](#-sécurité)
 
 </div>
 
@@ -28,26 +24,26 @@ Un addon Stremio auto-hébergé, une page d'alertes (navigateur et Telegram) et 
 
 | | |
 |---|---|
-| 📺 **Lives dans Stremio** | Catalogues *Lives par jeu*, *Lives en français*, recherche, *Rediffusions*, et avec un compte Twitch lié *Mes chaînes suivies* et *Mes rediffusions*. |
-| 🚫 **Flux sans pub** | Relais côté serveur avec repli automatique sur le flux officiel. |
-| 🎚️ **Réglages par personne** | Qualité maximale, 60 i/s, 1440p, nombre de qualités, audio seul, nom d'appareil, mode de téléchargement vidéo. |
-| 🔔 **Alertes de live** | Notification Web Push et/ou Telegram, même page fermée, avec le jeu et le titre du live. |
-| 🔕 **Sourdine et heures calmes** | Coupe une chaîne ou une plage horaire sans vider ta liste. |
+| 📺 **Lives dans Stremio** | Catalogues *Lives par jeu*, *Lives en français*, recherche de chaînes. Avec un compte Twitch lié : *Mes chaînes suivies*. |
+| 📼 **Rediffusions** | Catalogues *Rediffusions* et *Mes rediffusions*, avec durée, date et jeu dans la description. |
+| 🚫 **Flux sans pub** | Relais interrogés côté serveur, repli automatique sur le flux officiel. |
+| 🎚️ **Qualité réglable** | Plafond de qualité, 60 i/s, 1440p avec ton compte Twitch, nombre de qualités fixes, audio seul. |
+| 🧩 **Affichage des sources** | Quatre présentations dans Stremio : Classique, Compact, Détaillé, Sans emoji. |
+| 🖥️ **Mode ordinateur** | Réglages pour Stremio PC et Nuvio (lecteurs mpv/ffmpeg), dont une seule piste audio. |
 | ☁️ **Vidéo hors de ton serveur** | Un Worker Cloudflare télécharge les morceaux vidéo à ta place. |
-| 💬 **Chat Twitch** | En sous-titres ou incrusté dans la vidéo (expérimental). |
 | 🛠️ **Dashboard** | Statistiques, journal, santé des relais, utilisateurs, clés d'accès, suivi Cloudflare. |
+| 🎁 **En bonus** | Une page d'[alertes de live](#-bonus--alertes-de-live) (navigateur et Telegram) et un chat Twitch expérimental. |
 
 ## 🏗️ Architecture
 
 ```mermaid
 flowchart LR
-    S["Stremio · Nuvio"] -->|catalogues, flux| A["TwitchIO<br/>(PC ou VPS)"]
-    B["Navigateur · Telegram"] -->|/alerte| A
+    S["Stremio · Nuvio"] -->|catalogues, liste de lecture| A["TwitchIO<br/>(PC ou VPS)"]
     A -->|GraphQL, API| T[("Twitch")]
-    A -.->|liste de lecture| R["Relais sans pub"]
+    A -.->|liste de lecture sans pub| R["Relais"]
     S -->|"morceaux vidéo (mpv/ffmpeg)"| W["Worker Cloudflare"]
     W --> T
-    A -->|notifications| B
+    B["Navigateur · Telegram"] -.->|/alerte| A
 ```
 
 ## 🚀 Démarrage rapide
@@ -62,62 +58,35 @@ npm start
 Sous Windows, double-clique simplement sur `start.bat`.
 
 1. Au premier lancement, un fichier `.env` est créé avec un **mot de passe de dashboard** et une **clé de chiffrement**. Le mot de passe s'affiche aussi dans la console.
-2. Ouvre `http://localhost:7000/config`, choisis tes réglages, puis installe le lien obtenu dans Stremio.
+2. Ouvre `http://localhost:7000/config` : un assistant en six étapes (Profil, Qualité, Compte, Affichage, Options, Terminer) te donne ton **lien d'installation**. Colle-le dans Stremio.
 
 Sur le même PC, Stremio accepte `http://localhost:7000`. Pour tes amis, ou pour Stremio sur un autre appareil, il faut une adresse **https** publique : un tunnel (Cloudflare Tunnel, ngrok, Tailscale Funnel…) vers le port 7000. Renseigne cette adresse dans le dashboard (*Paramètres → Configuration → Adresse publique*), puis redémarre.
 
-## 🔔 Alertes de live
+## 📺 Dans Stremio
 
-Sur **`/alerte`**, ajoute jusqu'à 12 chaînes par navigateur et active les notifications. Le serveur vérifie les directs environ toutes les minutes et envoie une alerte au démarrage d'un live, avec le jeu et le titre. Le bouton **Envoyer un test** vérifie la réception.
+Une fois l'addon installé, tu trouves dans Stremio (type *TV*, et *Séries* pour les rediffusions) :
 
-**Ajouter des chaînes**
-
-- Cherche un streamer par pseudo ou colle le lien de sa chaîne.
-- Parcours *Tendance en français* et *Populaires sur Twitch*.
-- Ouvre une fiche streamer pour voir son calendrier Twitch et l'ajouter.
-- Dans *Mes suivis*, connecte-toi avec l'identifiant (ou le lien d'installation) et le mot de passe de ton profil TwitchIO : si un compte Twitch y est lié, tu choisis les suivis à importer.
-
-**Affiner ce que tu reçois**
-
-| Réglage | Effet |
+| Catalogue | Contenu |
 |---|---|
-| 🔕 **Sourdine** | Le bouton à côté d'une chaîne coupe ses alertes sans la retirer de la liste. |
-| 🌙 **Heures calmes** | Aucune alerte entre deux heures, dans le fuseau de ton navigateur. |
+| **TwitchIO · Lives par jeu** | les lives du moment, filtrables par jeu |
+| **TwitchIO · Lives en français** | les lives francophones, filtrables par jeu |
+| **TwitchIO · Lives** | recherche d'une chaîne par pseudo |
+| **TwitchIO · Rediffusions** | recherche une chaîne pour voir ses rediffs, avec durée, date et jeu |
+| **TwitchIO · Mes chaînes suivies** | tes suivis Twitch (compte Twitch lié) |
+| **TwitchIO · Mes rediffusions** | tes chaînes suivies : ouvre-en une pour voir ses rediffs (compte Twitch lié) |
 
-Un live démarré pendant une sourdine ou des heures calmes est marqué comme vu : tu n'es pas notifié en retard quand tu réactives. Ces réglages valent pour le navigateur **et** pour Telegram.
+La fiche d'une chaîne propose des liens vers Twitch, le catalogue du jeu en cours et, si l'administrateur l'a activé, le Discord de l'addon.
 
-<details>
-<summary><b>📱 Notifications du navigateur</b></summary>
+**Les sources.** Pour chaque live, Stremio liste une source *Auto*, des qualités fixes (de 0 à 6 selon ton réglage) et *Audio seul*. Le nom indique la qualité, les images par seconde et si le flux est **sans pub** ou officiel. La présentation se choisit à l'étape *Affichage* : **Classique**, **Compact** (une ligne par source, idéal sur TV ou téléphone), **Détaillé** (spectateurs et jeu en cours) ou **Sans emoji**.
 
-<br>
+**Qualité.**
 
-Les alertes arrivent page fermée, tant que le navigateur et le système autorisent les notifications en arrière-plan. Utilise l'adresse **HTTPS** de l'addon. Sur iPhone ou iPad, ajoute d'abord la page à l'écran d'accueil (menu de partage de Safari), puis ouvre l'icône pour activer les alertes. Les abonnements et la clé Push sont enregistrés dans le dossier de données.
+- Plafond de qualité (1440p, 1080p, 720p, 480p, 360p) et option 60 i/s.
+- **1440p** : demande de lier ton compte Twitch, voir [1440p](#-fonctionnement-et-limites).
+- **Sans pub** : activable ou non par personne.
+- **Mode ordinateur** : pour Stremio PC et Nuvio, avec le choix de qui télécharge la vidéo (voir [Worker Cloudflare](#-worker-cloudflare)).
 
-</details>
-
-<details>
-<summary><b>✈️ Telegram</b></summary>
-
-<br>
-
-1. Crée un bot **dédié** dans [BotFather](https://t.me/BotFather).
-2. Renseigne `TELEGRAM_BOT_TOKEN` dans les variables du VPS, puis redéploie.
-3. Sur `/alerte`, choisis tes chaînes, clique sur **Connecter Telegram**, ouvre le bot et appuie sur **Démarrer**.
-
-Telegram marche seul ou avec les notifications du navigateur. Envoie `/stop` au bot pour arrêter. Le bot doit être dédié à TwitchIO, qui reçoit ses messages via `getUpdates`.
-
-</details>
-
-<details>
-<summary><b>🛠️ Côté administrateur</b></summary>
-
-<br>
-
-L'onglet **Alertes** du dashboard permet de changer le titre et l'introduction de la page, de mettre les envois en pause et de voir le nombre de navigateurs abonnés et de chaînes surveillées. Les lives commencés pendant la pause ne déclenchent pas d'alerte à la reprise.
-
-Limites du serveur : 200 navigateurs, 12 chaînes par navigateur, 150 chaînes surveillées au total.
-
-</details>
+**Ton profil.** Les réglages sont dans le lien d'installation : pas de compte obligatoire. Un profil enregistré (`/u/<id>`, protégé par mot de passe) permet de retrouver et modifier ses réglages plus tard.
 
 ## 🐳 Sur un VPS (Docker / WDook)
 
@@ -168,6 +137,65 @@ Le fichier `.env` ne garde que l'essentiel :
 | `TELEGRAM_BOT_TOKEN` | facultatif : bot Telegram des alertes |
 
 D'autres variables facultatives existent dans le `.env.example` : `PORT`, `PUBLIC_URL`, `SAVE_DELAY_MS` et les réglages expérimentaux du chat (`CHAT_SUBS`, `CHAT_DELAY_MS`, `CHAT_MAX_ROOMS`, `CHAT_BURN`, `BURN_*`). L'option `AUDIO_SINGLE` (dashboard → Configuration → Vidéo) ne laisse qu'**une piste audio** sur Stremio PC et Nuvio desktop, au lieu de « Track 1 … Track 5 ».
+
+## 🎁 Bonus : alertes de live
+
+En complément de l'addon, la page **`/alerte`** te prévient quand un streamer démarre un live. Ajoute jusqu'à 12 chaînes par navigateur et active les notifications. Le serveur vérifie les directs environ toutes les minutes et envoie une alerte au démarrage d'un live, avec le jeu et le titre. Le bouton **Envoyer un test** vérifie la réception.
+
+<div align="center">
+
+<img src="docs/alerte.png" alt="Page Alertes : recherche de streamers et rangée « Tendance en français »" width="680">
+
+</div>
+
+**Ajouter des chaînes**
+
+- Cherche un streamer par pseudo ou colle le lien de sa chaîne.
+- Parcours *Tendance en français* et *Populaires sur Twitch*.
+- Ouvre une fiche streamer pour voir son calendrier Twitch et l'ajouter.
+- Dans *Mes suivis*, connecte-toi avec l'identifiant (ou le lien d'installation) et le mot de passe de ton profil TwitchIO : si un compte Twitch y est lié, tu choisis les suivis à importer.
+
+**Affiner ce que tu reçois**
+
+| Réglage | Effet |
+|---|---|
+| 🔕 **Sourdine** | Le bouton à côté d'une chaîne coupe ses alertes sans la retirer de la liste. |
+| 🌙 **Heures calmes** | Aucune alerte entre deux heures, dans le fuseau de ton navigateur. |
+
+Un live démarré pendant une sourdine ou des heures calmes est marqué comme vu : tu n'es pas notifié en retard quand tu réactives. Ces réglages valent pour le navigateur **et** pour Telegram.
+
+<details>
+<summary><b>📱 Notifications du navigateur</b></summary>
+
+<br>
+
+Les alertes arrivent page fermée, tant que le navigateur et le système autorisent les notifications en arrière-plan. Utilise l'adresse **HTTPS** de l'addon. Sur iPhone ou iPad, ajoute d'abord la page à l'écran d'accueil (menu de partage de Safari), puis ouvre l'icône pour activer les alertes. Les abonnements et la clé Push sont enregistrés dans le dossier de données.
+
+</details>
+
+<details>
+<summary><b>✈️ Telegram</b></summary>
+
+<br>
+
+1. Crée un bot **dédié** dans [BotFather](https://t.me/BotFather).
+2. Renseigne `TELEGRAM_BOT_TOKEN` dans les variables du VPS, puis redéploie.
+3. Sur `/alerte`, choisis tes chaînes, clique sur **Connecter Telegram**, ouvre le bot et appuie sur **Démarrer**.
+
+Telegram marche seul ou avec les notifications du navigateur. Envoie `/stop` au bot pour arrêter. Le bot doit être dédié à TwitchIO, qui reçoit ses messages via `getUpdates`.
+
+</details>
+
+<details>
+<summary><b>🛠️ Côté administrateur</b></summary>
+
+<br>
+
+L'onglet **Alertes** du dashboard permet de changer le titre et l'introduction de la page, de mettre les envois en pause et de voir le nombre de navigateurs abonnés et de chaînes surveillées. Les lives commencés pendant la pause ne déclenchent pas d'alerte à la reprise.
+
+Limites du serveur : 200 navigateurs, 12 chaînes par navigateur, 150 chaînes surveillées au total.
+
+</details>
 
 ## 🗺️ Pages
 
