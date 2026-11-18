@@ -359,11 +359,17 @@ dialog input:focus { border-color: var(--violet); outline: 0; box-shadow: 0 0 0 
 .schedule-day small { font-size: .7rem; color: #ded0ff; }
 .schedule-event { min-width: 0; display: grid; gap: 2px; overflow-wrap: anywhere; }
 .schedule time { color: var(--muted); font-size: .83rem; }
+.schedule .agenda { margin-left: auto; padding: 4px 7px; flex: none; font-size: .77rem; }
+.watch-filter { margin-top: 12px; }
+.watch-filter button[aria-pressed="true"] { border-color: var(--violet); color: #ede0ff; }
+.share-note { margin-top: 8px; }
 @media (max-width: 620px) {
   .streamer-hero { padding: 18px 17px 14px; }
   .streamer-identity .avatar { width: 51px; height: 51px; border-radius: 13px; }
   .streamer-body { grid-template-columns: 1fr; padding: 15px 17px 20px; gap: 18px; }
   .schedule { padding: 14px 0 0; border: 0; border-top: 1px solid var(--line); }
+  .schedule li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 11px; }
+  .schedule .agenda { grid-column: 2; justify-self: start; margin-left: 0; }
 }
 </style>
 <script src="/alerte.js" defer></script>
@@ -426,7 +432,9 @@ dialog input:focus { border-color: var(--violet); outline: 0; box-shadow: 0 0 0 
           <span class="pill" id="count">0 / 12</span>
         </div>
         <div class="meter" aria-hidden="true"><i id="meter"></i></div>
+        <div class="watch-filter" id="watch-filter" hidden><button type="button" id="watch-live" aria-pressed="false">En direct</button></div>
         <ul id="channels"></ul>
+        <p id="watch-live-empty" class="search-status" hidden>Aucune chaîne de ta liste n’est signalée en direct.</p>
         <div id="empty" class="empty">
           <div class="ico"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></div>
           <strong>Aucune chaîne pour l’instant</strong>
@@ -512,7 +520,10 @@ dialog input:focus { border-color: var(--violet); outline: 0; box-shadow: 0 0 0 
         <div class="actions">
           <button id="streamer-alert" class="primary" type="button" disabled>Ajouter en alerte</button>
           <a id="streamer-twitch" target="_blank" rel="noopener noreferrer">Ouvrir sur Twitch ↗</a>
+          <button id="streamer-share" type="button" class="ghost">Copier le lien</button>
         </div>
+        <p id="streamer-share-status" class="search-status share-note" role="status"></p>
+        <input id="streamer-share-url" aria-label="Lien de la fiche" readonly hidden>
       </div>
       <section class="schedule" aria-labelledby="schedule-title">
         <h3 id="schedule-title">Calendrier Twitch</h3>
