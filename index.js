@@ -605,7 +605,7 @@ async function gamesMerge(opt, per) {
 }
 async function topLives() {
   const q = o => 'query { streams(first: 60' + o + ') { edges { node { ' + STREAM_NODE + ' } } } }';
-  for (const o of ['', ', options: { sort: VIEWER_COUNT }']) {
+  for (const o of [', options: { sort: VIEWER_COUNT }', '']) { // trié par spectateurs d'abord : sans tri, Twitch renvoie un ordre quelconque et les plus gros lives manquent
     try { const v = (((await gqlRaw(q(o))).streams || {}).edges || []).map(e => toLive(e && e.node)).filter(Boolean).sort(byViewers); if (v.length) return v; } catch { /* essai suivant */ }
   }
   return gamesMerge('', 30);
@@ -635,8 +635,11 @@ async function frenchStreams(game) {
   const run = (opt, node) => gqlRaw(game ? 'query { game(name: ' + JSON.stringify(game) + ') { streams' + opt + ' { edges { node { ' + node + ' } } } } }' : 'query { streams' + opt + ' { edges { node { ' + node + ' } } } }');
   const toL = edges => edges.map(e => toLive(e && e.node)).filter(Boolean).sort((a, b) => b.info.viewers - a.info.viewers);
   let v = null; const errs = [];
-  try { v = toL(edgesOf(await run('(first: 100, options: { broadcasterLanguages: [FR] })', STREAM_NODE))); }
-  catch (e) { errs.push('filtre de langue : ' + String(e.message).slice(0, 110)); }
+  // d'abord triés par spectateurs côté Twitch (sinon on ne reçoit que 100 lives dans un ordre quelconque et les plus gros, comme Squeezie, peuvent manquer), puis sans tri en repli
+  for (const o of ['{ broadcasterLanguages: [FR], sort: VIEWER_COUNT }', '{ broadcasterLanguages: [FR] }']) {
+    try { v = toL(edgesOf(await run('(first: 100, options: ' + o + ')', STREAM_NODE))); break; }
+    catch (e) { errs.push('filtre de langue : ' + String(e.message).slice(0, 110)); }
+  }
   if (!v) {
     try { v = toL(edgesOf(await run('(first: 100)', STREAM_NODE + ' broadcaster { broadcastSettings { language } }')).filter(e => e && e.node && e.node.broadcaster && e.node.broadcaster.broadcastSettings && /^fr/i.test(String(e.node.broadcaster.broadcastSettings.language || '')))); }
     catch (e) { errs.push('langue des chaînes : ' + String(e.message).slice(0, 110)); }
