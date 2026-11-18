@@ -129,6 +129,7 @@ pre{background:var(--bg2);border:1px solid var(--bs);border-radius:var(--r);padd
 .uc{background:var(--bg3);border:1px solid var(--bs);border-radius:var(--rl);padding:18px;display:flex;flex-direction:column;gap:14px;transition:border-color .15s}.uc:hover{border-color:var(--bd)}
 .uh{display:flex;gap:12px;align-items:center}.uh .av{width:44px;height:44px;font-size:1.05rem;position:relative;flex:none}.uh .av i{position:absolute;right:-1px;bottom:-1px;width:12px;height:12px;border-radius:50%;border:2px solid var(--bg3);background:var(--t3)}.uh .av i.on{background:var(--ok)}.uh .av i.rc{background:var(--wa)}
 .uh b{font-size:1rem;font-weight:600;display:block;line-height:1.25}.uh span{font-size:.78rem;color:var(--t3)}.uh .ub{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.ah{margin:20px 0 4px;font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--t3)}.ah+.tw table th:first-child,.ah+.tw table td:first-child{padding-left:0}.ah+.tw table th:last-child,.ah+.tw table td:last-child{padding-right:0}.trunc{max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .us{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.us div{background:var(--bg2);border:1px solid var(--bs);border-radius:10px;padding:9px 11px}.us b{display:block;font-size:1.1rem;font-variant-numeric:tabular-nums;line-height:1.25}.us span{font-size:.7rem;color:var(--t3);text-transform:uppercase;letter-spacing:.05em}
 .ul{font-size:.82rem;color:var(--t2);display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}.ul b{color:var(--t);font-weight:500}
 .ch{display:flex;gap:6px;flex-wrap:wrap}.ch span{font-size:.72rem;color:var(--t2);background:var(--el);border:1px solid var(--bs);border-radius:99px;padding:2px 9px}
@@ -253,11 +254,14 @@ pre{background:var(--bg2);border:1px solid var(--bs);border-radius:var(--r);padd
     </div>
   </div>
   <div class="sec">
-    <div class="sh"><div class="stt">Suivi des alertes</div><button class="btn" id="alertsRefresh" type="button">Actualiser</button></div>
+    <div class="sh"><div class="stt">Suivi des alertes <span class="pill" id="alertsState"></span></div><button class="btn" id="alertsRefresh" type="button">Actualiser</button></div>
     <div class="sb">
       <div class="us" id="alertsStats"></div>
       <p class="dim" id="alertsScan" style="margin:12px 0" role="status">Chargement…</p>
-      <div id="alertsChannels"></div>
+      <div class="ah">Chaînes surveillées</div>
+      <div class="tw" id="alertsChannels"></div>
+      <div class="ah">Dernières alertes envoyées</div>
+      <div class="tw" id="alertsRecent"></div>
     </div>
   </div>
 </div>
@@ -408,32 +412,56 @@ $('#p-relays').addEventListener('change',e=>{const t=e.target;if(!t.dataset.r||!
 $('#rlAll').onclick=()=>fSave({offRelays:[]});
 loadFeat();
 const go0=go;go=function(k){go0(k);if(k==='site'&&!SITE_OK)loadSite()};
-let alertsLoaded = false;
+let alertsLoaded = false, alertsBase = null;
+function alertsDirty() {
+ const same = alertsBase && $('#alertsTitle').value === alertsBase.title && $('#alertsIntro').value === alertsBase.intro && $('#alertsPaused').checked === alertsBase.paused;
+ $('#alertsSave').disabled = !alertsBase || !!same;
+}
 function showAlerts(data, settings) {
  if (data.error || !Array.isArray(data.channels)) throw new Error(data.error || 'Réponse indisponible.');
  if (settings || !alertsLoaded) {
   $('#alertsTitle').value = data.title;
   $('#alertsIntro').value = data.intro;
   $('#alertsPaused').checked = data.paused;
+  alertsBase = { title: data.title, intro: data.intro, paused: data.paused };
   alertsLoaded = true;
-  $('#alertsSave').disabled = false;
+  alertsDirty();
  }
- $('#alertsStats').innerHTML = [[data.devices, 'Navigateurs abonnés'], [data.channels.length, 'Chaînes surveillées'], [data.sent, 'Alertes depuis le démarrage']]
-  .map(([count, label]) => '<div><b>' + n(count) + '</b><span>' + label + '</span></div>').join('');
- $('#alertsScan').textContent = data.paused ? 'Envois en pause.' : data.lastScan
-  ? 'Dernière vérification ' + ago(data.lastScan) + ' · ' + n(data.scanned) + ' chaînes avec une réponse Twitch.'
+ $('#alertsState').className = 'pill ' + (data.paused ? 'wa' : 'ok');
+ $('#alertsState').textContent = data.paused ? 'En pause' : 'Actif';
+ $('#alertsStats').innerHTML = [
+  [data.pushDevices, 'Navigateurs (Push)'], [data.telegramDevices, data.telegramAvailable ? 'Telegram' : 'Telegram (bot non configuré)'], [data.channels.length, 'Chaînes surveillées'],
+  [data.liveNow, 'En direct maintenant'], [data.sent, 'Alertes depuis le démarrage'], [data.customDevices, 'Avec sourdine ou heures calmes'],
+ ].map(([count, label]) => '<div><b>' + n(count) + '</b><span>' + label + '</span></div>').join('');
+ $('#alertsScan').textContent = data.paused ? 'Envois en pause : les abonnements sont conservés.'
+  : !data.devices ? 'Aucune vérification : personne n’est encore abonné.'
+  : data.lastScan ? 'Vérification toutes les ' + n(data.interval) + ' s · dernière ' + ago(data.lastScan) + ' · ' + n(data.scanned) + ' chaînes avec une réponse Twitch.'
   : 'Aucune vérification depuis le démarrage du serveur.';
- $('#alertsChannels').innerHTML = data.channels.length ? data.channels.map(channel => {
-  const fresh = Date.now() - (channel.checked || 0) < 180000;
-  const current = !data.paused && fresh ? (channel.live ? 'En direct' : 'Hors ligne') : 'En attente';
-  return '<div class="kv"><a href="https://www.twitch.tv/' + encodeURIComponent(channel.login) + '" target="_blank" rel="noopener">' + esc(channel.name || channel.login) + '</a><span>' + n(channel.subscribers) + ' · ' + current + '</span></div>';
- }).join('') : '<p class="dim">Aucune chaîne surveillée pour le moment.</p>';
+ const state = channel => {
+  const fresh = !data.paused && Date.now() - (channel.checked || 0) < 180000;
+  return fresh ? (channel.live ? 'live' : 'off') : 'wait';
+ };
+ const rank = { live: 0, off: 1, wait: 2 };
+ const channels = [...data.channels].sort((x, y) => rank[state(x)] - rank[state(y)] || y.subscribers - x.subscribers);
+ $('#alertsChannels').innerHTML = channels.length ? '<table><thead><tr><th>Chaîne</th><th>Statut</th><th>En cours</th><th class="r">Abonnés</th></tr></thead><tbody>' + channels.map(channel => {
+  const st = state(channel), now = [channel.game, channel.title].filter(Boolean).join(' · ');
+  return '<tr><td><a href="https://www.twitch.tv/' + encodeURIComponent(channel.login) + '" target="_blank" rel="noopener">' + esc(channel.name || channel.login) + '</a></td>'
+   + '<td><span class="pill' + (st === 'live' ? ' ok' : '') + '">' + (st === 'live' ? 'En direct' : st === 'off' ? 'Hors ligne' : 'En attente') + '</span></td>'
+   + '<td class="dim"><div class="trunc" title="' + esc(now) + '">' + (st === 'live' && now ? esc(now) : '–') + '</div></td>'
+   + '<td class="r">' + n(channel.subscribers) + '</td></tr>';
+ }).join('') + '</tbody></table>' : '<p class="dim" style="margin:6px 0 0">Aucune chaîne surveillée pour le moment.</p>';
+ $('#alertsRecent').innerHTML = data.recent.length ? '<table><thead><tr><th>Quand</th><th>Chaîne</th><th>Jeu</th><th class="r">Push</th><th class="r">Telegram</th></tr></thead><tbody>' + data.recent.map(item =>
+  '<tr><td class="dim">' + ago(item.at) + '</td><td>' + esc(item.name || item.login) + '</td><td class="dim"><div class="trunc">' + (esc(item.game) || '–') + '</div></td><td class="r">' + n(item.push) + '</td><td class="r">' + n(item.telegram) + '</td></tr>'
+ ).join('') + '</tbody></table>' : '<p class="dim" style="margin:6px 0 0">Aucune alerte envoyée depuis le démarrage du serveur.</p>';
 }
 async function loadAlerts() {
  try { showAlerts(await api('alerts'), false); }
  catch { $('#alertsScan').textContent = 'Impossible de charger le suivi des alertes.'; }
 }
+setInterval(() => { if (cur === 'alerts' && !document.hidden) loadAlerts(); }, 30000);
 $('#alertsRefresh').onclick = loadAlerts;
+$('#alertsForm').addEventListener('input', alertsDirty);
+$('#alertsForm').addEventListener('change', alertsDirty);
 $('#alertsForm').onsubmit = async event => {
  event.preventDefault();
  const button = $('#alertsSave'), message = $('#alertsMessage');
@@ -447,7 +475,7 @@ $('#alertsForm').onsubmit = async event => {
   showAlerts(data, true);
   message.textContent = 'Réglages enregistrés.';
  } catch (e) { message.textContent = e.message || 'Enregistrement impossible.'; }
- finally { button.disabled = false; }
+ finally { alertsDirty(); }
 };
 
 $('#tabs').onclick=e=>{const b=e.target.closest('.tab');if(b)go(b.dataset.k)};go(cur);loadProf();

@@ -199,7 +199,13 @@ Telegram marche seul ou avec les notifications du navigateur. Envoie `/stop` au 
 
 <br>
 
-L'onglet **Alertes** du dashboard permet de changer le titre et l'introduction de la page, de mettre les envois en pause et de voir le nombre de navigateurs abonnés et de chaînes surveillées. Les lives commencés pendant la pause ne déclenchent pas d'alerte à la reprise.
+L'onglet **Alertes** du dashboard permet de changer le titre et l'introduction de la page et de mettre les envois en pause (le bouton *Enregistrer* ne s'active que si tu as modifié quelque chose). Le suivi, actualisé toutes les 30 secondes, affiche :
+
+- l'état (Actif ou En pause), le nombre de navigateurs abonnés (Push), de comptes Telegram, de chaînes surveillées et de lives en cours, les alertes envoyées et le nombre de personnes qui ont réglé une sourdine ou des heures calmes ;
+- la liste des chaînes surveillées, avec leur statut, le jeu et le titre du live en cours, et le nombre d'abonnés ;
+- les 20 dernières alertes envoyées (chaîne, jeu, nombre d'envois Push et Telegram), depuis le démarrage du serveur.
+
+Les lives commencés pendant la pause ne déclenchent pas d'alerte à la reprise.
 
 Limites du serveur : 200 navigateurs, 12 chaînes par navigateur, 150 chaînes surveillées au total.
 
