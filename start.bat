@@ -1,6 +1,13 @@
 @echo off
 title TwitchIO
 cd /d "%~dp0"
+if not exist node_modules\web-push\package.json (
+  call npm ci --omit=dev
+  if errorlevel 1 (
+    pause
+    exit /b 1
+  )
+)
 :boucle
 node index.js
 echo.

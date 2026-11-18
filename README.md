@@ -1,18 +1,24 @@
 # TwitchIO
 
-Addon Stremio hébergé sur ton PC : regarder des lives Twitch dans Stremio. Aucune dépendance à installer, seulement [Node.js](https://nodejs.org) 18 ou plus.
+Addon Stremio hébergé sur ton PC : regarder des lives Twitch dans Stremio. [Node.js](https://nodejs.org) 18 ou plus.
 
 ## Lancer l'addon
 
-1. Double-clique sur `start.bat` (ou `node index.js` dans un terminal).
+1. Double-clique sur `start.bat` ou lance `npm ci --omit=dev` puis `npm start` dans un terminal.
 2. Au premier lancement, un fichier `.env` est créé à côté de `index.js` avec un mot de passe pour le dashboard et une clé de chiffrement. Le mot de passe est aussi affiché dans la console.
 3. Ouvre `http://localhost:7000/config`, choisis tes réglages, puis installe le lien obtenu dans Stremio.
 
 Sur le même PC, Stremio accepte `http://localhost:7000`. Pour tes amis (ou Stremio sur un autre appareil), il faut une adresse **https** publique : un tunnel (Cloudflare Tunnel, ngrok, Tailscale Funnel…) vers le port 7000. Mets cette adresse dans le dashboard (Paramètres → Configuration → Adresse publique) du fichier `.env`, puis redémarre.
 
+## Alertes de live
+
+Sur `/alerte`, ajoute jusqu’à 12 chaînes par navigateur, puis active les notifications. Le serveur vérifie les directs environ toutes les minutes et envoie une notification quand une chaîne surveillée démarre un nouveau live. Le bouton « Envoyer un test » permet de vérifier la réception.
+
+Les alertes arrivent même quand la page est fermée, tant que le navigateur et le système autorisent les notifications en arrière-plan. Utilise l’adresse HTTPS de l’addon. Sur iPhone ou iPad, ajoute la page à l’écran d’accueil avant d’activer les alertes. Les abonnements et la clé Push sont enregistrés dans le dossier de données.
+
 ## Sur un VPS (Docker / WDook)
 
-Le repo contient un `Dockerfile` (Node 22 Alpine, aucune dépendance) et un `.env.example`.
+Le repo contient un `Dockerfile` (Node 22 Alpine) et un `.env.example`.
 
 - **WDook** : « Nouveau projet » → choisis le repo ; les variables du `.env.example` sont préremplies, le port est `7000`. Laisse `ADMIN_PASSWORD` et `SECRET` vides : ils sont générés au premier démarrage (le mot de passe du dashboard est affiché dans les logs du conteneur, `docker logs <conteneur>`).
 - **Docker seul** :

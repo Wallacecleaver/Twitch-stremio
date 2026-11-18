@@ -62,6 +62,7 @@ const fmtLib = require('./lib/format');
 const sealLib = require('./lib/seal');
 const akeys = require('./lib/akeys');
 const siteLib = require('./lib/site');
+const { createAlerts } = require('./lib/alerts');
 
 const PORT = process.env.PORT || 7000;
 const HOST = process.env.HOST || '0.0.0.0';
@@ -539,6 +540,22 @@ async function gqlRaw(query) {
   if (!j.data) throw new Error('Twitch n\'a pas renvoyé de lives' + (j.errors && j.errors[0] ? ' : ' + String(j.errors[0].message).slice(0, 120) : ''));
   return j.data;
 }
+const alerts = createAlerts({
+  async scan(logins) {
+    const result = new Map();
+    for (let offset = 0; offset < logins.length; offset += 12) {
+      const batch = logins.slice(offset, offset + 12);
+      const fields = batch.map((login, i) => 'u' + i + ': user(login: ' + JSON.stringify(login) + ') { displayName stream { id createdAt title } }');
+      const data = await gqlRaw('query { ' + fields.join(' ') + ' }').catch(() => null);
+      if (!data) continue;
+      batch.forEach((login, i) => {
+        const user = data['u' + i];
+        if (user) result.set(login, { name: user.displayName || login, id: user.stream?.id, startedAt: user.stream?.createdAt, title: user.stream?.title });
+      });
+    }
+    return result;
+  },
+});
 const toLive = n => n && n.broadcaster && n.broadcaster.login ? { login: n.broadcaster.login, info: { name: n.broadcaster.displayName || n.broadcaster.login, avatar: n.broadcaster.profileImageURL || '', banner: '', bio: '', live: true, title: n.title || '', game: n.game ? n.game.displayName : '', viewers: Number(n.viewersCount) || 0, preview: n.previewImageURL || '' } } : null;
 // Les infos des lives déjà reçues pour un catalogue servent aussi aux vignettes : évite ~60 requêtes Twitch supplémentaires par affichage du catalogue
 function seedInfo(list) {
@@ -1442,6 +1459,27 @@ async function handler(req, res) {
       return send(res, 200, 'image/svg+xml', svg, { 'Cache-Control': 'private, max-age=45', Vary: 'User-Agent' });
     }
     if (seg[0] === 'logo.svg') return send(res, 200, 'image/svg+xml', asset('logo.svg'), { 'Cache-Control': 'public, max-age=86400' });
+    if (!base && seg.length === 1 && seg[0] === 'alerte') {
+      return send(res, 200, 'text/html; charset=utf-8', rawPage('alerte.html').replace(/\{\{NAME\}\}/g, () => escH(SS.name)), { 'Cache-Control': 'no-cache', 'Content-Security-Policy': CONFIG_CSP });
+    }
+    if (!base && seg.length === 1 && ['alerte.js', 'alerte-sw.js'].includes(seg[0])) {
+      return send(res, 200, 'text/javascript; charset=utf-8', rawPage(seg[0]), { 'Cache-Control': 'no-cache' });
+    }
+    if (!base && seg.length === 1 && seg[0] === 'alerte.webmanifest') {
+      return send(res, 200, 'application/manifest+json', JSON.stringify({
+        name: SS.name + ' · Alertes', short_name: 'Alertes', start_url: '/alerte', scope: '/alerte', display: 'standalone',
+        background_color: '#10111a', theme_color: '#10111a', icons: [{ src: '/logo.svg', sizes: 'any', type: 'image/svg+xml' }],
+      }), { 'Cache-Control': 'no-cache' });
+    }
+    if (!base && seg.length === 2 && seg[0] === 'api' && seg[1] === 'alerts') {
+      if (req.method === 'GET') return json(res, { publicKey: await alerts.publicKey() });
+      if (req.method !== 'POST') return send(res, 405, 'text/plain; charset=utf-8', 'Méthode non autorisée', { Allow: 'GET, POST' });
+      if (!/^application\/json(?:;|$)/i.test(req.headers['content-type'] || '')) return send(res, 415, 'text/plain; charset=utf-8', 'JSON attendu');
+      if (tooMany(req)) return json(res, { error: 'Trop de demandes. Réessaie dans un instant.' });
+      let body;
+      try { body = JSON.parse(await readBody(req)); } catch { return json(res, { error: 'Requête invalide.' }); }
+      return json(res, await alerts.action(body));
+    }
     if (seg[0] === 'config' || seg[0] === 'configure') return send(res, 200, 'text/html; charset=utf-8', await configPage(), { 'Cache-Control': 'no-cache', 'Content-Security-Policy': CONFIG_CSP });
     if (seg[0] === 'api' && seg[1] === 'profile') return json(res, await profileApi(req));
     if (seg[0] === 'api' && seg[1] === 'akey') { // POST { k } : la clé ne passe plus dans l'adresse (donc plus dans les journaux d'accès)
@@ -1687,6 +1725,7 @@ if (require.main === module) {
   srv.headersTimeout = 66000;
   srv.requestTimeout = 30000;
   srv.listen(PORT, HOST, () => {
+    alerts.start();
     console.log('TwitchIO sur http://localhost:' + PORT + (process.env.PUBLIC_URL ? '  (adresse publique : ' + process.env.PUBLIC_URL + ')' : ''));
     console.log('Données : ' + store.file + '  ·  Dashboard : http://localhost:' + PORT + '/admin  ·  Configuration : http://localhost:' + PORT + '/config');
   });
