@@ -312,6 +312,14 @@ dialog input:focus { border-color: var(--violet); outline: 0; box-shadow: 0 0 0 
   scrollbar-width: thin;
 }
 .rail > li { scroll-snap-align: start; }
+.quiet { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--line); }
+.quiet h3 { margin: 0; font-size: 1.05rem; }
+.quiet-row { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 12px; color: var(--dim); font-size: .88rem; }
+.quiet-row label { display: flex; align-items: center; gap: 8px; }
+.quiet-row input { padding: 8px 10px; border: 1px solid var(--line2); border-radius: 10px; background: #181428; color: var(--text); color-scheme: dark; }
+.mute { background: transparent; border-color: transparent; padding: 6px 9px; color: var(--dim); font-size: .8rem; }
+.mute:hover:not(:disabled) { color: var(--text); filter: none; }
+.mute[aria-pressed="true"] { color: #ffc678; }
 .telegram { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--line); }
 #telegram-link { color: #ded0ff; }
 #streamer { width: min(100% - 32px, 840px); padding: 0; overflow-x: hidden; }
@@ -458,6 +466,18 @@ dialog input:focus { border-color: var(--violet); outline: 0; box-shadow: 0 0 0 
         </div>
         <p id="hint" class="hint">Les alertes sont propres à ce navigateur.</p>
         <p id="message" class="message" role="status" aria-live="polite"></p>
+        <section class="quiet" id="quiet" aria-labelledby="quiet-title" hidden>
+          <div class="head"><h3 id="quiet-title">Heures calmes</h3><span class="pill" id="quiet-state">Désactivées</span></div>
+          <p class="hint" id="quiet-hint">Aucune alerte entre ces deux heures (heure de ton navigateur). Un live démarré pendant ce temps n’est pas notifié après coup.</p>
+          <div class="quiet-row">
+            <label>De <input type="time" id="quiet-start" value="23:00" required></label>
+            <label>à <input type="time" id="quiet-end" value="07:00" required></label>
+          </div>
+          <div class="actions">
+            <button type="button" id="quiet-save">Activer</button>
+            <button type="button" id="quiet-off" hidden>Désactiver</button>
+          </div>
+        </section>
         <section class="telegram" aria-labelledby="telegram-title">
           <div class="head"><h3 id="telegram-title">Telegram</h3><span class="pill" id="telegram-state">Non connecté</span></div>
           <p class="hint" id="telegram-hint">Reçois les alertes dans une conversation privée avec le bot.</p>

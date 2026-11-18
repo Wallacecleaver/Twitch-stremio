@@ -602,12 +602,12 @@ const alerts = createAlerts({
     const result = new Map();
     for (let offset = 0; offset < logins.length; offset += 12) {
       const batch = logins.slice(offset, offset + 12);
-      const fields = batch.map((login, i) => 'u' + i + ': user(login: ' + JSON.stringify(login) + ') { displayName stream { id createdAt title } }');
+      const fields = batch.map((login, i) => 'u' + i + ': user(login: ' + JSON.stringify(login) + ') { displayName stream { id createdAt title game { displayName } } }');
       const data = await gqlRaw('query { ' + fields.join(' ') + ' }').catch(() => null);
       if (!data) continue;
       batch.forEach((login, i) => {
         const user = data['u' + i];
-        if (user) result.set(login, { name: user.displayName || login, id: user.stream?.id, startedAt: user.stream?.createdAt, title: user.stream?.title });
+        if (user) result.set(login, { name: user.displayName || login, id: user.stream?.id, startedAt: user.stream?.createdAt, title: user.stream?.title, game: user.stream?.game?.displayName || '' });
       });
     }
     return result;
