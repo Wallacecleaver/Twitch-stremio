@@ -130,7 +130,7 @@ pre{background:var(--bg2);border:1px solid var(--bs);border-radius:var(--r);padd
 .uh{display:flex;gap:12px;align-items:center}.uh .av{width:44px;height:44px;font-size:1.05rem;position:relative;flex:none}.uh .av i{position:absolute;right:-1px;bottom:-1px;width:12px;height:12px;border-radius:50%;border:2px solid var(--bg3);background:var(--t3)}.uh .av i.on{background:var(--ok)}.uh .av i.rc{background:var(--wa)}
 .uh b{font-size:1rem;font-weight:600;display:block;line-height:1.25}.uh span{font-size:.78rem;color:var(--t3)}.uh .ub{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
 .ah{margin:20px 0 4px;font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--t3)}.ah+.tw table th:first-child,.ah+.tw table td:first-child{padding-left:0}.ah+.tw table th:last-child,.ah+.tw table td:last-child{padding-right:0}.trunc{max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.telegram-settings [hidden]{display:none}.telegram-guide{background:var(--el);border:1px solid var(--bd);border-radius:10px;padding:14px 16px}.telegram-guide ol{margin:8px 0 0;padding-left:20px}.telegram-guide li+li{margin-top:6px}.telegram-actions{margin-top:12px}.telegram-message{margin:10px 0 0}.telegram-message:empty{display:none}
+.telegram-settings [hidden]{display:none}#telegramForm{max-width:650px}.telegram-guide{background:var(--el);border:1px solid var(--bd);border-radius:10px;padding:14px 16px}.telegram-guide ol{margin:8px 0 0;padding-left:20px}.telegram-guide li+li{margin-top:6px}.telegram-actions{margin-top:12px}.telegram-message{margin:10px 0 0}.telegram-message:empty{display:none}
 .us{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.us div{background:var(--bg2);border:1px solid var(--bs);border-radius:10px;padding:9px 11px}.us b{display:block;font-size:1.1rem;font-variant-numeric:tabular-nums;line-height:1.25}.us span{font-size:.7rem;color:var(--t3);text-transform:uppercase;letter-spacing:.05em}
 .ul{font-size:.82rem;color:var(--t2);display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}.ul b{color:var(--t);font-weight:500}
 .ch{display:flex;gap:6px;flex-wrap:wrap}.ch span{font-size:.72rem;color:var(--t2);background:var(--el);border:1px solid var(--bs);border-radius:99px;padding:2px 9px}
@@ -256,7 +256,7 @@ pre{background:var(--bg2);border:1px solid var(--bs);border-radius:var(--r);padd
   </div>
   <div class="sec telegram-settings">
     <div class="sh"><div class="stt">Bot Telegram <span class="pill" id="telegramState">Chargement…</span></div></div>
-    <div class="sb sform">
+    <div class="sb" id="telegramSettingsBody">
       <form id="telegramForm">
         <div class="sf">
           <label for="telegramToken">Jeton BotFather</label>
@@ -270,7 +270,7 @@ pre{background:var(--bg2);border:1px solid var(--bs);border-radius:var(--r);padd
         </div>
         <p class="dim telegram-message" id="telegramMessage" role="status"></p>
       </form>
-      <div class="telegram-guide">
+      <div class="telegram-guide" id="telegramGuide" hidden>
         <strong>Relier Telegram</strong>
         <ol class="dim">
           <li>Crée un bot dédié avec <a href="https://t.me/BotFather" target="_blank" rel="noopener">BotFather</a> et la commande <code>/newbot</code>.</li>
@@ -524,6 +524,8 @@ async function telegramRequest(action) {
   state.textContent = data.username ? '@' + data.username : data.configured ? 'Jeton enregistré' : 'Non configuré';
   input.placeholder = data.configured ? 'Saisir un nouveau jeton' : 'Coller le jeton du bot';
   $('#telegramVerify').hidden = $('#telegramClear').hidden = !data.configured;
+  $('#telegramGuide').hidden = data.configured;
+  $('#telegramSettingsBody').classList.toggle('sform', !data.configured);
   if (action === 'save' || action === 'clear') {
    input.value = '';
    loadAlerts();
