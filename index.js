@@ -757,11 +757,30 @@ async function channelLogo(login, avatar) {
 async function channelVods(login) {
   const c = vodCache.get(login);
   if (c && c.exp > Date.now()) return c.v;
-  const d = await gqlRaw('query { user(login: ' + JSON.stringify(login) + ') { displayName login description profileImageURL(width: 300) offlineImageURL bannerImageURL a: videos(first: 30, type: ARCHIVE, sort: TIME) { edges { node { ' + VIDEO_NODE + ' } } } h: videos(first: 10, type: HIGHLIGHT, sort: TIME) { edges { node { ' + VIDEO_NODE + ' } } } } }');
-  const u = d.user, nodes = k => ((u && u[k] || {}).edges || []).map(e => e && e.node).filter(n => n && n.id);
-  const v = u ? { logo: '', login: u.login || login, name: u.displayName || login, avatar: u.profileImageURL || '', banner: u.bannerImageURL || u.offlineImageURL || '', bio: u.description || '', archives: nodes('a'), highlights: nodes('h') } : null;
+  const userQuery = fields => gqlRaw('query { user(login: ' + JSON.stringify(login) + ') { ' + fields + ' } }');
+  const { user: u } = await userQuery('id displayName login description profileImageURL(width: 300) offlineImageURL bannerImageURL a: videos(first: 30, type: ARCHIVE, sort: TIME) { edges { node { ' + VIDEO_NODE + ' } } } h: videos(first: 10, type: HIGHLIGHT, sort: TIME) { edges { node { ' + VIDEO_NODE + ' } } }');
+  const nodes = connection => (connection?.edges || []).map(e => e?.node).filter(n => n?.id);
+  const v = u ? { logo: '', login: u.login || login, name: u.displayName || login, avatar: u.profileImageURL || '', banner: u.bannerImageURL || u.offlineImageURL || '', bio: u.description || '', archives: nodes(u.a), highlights: nodes(u.h) } : null;
+  if (v && !v.archives.length && !v.highlights.length) {
+    // Le filtre par type peut renvoyer une fiche vide. Demande la liste générale, puis trie les vidéos ici.
+    const other = await userQuery('videos(first: 40, sort: TIME) { edges { node { ' + VIDEO_NODE + ' broadcastType } } }').catch(() => null);
+    const videos = nodes(other?.user?.videos);
+    v.archives = videos.filter(n => n.broadcastType === 'ARCHIVE').slice(0, 30);
+    v.highlights = videos.filter(n => n.broadcastType === 'HIGHLIGHT').slice(0, 10);
+    if (!v.archives.length && !v.highlights.length && u.id && process.env.TWITCH_CLIENT_ID && process.env.TWITCH_CLIENT_SECRET) {
+      const fromHelix = await helix('/videos', { user_id: u.id, first: 40, sort: 'time' }).catch(() => []);
+      const episode = n => ({
+        id: n.id, title: n.title, publishedAt: n.published_at, viewCount: n.view_count,
+        previewThumbnailURL: (n.thumbnail_url || '').replace('%{width}', '640').replace('%{height}', '360'),
+        lengthSeconds: [...String(n.duration || '').matchAll(/(\d+)([hms])/g)].reduce((s, [, count, unit]) => s + Number(count) * { h: 3600, m: 60, s: 1 }[unit], 0),
+      });
+      v.archives = fromHelix.filter(n => n.id && n.type === 'archive').slice(0, 30).map(episode);
+      v.highlights = fromHelix.filter(n => n.id && n.type === 'highlight').slice(0, 10).map(episode);
+    }
+  }
   if (v) v.logo = await channelLogo(v.login, v.avatar);
-  vodCache.set(login, { v, exp: Date.now() + 120000 });
+  const hasVideos = v && (v.archives.length || v.highlights.length);
+  vodCache.set(login, { v, exp: Date.now() + (hasVideos ? 120000 : 15000) });
   if (vodCache.size > 100) vodCache.delete(vodCache.keys().next().value);
   return v;
 }
