@@ -1527,6 +1527,14 @@ async function handler(req, res) {
       try { body = JSON.parse(await readBody(req)); } catch { return json(res, { error: 'Requête invalide.' }); }
       return json(res, await alerts.action(body));
     }
+    if (!base && seg.length === 3 && seg[0] === 'api' && seg[1] === 'alerts' && seg[2] === 'discover' && req.method === 'GET') {
+      if (tooMany(req)) return json(res, { error: 'Trop de demandes. Réessaie dans un instant.' });
+      const lives = await frenchStreams('').catch(() => []) || [];
+      const suggestions = lives.length ? lives : await liveStreams('').catch(() => []) || [];
+      return json(res, { channels: suggestions.slice(0, 8).map(({ login, info }) => ({
+        login, name: info.name, avatar: info.avatar, live: true, game: info.game,
+      })) });
+    }
     if (!base && seg.length === 3 && seg[0] === 'api' && seg[1] === 'alerts' && seg[2] === 'search' && req.method === 'GET') {
       if (tooMany(req)) return json(res, { error: 'Trop de recherches. Réessaie dans un instant.' });
       const term = new URL(req.url, 'http://x').searchParams.get('q') || '';

@@ -46,7 +46,7 @@ header {
 .brand { display: flex; gap: 10px; align-items: center; font-weight: 750; }
 .brand img { border-radius: 9px; }
 .back { color: var(--muted); font-size: .9rem; }
-main { padding: clamp(36px, 7vw, 74px) 0 64px; }
+main { padding: 12px 0 64px; }
 h1, h2, p { margin: 0; }
 h1 { font-size: clamp(2.35rem, 7vw, 4.5rem); line-height: 1.03; letter-spacing: -.055em; overflow-wrap: anywhere; }
 h2 { font-size: 1.1rem; letter-spacing: -.015em; }
@@ -112,9 +112,6 @@ details p { margin-top: 8px; }
   .panel { padding: 16px; }
 }
 
-.stack { display: grid; gap: 18px; min-width: 0; }
-.sources { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 16px; }
-.sources button[aria-pressed="true"] { border-color: var(--accent); background: #3a2852; }
 .results { margin-top: 10px; }
 .result { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .result .channel { flex: 1; }
@@ -130,65 +127,108 @@ details p { margin-top: 8px; }
 .ghost { background: transparent; }
 .search-status { margin-top: 8px; color: var(--muted); font-size: .84rem; }
 .search-status:empty { display: none; }
+
+.top-actions { display: flex; align-items: center; gap: 16px; }
+.connect { background: #34234b; border-color: #614783; }
+.hero {
+  position: relative;
+  text-align: center;
+  isolation: isolate;
+  padding: clamp(30px,6vw,66px) 12px 34px;
+}
+.hero::before {
+  content: "";
+  position: absolute;
+  inset: -38px 0 0;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 50% 22%, #54357a66, transparent 70%);
+}
+.hero .intro { margin: 16px auto 25px; }
+.search-bar {
+  width: min(100%, 640px);
+  margin: auto;
+  padding: 6px;
+  border: 1px solid #6d5095;
+  border-radius: 16px;
+  background: #1c172a;
+  box-shadow: 0 14px 36px #07051070;
+}
+.search-bar input { background: transparent; border: 0; }
+.search-bar button { padding: 10px 16px; }
+.discovery { margin-bottom: 24px; }
+.discovery .head { margin-bottom: 12px; }
+.profile-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.profile-grid .result {
+  align-items: flex-start;
+  flex-wrap: wrap;
+  row-gap: 8px;
+  padding: 14px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+.profile-grid .result .channel { flex: 1; }
+.profile-grid .result button { flex-basis: 100%; }
+.profile-grid .result button:not(:disabled) { border-color: #58416f; background: #35284a; }
+.result-label { display: flex; align-items: center; gap: 5px; }
+.live-dot { background: #ef767e; border-radius: 50%; flex: none; width: 7px; height: 7px; }
+dialog {
+  width: min(100% - 32px, 560px);
+  max-height: 86vh;
+  padding: 24px;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  box-shadow: 0 22px 65px #0009;
+}
+dialog::backdrop { background: #090610bd; }
+dialog .head { margin-bottom: 14px; }
+@media (max-width: 900px) { .profile-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 680px) {
+  .profile-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .top-actions { gap: 9px; }
+  .back { font-size: .75rem; }
+}
+@media (max-width: 380px) {
+  .wrap { width: calc(100% - 24px); }
+  .profile-grid .result { padding: 10px; }
+  .profile-grid .avatar { width: 27px; height: 27px; }
+  .search-bar button { padding: 9px; }
+}
 </style>
 <script src="/alerte.js" defer></script>
 </head>
 <body>
   <header class="wrap">
     <a class="brand" href="/config"><img src="/logo.png" alt="" width="34" height="34">{{NAME}}</a>
-    <a class="back" href="/config">Configuration Stremio ↗</a>
+    <nav class="top-actions" aria-label="Navigation">
+      <a class="back" href="/config">Configuration Stremio</a>
+      <button type="button" class="connect" id="open-connection">Connexion</button>
+    </nav>
   </header>
   <main class="wrap">
-    <h1>{{TITLE}}</h1>
-    <p class="intro">{{INTRO}}</p>
+    <section class="hero" aria-labelledby="page-title">
+      <h1 id="page-title">{{TITLE}}</h1>
+      <p class="intro">{{INTRO}}</p>
+      <form id="add" class="search-bar" role="search">
+        <input id="channel" required maxlength="180" placeholder="Pseudo ou lien Twitch" aria-label="Pseudo ou lien Twitch" autocomplete="off" spellcheck="false">
+        <button class="primary" type="submit">Rechercher</button>
+      </form>
+    </section>
+    <section class="discovery" aria-labelledby="discovery-title">
+      <div class="head"><h2 id="discovery-title">En direct sur Twitch</h2><a class="back" href="#watchlist">Ma liste ↓</a></div>
+      <p id="search-status" class="search-status" role="status"></p>
+      <ul id="search-results" class="profile-grid results"></ul>
+      <button type="button" id="manual-add" class="ghost" hidden>Ajouter ce pseudo</button>
+    </section>
     <div class="grid">
-      <div class="stack">
-      <section class="panel" aria-labelledby="find-title">
-        <div class="head"><h2 id="find-title">Trouver des streamers</h2></div>
-        <div class="sources" aria-label="Source des chaînes">
-          <button type="button" id="source-search" aria-pressed="true">Rechercher sur Twitch</button>
-          <button type="button" id="source-follows" aria-pressed="false">Mes suivis</button>
-        </div>
-        <div id="search-panel">
-          <form id="add" role="search">
-            <input id="channel" required maxlength="180" placeholder="Pseudo ou lien Twitch" aria-label="Pseudo ou lien Twitch" autocomplete="off" spellcheck="false">
-            <button type="submit">Rechercher</button>
-          </form>
-          <p id="search-status" class="search-status" role="status"></p>
-          <ul id="search-results" class="results"></ul>
-          <button type="button" id="manual-add" class="ghost" hidden>Ajouter ce pseudo</button>
-        </div>
-        <div id="follows-panel" hidden>
-          <div id="profile-signin">
-            <p class="profile-note">Connecte ton profil TwitchIO pour retrouver les chaînes du compte Twitch lié dans <a href="/config">ta configuration</a>.</p>
-            <form id="profile-form" class="profile-form">
-              <label>Identifiant de config ou lien d’installation<input id="profile-id" required maxlength="260" autocomplete="username" spellcheck="false"></label>
-              <label>Mot de passe du profil<input id="profile-password" type="password" required maxlength="100" autocomplete="current-password"></label>
-              <button class="primary" type="submit">Charger mes suivis</button>
-            </form>
-          </div>
-          <div id="profile-connected" hidden>
-            <div class="head">
-              <strong id="profile-name"></strong>
-              <button type="button" id="profile-logout" class="ghost">Déconnecter</button>
-            </div>
-            <div class="profile-tools">
-              <input id="follow-filter" placeholder="Filtrer mes suivis" aria-label="Filtrer mes suivis">
-              <button type="button" id="profile-refresh">Actualiser</button>
-                <button type="button" id="follow-add">Ajouter à ma liste</button>
-            </div>
-            <ul id="follow-results" class="results"></ul>
-            <button type="button" id="follow-more" class="ghost" hidden>Voir plus</button>
-          </div>
-          <p id="profile-status" class="search-status" role="status"></p>
-        </div>
-      </section>
-      <section class="panel" aria-labelledby="channels-title">
+      <section class="panel" id="watchlist" aria-labelledby="channels-title">
         <div class="head"><h2 id="channels-title">Chaînes surveillées</h2><span class="pill" id="count">0 / 12</span></div>
         <ul id="channels"></ul>
         <p id="empty" class="empty">Ajoute une première chaîne pour recevoir ses alertes de live.</p>
       </section>
-      </div>
       <section class="panel alerts" aria-labelledby="push-title">
         <div class="head"><h2 id="push-title">Notifications</h2><span class="pill" id="state">Désactivées</span></div>
         <button class="primary" type="button" id="enable" disabled>Activer les notifications</button>
@@ -202,5 +242,30 @@ details p { margin-top: 8px; }
       </section>
     </div>
   </main>
+  <dialog id="connection" aria-labelledby="connection-title">
+    <div class="head"><h2 id="connection-title">Connexion TwitchIO</h2><button type="button" id="close-connection" class="ghost">Fermer</button></div>
+    <div id="profile-signin">
+      <p class="profile-note">Connecte ton profil TwitchIO pour retrouver les chaînes du compte Twitch lié dans <a href="/config">ta configuration</a>.</p>
+      <form id="profile-form" class="profile-form">
+        <label>Identifiant de config ou lien d’installation<input id="profile-id" required maxlength="260" autocomplete="username" spellcheck="false"></label>
+        <label>Mot de passe du profil<input id="profile-password" type="password" required maxlength="100" autocomplete="current-password"></label>
+        <button class="primary" type="submit">Charger mes suivis</button>
+      </form>
+    </div>
+    <div id="profile-connected" hidden>
+      <div class="head">
+        <strong id="profile-name"></strong>
+        <button type="button" id="profile-logout" class="ghost">Déconnecter</button>
+      </div>
+      <div class="profile-tools">
+        <input id="follow-filter" placeholder="Filtrer mes suivis" aria-label="Filtrer mes suivis">
+        <button type="button" id="profile-refresh">Actualiser</button>
+          <button type="button" id="follow-add">Ajouter à ma liste</button>
+      </div>
+      <ul id="follow-results" class="results"></ul>
+      <button type="button" id="follow-more" class="ghost" hidden>Voir plus</button>
+    </div>
+    <p id="profile-status" class="search-status" role="status"></p>
+  </dialog>
 </body>
 </html>
