@@ -312,13 +312,59 @@ dialog input:focus { border-color: var(--violet); outline: 0; box-shadow: 0 0 0 
   scrollbar-width: thin;
 }
 .rail > li { scroll-snap-align: start; }
-.schedule, .telegram { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--line); }
-.schedule li { display: grid; gap: 2px; align-items: start; padding: 9px 0; }
-.schedule time, .streamer-bio { color: var(--muted); font-size: .86rem; }
-.streamer-summary { display: flex; align-items: center; gap: 12px; }
-.streamer-summary .avatar { width: 50px; height: 50px; }
-.streamer-bio { margin-top: 10px; overflow-wrap: anywhere; }
-#streamer-twitch, #telegram-link { color: #ded0ff; }
+.telegram { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--line); }
+#telegram-link { color: #ded0ff; }
+#streamer { width: min(100% - 32px, 840px); padding: 0; overflow-x: hidden; }
+.streamer-hero {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  min-height: clamp(176px, 31vw, 260px);
+  padding: 24px 28px 20px;
+  isolation: isolate;
+  background: radial-gradient(ellipse at 90% 0%, #503778, transparent 75%), #211832;
+}
+.streamer-cover { position: absolute; inset: 0; z-index: -2; }
+.streamer-cover img { width: 100%; height: 100%; object-fit: cover; object-position: center 35%; }
+.streamer-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(0deg, #15111f, #17102128 85%), linear-gradient(90deg, #15111fc9, transparent 82%);
+}
+#close-streamer { position: absolute; top: 14px; right: 14px; background: #171320e8; }
+.streamer-identity { display: flex; align-items: center; gap: 14px; min-width: 0; width: 100%; }
+.streamer-identity .avatar { flex: none; width: 63px; height: 63px; border-radius: 16px; border: 2px solid #a88bdab3; }
+.streamer-identity-text { min-width: 0; }
+#streamer-title { font-size: clamp(1.65rem, 5vw, 2.65rem); letter-spacing: -.045em; line-height: 1.05; overflow-wrap: anywhere; margin: 0 0 7px; }
+.streamer-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: .83rem; color: var(--muted); }
+.streamer-meta .pill { padding: 3px 8px; }
+.streamer-meta .live { color: #fff; background: #a12746; }
+.streamer-body { display: grid; grid-template-columns: 1.05fr 1fr; gap: 22px; padding: 22px 28px 27px; }
+.streamer-body > * { min-width: 0; }
+.streamer-body h3 { margin: 0 0 7px; font-size: 1.05rem; overflow-wrap: anywhere; }
+.streamer-bio { margin-top: 12px; color: var(--muted); font-size: .87rem; overflow-wrap: anywhere; }
+.streamer-body .actions { margin-top: 17px; }
+#streamer-twitch {
+  display: inline-flex; align-items: center; min-height: 40px; padding: 0 11px;
+  border: 1px solid var(--line2); border-radius: 10px; color: #eee3ff; font-size: .85rem;
+}
+.schedule { border-left: 1px solid var(--line); padding-left: 20px; }
+.schedule ul { margin: 8px 0 0; }
+.schedule li { display: flex; gap: 11px; align-items: center; justify-content: flex-start; padding: 9px 0; }
+.schedule li:first-child { border-top: none; }
+.schedule-day { flex: none; display: grid; place-items: center; width: 48px; padding: 5px 3px; border-radius: 10px; background: #302442; line-height: 1.15; }
+.schedule-day b { font-size: 1.2rem; }
+.schedule-day small { font-size: .7rem; color: #ded0ff; }
+.schedule-event { min-width: 0; display: grid; gap: 2px; overflow-wrap: anywhere; }
+.schedule time { color: var(--muted); font-size: .83rem; }
+@media (max-width: 620px) {
+  .streamer-hero { padding: 18px 17px 14px; }
+  .streamer-identity .avatar { width: 51px; height: 51px; border-radius: 13px; }
+  .streamer-body { grid-template-columns: 1fr; padding: 15px 17px 20px; gap: 18px; }
+  .schedule { padding: 14px 0 0; border: 0; border-top: 1px solid var(--line); }
+}
 </style>
 <script src="/alerte.js" defer></script>
 </head>
@@ -449,17 +495,31 @@ dialog input:focus { border-color: var(--violet); outline: 0; box-shadow: 0 0 0 
     <p id="profile-status" class="search-status" role="status"></p>
   </dialog>
   <dialog id="streamer" aria-labelledby="streamer-title">
-    <div class="head"><h2 id="streamer-title">Fiche streamer</h2><button id="close-streamer" type="button" class="ghost">Fermer</button></div>
-    <div id="streamer-content"></div>
-    <div class="actions">
-      <button id="streamer-alert" class="primary" type="button" disabled>Ajouter en alerte</button>
-      <a id="streamer-twitch" class="back" target="_blank" rel="noopener noreferrer">Ouvrir sur Twitch ↗</a>
+    <div class="streamer-hero">
+      <div class="streamer-cover" id="streamer-cover" aria-hidden="true"></div>
+      <button id="close-streamer" type="button" autofocus>Fermer</button>
+      <div class="streamer-identity">
+        <div id="streamer-avatar"></div>
+        <div class="streamer-identity-text">
+          <h2 id="streamer-title">Fiche streamer</h2>
+          <div class="streamer-meta" id="streamer-meta"></div>
+        </div>
+      </div>
     </div>
-    <section class="schedule" aria-labelledby="schedule-title">
-      <h3 id="schedule-title">Calendrier Twitch</h3>
-      <p class="search-status" id="schedule-status" role="status"></p>
-      <ul id="schedule-events"></ul>
-    </section>
+    <div class="streamer-body">
+      <div>
+        <div id="streamer-content" aria-live="polite"></div>
+        <div class="actions">
+          <button id="streamer-alert" class="primary" type="button" disabled>Ajouter en alerte</button>
+          <a id="streamer-twitch" target="_blank" rel="noopener noreferrer">Ouvrir sur Twitch ↗</a>
+        </div>
+      </div>
+      <section class="schedule" aria-labelledby="schedule-title">
+        <h3 id="schedule-title">Calendrier Twitch</h3>
+        <p class="search-status" id="schedule-status" role="status"></p>
+        <ul id="schedule-events"></ul>
+      </section>
+    </div>
   </dialog>
 </body>
 </html>
