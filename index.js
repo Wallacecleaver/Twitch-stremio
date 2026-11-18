@@ -819,7 +819,7 @@ function vodSocialLinks(socials) {
     try { url = new URL(social?.url); } catch { continue; }
     if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password || url.port) continue;
     const name = SOCIAL_HOSTS.get(url.hostname.replace(/^(?:www|m|mobile)\./, ''));
-    if (name && !links.has(name)) links.set(name, { name, category: 'actor', url: url.href });
+    if (name && !links.has(name)) links.set(name, { name, category: 'Réseaux', url: url.href });
   }
   return [...links.values()];
 }
