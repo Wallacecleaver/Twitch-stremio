@@ -1532,7 +1532,7 @@ async function handler(req, res) {
       const lives = await frenchStreams('').catch(() => []) || [];
       const suggestions = lives.length ? lives : await liveStreams('').catch(() => []) || [];
       return json(res, { channels: suggestions.slice(0, 8).map(({ login, info }) => ({
-        login, name: info.name, avatar: info.avatar, live: true, game: info.game,
+        login, name: info.name, avatar: info.avatar, live: true, game: info.game, viewers: info.viewers || 0,
       })) });
     }
     if (!base && seg.length === 3 && seg[0] === 'api' && seg[1] === 'alerts' && seg[2] === 'search' && req.method === 'GET') {
