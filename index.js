@@ -815,6 +815,27 @@ function vodSocialLinks(socials) {
   }
   return [...links.values()];
 }
+async function vodChannelSocials(login) {
+  // Requête enregistrée utilisée par la page Twitch pour afficher les réseaux de la chaîne.
+  try {
+    const r = await fetch(GQL, {
+      method: 'POST',
+      headers: { 'Client-ID': GQL_CLIENT_ID, 'Content-Type': 'application/json', 'User-Agent': UA },
+      signal: AbortSignal.timeout(1200),
+      body: JSON.stringify({
+        operationName: 'ChannelRoot_SocialMediaSpace',
+        variables: { channelLogin: login },
+        extensions: { persistedQuery: { version: 1, sha256Hash: '3cc9b2fc1ce60c0d0bd271e795e6c9d0baef0d7cb8a0f130c5311f4d045157da' } },
+      }),
+    });
+    if (r.ok) {
+      const data = await r.json();
+      const socials = data?.data?.user?.channel?.socialMedias;
+      if (Array.isArray(socials) && socials.length) return socials;
+    }
+  } catch { /* utilise la requête directe si Twitch ne répond pas */ }
+  return channelSocials(login);
+}
 const vodMeta = (v, withVideos, socials = []) => {
   const last = v.archives[0], logo = v.logo || v.avatar, nA = v.archives.length, nH = v.highlights.length;
   const games = {}; v.archives.forEach(n => { if (n.game && n.game.displayName) games[n.game.displayName] = (games[n.game.displayName] || 0) + 1; });
@@ -1527,7 +1548,7 @@ async function handler(req, res) {
           if (!LOGIN_RE.test(login)) return json(res, { meta: null });
           const [v, socials] = await Promise.all([
             channelVods(login),
-            withTimeout(channelSocials(login).catch(() => []), 1500, []),
+            withTimeout(vodChannelSocials(login).catch(() => []), 2500, []),
           ]);
           return json(res, { meta: v ? vodMeta(v, true, socials) : null });
         }
