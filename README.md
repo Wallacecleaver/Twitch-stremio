@@ -16,6 +16,10 @@ Sur `/alerte`, ajoute jusqu’à 12 chaînes par navigateur, puis active les not
 
 Tu peux rechercher des streamers par pseudo ou coller le lien d’une chaîne Twitch. Dans « Mes suivis », connecte-toi avec l’identifiant ou le lien d’installation et le mot de passe de ton profil TwitchIO. Si un compte Twitch est lié à ce profil, sélectionne les suivis à ajouter. Tes choix sont enregistrés pour ce navigateur au moment où tu actives ou mets à jour les notifications.
 
+La découverte affiche deux rangées, « Tendance en français » et « Populaires sur Twitch ». Ouvre une fiche streamer pour consulter son calendrier publié sur Twitch et l’ajouter à tes alertes.
+
+Pour activer Telegram, crée un bot dédié dans [BotFather](https://t.me/BotFather), renseigne `TELEGRAM_BOT_TOKEN` dans les variables du VPS, puis redéploie. Sur `/alerte`, choisis tes chaînes, clique sur « Connecter Telegram », ouvre le bot et appuie sur « Démarrer ». Telegram peut être utilisé seul ou avec les notifications du navigateur. Pour arrêter Telegram depuis le bot, envoie `/stop`. Le bot doit être dédié à TwitchIO, qui reçoit ses messages via `getUpdates`.
+
 Les alertes arrivent même quand la page est fermée, tant que le navigateur et le système autorisent les notifications en arrière-plan. Utilise l’adresse HTTPS de l’addon. Sur iPhone ou iPad, ajoute la page à l’écran d’accueil avant d’activer les alertes. Les abonnements et la clé Push sont enregistrés dans le dossier de données.
 
 L’onglet « Alertes » du dashboard permet de modifier le titre et l’introduction de la page, de mettre les envois en pause et de consulter le nombre de navigateurs abonnés et de chaînes surveillées. Les diffusions commencées pendant la pause ne déclenchent pas d’alerte à la reprise.

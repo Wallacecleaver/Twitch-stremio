@@ -443,16 +443,16 @@ const extraOf = e => new URLSearchParams(String(e || '').replace(/\.json$/, ''))
 // Fiche d'une chaîne (photo, titre du live, jeu, spectateurs) via la même API publique que le site web de Twitch : aucune clé nécessaire.
 const INFO_QUERY = 'query ChannelInfo($login: String!) { user(login: $login) { displayName login description profileImageURL(width: 300) bannerImageURL offlineImageURL stream { title viewersCount previewImageURL(width: 1280, height: 720) game { displayName } } } }';
 const infoCache = new Map();
-async function channelInfo(login) {
+async function channelInfo(login, full = false) {
   const c = infoCache.get(login);
-  if (c && c.exp > Date.now()) return c.v;
+  if (c && c.exp > Date.now() && (!full || c.full)) return c.v;
   let v = null;
   try {
     const r = await fetch(GQL, { method: 'POST', headers: { 'Client-ID': GQL_CLIENT_ID, 'Content-Type': 'application/json', 'User-Agent': UA }, body: JSON.stringify({ operationName: 'ChannelInfo', variables: { login }, query: INFO_QUERY }), signal: AbortSignal.timeout(4000) });
     const u = r.ok ? ((await r.json().catch(() => ({}))).data || {}).user : null;
     if (u && u.login) v = { name: u.displayName || login, avatar: u.profileImageURL || '', banner: u.offlineImageURL || u.bannerImageURL || '', bio: u.description || '', live: !!u.stream, title: u.stream ? u.stream.title || '' : '', game: u.stream && u.stream.game ? u.stream.game.displayName : '', viewers: u.stream ? Number(u.stream.viewersCount) || 0 : 0, preview: u.stream ? u.stream.previewImageURL || '' : '' };
   } catch { /* sans fiche : on affiche une fiche simple */ }
-  infoCache.set(login, { v, exp: Date.now() + (v ? 45000 : 10000) });
+  infoCache.set(login, { v, full: true, exp: Date.now() + (v ? 45000 : 10000) });
   if (infoCache.size > 300) infoCache.delete(infoCache.keys().next().value);
   return v;
 }
@@ -570,6 +570,32 @@ async function searchAlertChannels(term) {
   alertSearchCache.set(query, { channels, exp: Date.now() + (channels.length ? 60000 : 10000) });
   if (alertSearchCache.size > 100) alertSearchCache.delete(alertSearchCache.keys().next().value);
   return channels;
+}
+const alertSchedules = new Map();
+async function alertSchedule(login) {
+  const cached = alertSchedules.get(login);
+  if (cached && cached.exp > Date.now()) return cached.value;
+  let segments;
+  try {
+    const { user } = await gqlRaw('query { user(login: ' + JSON.stringify(login) + ') { id channel { schedule { segments { id title startAt endAt } } } } }');
+    segments = user?.channel?.schedule?.segments;
+    if (user?.id && process.env.TWITCH_CLIENT_ID && process.env.TWITCH_CLIENT_SECRET) {
+      const schedule = await helix('/schedule', { broadcaster_id: user.id, first: 12 }).catch(() => null);
+      if (Array.isArray(schedule?.segments)) {
+        segments = schedule.segments.filter(s => !s.canceled_until).map(s => ({
+          id: s.id, title: s.title, startAt: s.start_time, endAt: s.end_time, game: s.category?.name,
+        }));
+      }
+    }
+  } catch { return { available: false, events: [] }; }
+  const value = {
+    available: true,
+    events: (segments || []).filter(s => s && Date.parse(s.startAt) > 0 && Date.parse(s.endAt) > Date.now())
+      .sort((a, b) => Date.parse(a.startAt) - Date.parse(b.startAt)).slice(0, 12),
+  };
+  alertSchedules.set(login, { value, exp: Date.now() + 120000 });
+  if (alertSchedules.size > 150) alertSchedules.delete(alertSchedules.keys().next().value);
+  return value;
 }
 const alerts = createAlerts({
   async scan(logins) {
@@ -1522,7 +1548,10 @@ async function handler(req, res) {
       }), { 'Cache-Control': 'no-cache' });
     }
     if (!base && seg.length === 2 && seg[0] === 'api' && seg[1] === 'alerts') {
-      if (req.method === 'GET') return json(res, { publicKey: await alerts.publicKey(), paused: alerts.publicSettings().paused });
+      if (req.method === 'GET') {
+        const { paused, telegramAvailable } = alerts.publicSettings();
+        return json(res, { publicKey: await alerts.publicKey(), paused, telegramAvailable });
+      }
       if (req.method !== 'POST') return send(res, 405, 'text/plain; charset=utf-8', 'Méthode non autorisée', { Allow: 'GET, POST' });
       if (!/^application\/json(?:;|$)/i.test(req.headers['content-type'] || '')) return send(res, 415, 'text/plain; charset=utf-8', 'JSON attendu');
       if (tooMany(req)) return json(res, { error: 'Trop de demandes. Réessaie dans un instant.' });
@@ -1536,9 +1565,22 @@ async function handler(req, res) {
       const top = new URL(req.url, 'http://x').searchParams.get('mode') === 'top';
       let lives = top ? await liveStreams('').catch(() => []) || [] : await frenchStreams('').catch(() => []) || [];
       if (!lives.length && !top) lives = await liveStreams('').catch(() => []) || [];
+      // La liste générale de Twitch peut omettre cette chaîne même lorsqu'elle est en direct.
+      if (!lives.some(channel => channel.login === 'squeezie')) {
+        const info = await channelInfo('squeezie');
+        if (info?.live) lives = [...lives, { login: 'squeezie', info }].sort(byViewers);
+      }
       return json(res, { mode: top ? 'top' : 'fr', channels: lives.slice(0, 24).map(({ login, info }) => ({
         login, name: info.name, avatar: info.avatar, live: true, game: info.game, title: info.title || '', viewers: info.viewers || 0,
       })) });
+    }
+    if (!base && seg.length === 4 && seg[0] === 'api' && seg[1] === 'alerts' && seg[2] === 'channel' && req.method === 'GET') {
+      const login = seg[3].toLowerCase();
+      if (!LOGIN_RE.test(login)) return json(res, { error: 'Nom de chaîne invalide.' });
+      if (tooMany(req)) return json(res, { error: 'Trop de demandes. Réessaie dans un instant.' });
+      const [info, schedule] = await Promise.all([channelInfo(login, true), alertSchedule(login)]);
+      if (!info) return json(res, { error: 'Cette chaîne est introuvable ou indisponible.' });
+      return json(res, { channel: { login, ...info }, schedule });
     }
     if (!base && seg.length === 3 && seg[0] === 'api' && seg[1] === 'alerts' && seg[2] === 'search' && req.method === 'GET') {
       if (tooMany(req)) return json(res, { error: 'Trop de recherches. Réessaie dans un instant.' });

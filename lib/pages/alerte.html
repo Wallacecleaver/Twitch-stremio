@@ -297,6 +297,28 @@ dialog input:focus { border-color: var(--violet); outline: 0; box-shadow: 0 0 0 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
+
+#discovery-rails { display: grid; gap: 24px; }
+.discovery-rail h3, .schedule h3, .telegram h3 { margin: 0; font-size: 1.05rem; }
+.rail-controls { display: flex; gap: 6px; }
+.rail-controls button { padding: 4px 10px; }
+.profile-grid.rail {
+  grid-template-columns: none;
+  grid-auto-flow: column;
+  grid-auto-columns: clamp(165px, 23%, 260px);
+  overflow-x: auto;
+  padding: 3px 3px 9px;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: thin;
+}
+.rail > li { scroll-snap-align: start; }
+.schedule, .telegram { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--line); }
+.schedule li { display: grid; gap: 2px; align-items: start; padding: 9px 0; }
+.schedule time, .streamer-bio { color: var(--muted); font-size: .86rem; }
+.streamer-summary { display: flex; align-items: center; gap: 12px; }
+.streamer-summary .avatar { width: 50px; height: 50px; }
+.streamer-bio { margin-top: 10px; overflow-wrap: anywhere; }
+#streamer-twitch, #telegram-link { color: #ded0ff; }
 </style>
 <script src="/alerte.js" defer></script>
 </head>
@@ -331,13 +353,24 @@ dialog input:focus { border-color: var(--violet); outline: 0; box-shadow: 0 0 0 
           <a class="back" href="#watchlist">Ma liste ↓</a>
         </div>
       </div>
-      <div class="tabs" id="tabs" role="tablist" aria-label="Type de lives">
-        <button type="button" role="tab" id="tab-fr" aria-selected="true">🇫🇷 En français</button>
-        <button type="button" role="tab" id="tab-top" aria-selected="false">🔥 Populaires dans le monde</button>
+      <div id="discovery-rails">
+        <section class="discovery-rail" aria-labelledby="rail-fr-title">
+          <div class="section-head"><h3 id="rail-fr-title">Tendance en français</h3>
+            <div class="rail-controls"><button type="button" data-rail="fr" data-direction="-1" aria-label="Précédents en français">←</button><button type="button" data-rail="fr" data-direction="1" aria-label="Suivants en français">→</button></div>
+          </div>
+          <ul id="rail-fr" class="profile-grid rail results"></ul>
+          <p id="rail-fr-status" class="search-status" role="status"></p>
+        </section>
+        <section class="discovery-rail" aria-labelledby="rail-top-title">
+          <div class="section-head"><h3 id="rail-top-title">Populaires sur Twitch</h3>
+            <div class="rail-controls"><button type="button" data-rail="top" data-direction="-1" aria-label="Précédents sur Twitch">←</button><button type="button" data-rail="top" data-direction="1" aria-label="Suivants sur Twitch">→</button></div>
+          </div>
+          <ul id="rail-top" class="profile-grid rail results"></ul>
+          <p id="rail-top-status" class="search-status" role="status"></p>
+        </section>
       </div>
       <p id="search-status" class="search-status" role="status"></p>
       <ul id="search-results" class="profile-grid results"></ul>
-      <div class="more-row"><button type="button" id="discover-more" class="ghost" hidden>Voir plus de lives</button></div>
       <button type="button" id="manual-add" class="ghost" hidden>Ajouter ce pseudo</button>
     </section>
     <div class="grid">
@@ -371,6 +404,16 @@ dialog input:focus { border-color: var(--violet); outline: 0; box-shadow: 0 0 0 
         </div>
         <p id="hint" class="hint">Les alertes sont propres à ce navigateur.</p>
         <p id="message" class="message" role="status" aria-live="polite"></p>
+        <section class="telegram" aria-labelledby="telegram-title">
+          <div class="head"><h3 id="telegram-title">Telegram</h3><span class="pill" id="telegram-state">Non connecté</span></div>
+          <p class="hint" id="telegram-hint">Reçois les alertes dans une conversation privée avec le bot.</p>
+          <div class="actions">
+            <button type="button" id="telegram-connect">Connecter Telegram</button>
+            <a id="telegram-link" class="back" target="_blank" rel="noopener noreferrer" hidden>Ouvrir le bot Telegram ↗</a>
+            <button type="button" id="telegram-test" hidden>Tester Telegram</button>
+            <button type="button" id="telegram-stop" hidden>Déconnecter Telegram</button>
+          </div>
+        </section>
         <details><summary>Sur iPhone ou iPad</summary><p>Dans Safari, ajoute cette page à l’écran d’accueil depuis le menu de partage. Ouvre ensuite l’icône pour activer les notifications.</p></details>
       </section>
     </div>
@@ -404,6 +447,19 @@ dialog input:focus { border-color: var(--violet); outline: 0; box-shadow: 0 0 0 
       <button type="button" id="follow-more" class="ghost" hidden>Voir plus</button>
     </div>
     <p id="profile-status" class="search-status" role="status"></p>
+  </dialog>
+  <dialog id="streamer" aria-labelledby="streamer-title">
+    <div class="head"><h2 id="streamer-title">Fiche streamer</h2><button id="close-streamer" type="button" class="ghost">Fermer</button></div>
+    <div id="streamer-content"></div>
+    <div class="actions">
+      <button id="streamer-alert" class="primary" type="button" disabled>Ajouter en alerte</button>
+      <a id="streamer-twitch" class="back" target="_blank" rel="noopener noreferrer">Ouvrir sur Twitch ↗</a>
+    </div>
+    <section class="schedule" aria-labelledby="schedule-title">
+      <h3 id="schedule-title">Calendrier Twitch</h3>
+      <p class="search-status" id="schedule-status" role="status"></p>
+      <ul id="schedule-events"></ul>
+    </section>
   </dialog>
 </body>
 </html>
