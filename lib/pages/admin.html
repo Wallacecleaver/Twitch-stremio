@@ -302,7 +302,7 @@ pre{background:var(--bg2);border:1px solid var(--bs);border-radius:var(--r);padd
    <details style="margin-top:14px"><summary class="dim" style="cursor:pointer">Méthode avancée : coller le cookie auth-token</summary><div class="ctl" style="margin-top:10px"><input id="acTok" type="password" placeholder="Valeur du cookie auth-token" size="34" autocomplete="off" spellcheck="false"><button class="btn pr" id="acLink">Lier</button></div>
    <p class="dim" style="margin-top:12px;font-size:.82rem">Sur twitch.tv (connecté), F12, onglet « Application » (Chrome) puis Cookies, <b>https://www.twitch.tv</b>, copie la valeur de <b>auth-token</b>. Elle est vérifiée, chiffrée (clé SECRET ou ADMIN_PASSWORD) et stockée dans data.json. Pour la révoquer : « Retirer le compte lié », et déconnecte-toi de Twitch partout. Autre option : variable <b>TWITCH_AUTH_TOKEN</b> dans le fichier .env.</p></details></div></div>
  <div class="sec spane" data-s="info"><div class="sh"><div class="stt"><svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>Informations du serveur<span class="cnt">lecture seule : les réglages se modifient dans « Configuration »</span></div></div><div class="sb"><div class="cg" id="cfg"></div></div></div>
- <div class="sec spane" data-s="chat"><div class="sh"><div class="stt"><svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>Chat Twitch<span class="cnt">incrusté dans la vidéo ou en sous-titres</span></div><div class="ctl"><button class="btn" id="chRef" type="button">Actualiser</button></div></div>
+ <div class="sec spane" data-s="chat"><div class="sh"><div class="stt"><svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>Chat Twitch<span class="cnt">en sous-titres</span></div><div class="ctl"><button class="btn" id="chRef" type="button">Actualiser</button></div></div>
  <div class="sb">
   <h3 style="font-size:.95rem;margin:0 0 12px">État en direct</h3><div id="chLive"><p class="dim">Chargement…</p></div>
   <h3 style="font-size:.95rem;margin:22px 0 4px">Tester le chat d'une chaîne</h3><p class="dim" style="margin:0 0 10px;font-size:.84rem">Ouvre la connexion au chat pendant 5 secondes : vérifie que les messages arrivent et mesure la latence.</p>
@@ -469,21 +469,13 @@ $('#envBox').onclick=async e=>{const b=e.target.closest('[data-clear]');if(!b)re
 /* ---- Paramètres → Chat : réglages, état en direct, test ---- */
 function chatRender(V){
  const el=$('#chatBox');if(!el)return;const by={};V.fields.forEach(f=>(by[f.g]=by[f.g]||[]).push(f));
- el.innerHTML=['chatb','chatc','chats'].filter(g=>by[g]).map((g,i)=>'<h3 style="font-size:.9rem;margin:'+(i?'22px':'0')+' 0 12px;color:var(--t2)">'+esc(V.groups[g])+'</h3><div class="sform">'+by[g].map(envField).join('')+'</div>').join('');
+ el.innerHTML=['chatc','chats'].filter(g=>by[g]).map((g,i)=>'<h3 style="font-size:.9rem;margin:'+(i?'22px':'0')+' 0 12px;color:var(--t2)">'+esc(V.groups[g])+'</h3><div class="sform">'+by[g].map(envField).join('')+'</div>').join('');
 }
 $('#chatSave').onclick=async()=>{const b=$('#chatSave'),values={};$$('#chatBox [data-k]').forEach(e=>{values[e.dataset.k]=e.type==='checkbox'?(e.checked?'1':''):e.value});b.disabled=true;try{if(envDone(await envPost({values}),'Réglages du chat enregistrés'))loadChat()}catch{toast('Enregistrement impossible',1)}b.disabled=false};
 async function loadChat(){
  let r;try{r=await api('chat')}catch{$('#chLive').innerHTML='<p class="dim">Chargement impossible</p>';return}
- const b=r.burn||{},c=r.chat||{},fl=b.flux||[],pill=(t,k)=>'<span class="pill'+(k?' '+k:'')+'">'+t+'</span>';
- let h='<div style="display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px">'+pill('Chat incrusté : '+(b.actif?'activé':'désactivé'),b.actif?'ok':'')
-  +(b.actif?pill('ffmpeg '+(b.ffmpeg?'disponible':'absent'),b.ffmpeg?'ok':'ko')+pill('charge '+b.utilise+' / '+b.budget,b.utilise>b.budget*.85?'wa':'in')+pill(fl.length+' / '+b.max_chaines+' flux','in')+pill('jusqu\'à '+b.hauteur_max+'p','in')+pill('synchro : '+esc(b.synchro),'in'):'')
-  +pill('Sous-titres : '+(c.sous_titres?'activés':'désactivés'),c.sous_titres?'ok':'')+'</div>';
- if(b.actif){
-  h+='<div class="dim" style="font-size:.8rem;margin:0 0 6px">Flux incrustés en cours</div>';
-  h+=fl.length?fl.map(f=>{const s=f.synchro&&typeof f.synchro==='object'?f.synchro:null,bad=(f.ffmpeg&&f.ffmpeg.length)||(s&&(s.mode!=='video'||s.sauts_de_date));
-   return kv('<b>'+esc(f.chaine)+'</b> · '+f.hauteur+'p',(s?(s.mode==='video'?'sur l\'image':'horloge du serveur')+' · retard '+(s.retard_sur_le_direct_s??'–')+' s · IRC '+s.latence_irc_ms+' ms'+(s.sauts_de_date?' · '+s.sauts_de_date+' saut(s) de date':''):'calage en cours')+' · depuis '+dur(f.depuis_s),bad?'var(--w)':'')
-   +(s&&s.raison?'<div class="dim" style="font-size:.78rem;padding:0 0 6px">Repli : '+esc(s.raison)+'</div>':'')+(f.ffmpeg&&f.ffmpeg.length?'<div style="font-size:.78rem;color:var(--ko);padding:0 0 6px">'+f.ffmpeg.map(esc).join('<br>')+'</div>':'')}).join(''):'<p class="dim" style="margin:0 0 6px">Aucun flux pour l\'instant : un flux démarre quand quelqu\'un lance « Chat incrusté » dans Stremio.</p>';
- }else h+='<p class="dim" style="margin:0">Le chat incrusté est coupé : active « Autoriser le chat incrusté » dans les réglages ci-dessous.</p>';
+ const c=r.chat||{},pill=(t,k)=>'<span class="pill'+(k?' '+k:'')+'">'+t+'</span>';
+ let h=pill('Sous-titres : '+(c.sous_titres?'activés':'désactivés'),c.sous_titres?'ok':'');
  const sl=c.salles||[];
  h+='<div class="dim" style="font-size:.8rem;margin:16px 0 6px">Chaînes connectées au chat (IRC)</div>'+(sl.length?sl.map(x=>kv(esc(x.chaine),(x.connectee?'connecté':'connexion…')+' · '+n(x.messages_recus)+' messages · IRC '+x.latence_irc_ms+' ms · inactif '+dur(x.inactif_s),x.connectee?'':'var(--w)')).join(''):'<p class="dim" style="margin:0">Aucune : une connexion s\'ouvre seulement pendant la lecture.</p>');
  $('#chLive').innerHTML=h;

@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """Génère lib/assets/chatfont.json : atlas de glyphes (alpha 8 bits) de la police Inter (licence SIL OFL 1.1),
-utilisé par lib/chatimg.js pour dessiner le chat sans aucune dépendance npm.
-Usage : python3 tools/make-chatfont.py [taille_px] [fichier_sortie]   (nécessite Pillow et les polices Inter)
-Atlas fournis : 17 px -> lib/assets/chatfont.json (720p et moins), 26 px -> lib/assets/chatfont26.json (1080p, panneau net sans agrandissement)"""
+utilisé par lib/posterimg.js pour dessiner les affiches sans aucune dépendance npm.
+Usage : python3 tools/make-chatfont.py [taille_px] [fichier_sortie]   (nécessite Pillow et les polices Inter)"""
 import base64, json, sys
 from PIL import Image, ImageDraw, ImageFont
 
