@@ -74,18 +74,3 @@ Les flux « sans pub » passent par des relais tiers (même liste que le script 
 ### 1440p (compte Twitch lié)
 
 Twitch ne donne le 1440p qu'au site web avec un compte connecté. Sur `/config`, la personne colle la valeur de son cookie `auth-token` (twitch.tv) : elle est vérifiée auprès de Twitch, chiffrée en AES-256-GCM (clé `SECRET`, sinon `ADMIN_PASSWORD`) et placée dans son lien d'installation. Les profils enregistrés (`/u/<id>`) gardent aussi ce jeton chiffré dans `data.json`. Changer `SECRET` invalide tous les liens. Activer aussi « Autoriser le 1440p ».
-
-## Chat Twitch en sous-titres (expérimental)
-
-Désactivé par défaut. `CHAT_SUBS=1` (ou le réglage « Chat Twitch en sous-titres » du dashboard) ajoute une piste **Chat Twitch** à la liste de lecture des lives : les messages arrivent comme des sous-titres WebVTT live, alignés sur la vidéo grâce au PTS d'un segment de référence (relu toutes les minutes).
-
-- La connexion au chat (IRC anonyme, sans compte) n'existe que pendant qu'une personne lit la piste, et se coupe après 90 s d'inactivité. `CHAT_MAX_ROOMS` limite le nombre de chaînes en même temps.
-- `/chat/<chaîne>/debug` : état de la connexion, messages reçus, recalage vidéo.
-- `CHAT_DELAY_MS` règle le décalage entre le chat et l'image.
-- Dépend du lecteur : la piste doit apparaître dans le menu des sous-titres.
-
-Le chat est ajouté à **tous** les flux d'un live : « Auto » (liste principale) mais aussi chaque qualité fixe et l'audio seul, qui passent par `/q/…` (mini liste principale à une seule qualité, avec la piste de chat). Cela demande que `SECRET` (ou `ADMIN_PASSWORD`) soit défini, comme pour le mode ordinateur.
-
-Réglages de diagnostic (dashboard › Configuration) : **Chat : messages de test** (un message factice toutes les 3 s, pour vérifier l'affichage même si le chat est calme) et **Chat : heure des messages** (« Absolu » par défaut, ou « Norme HLS » avec X-TIMESTAMP-MAP si le lecteur n'affiche rien).
-
-Chaque personne choisit sur sa page **/config › Options** (« Chat Twitch intégré ») si elle veut la piste de chat ; le serveur doit l'autoriser (`CHAT_SUBS=1` ou « Autoriser le chat Twitch en sous-titres » dans le dashboard). Mise en page : texte seul, 8 lignes, sans émotes, en bas à gauche (ou à droite / centré, réglage « Chat : disposition »). Astuce : réduis la taille des sous-titres dans Stremio et augmente « Chat : largeur » en proportion (à 60 % de taille, ≈ 92).
