@@ -1432,7 +1432,7 @@ async function handler(req, res) {
       const inf = '#EXT-X-STREAM-INF:BANDWIDTH=' + (Number(j.b) > 0 ? Number(j.b) : 1000000) + (Number(j.f) > 0 ? ',FRAME-RATE=' + Number(j.f) + '.000' : '') + (j.a ? ',CODECS="mp4a.40.2"' : '');
       return send(res, 200, 'application/vnd.apple.mpegurl', withChat('#EXTM3U\n' + inf + '\n' + u + '\n', originOf(req), base, j.l, { chat: 'sub' }), { 'Cache-Control': 'no-store' });
     }
-    if (seg[0] === 'burn' && seg[1]) { // chat incrusté : /burn/<chaîne>/index.m3u8?k=…, /burn/<chaîne>/s<n>.ts, /burn/debug
+    if (seg[0] === 'burn' && seg[1]) { // chat incrusté : /burn/<chaîne>/index.m3u8?k=…, /burn/<chaîne>/<session>-s<n>.ts, /burn/debug
       if (!burnLib.enabled()) return send(res, 404, 'text/plain; charset=utf-8', 'Chat incrusté désactivé (CHAT_BURN=1 pour l\'activer)');
       if (seg[1] === 'debug') return json(res, burnLib.status());
       const login = seg[1].toLowerCase(), nc = { 'Cache-Control': 'no-store' };
@@ -1440,10 +1440,16 @@ async function handler(req, res) {
       if (seg[2] === 'index.m3u8') {
         let p = null; try { p = JSON.parse(sealLib.open(new URL(req.url, 'http://x').searchParams.get('k') || '') || ''); } catch { /* lien illisible */ }
         if (p && p.l !== login) p = null;
-        const r = await burnLib.playlist(login, p);
+        const controller = new AbortController();
+        const cancel = () => controller.abort();
+        res.once('close', cancel);
+        let r;
+        try { r = await burnLib.playlist(login, p, controller.signal); }
+        finally { res.off('close', cancel); }
+        if (controller.signal.aborted) return;
         return r.code === 200 ? send(res, 200, 'application/vnd.apple.mpegurl', r.body, nc) : send(res, r.code, 'text/plain; charset=utf-8', r.msg);
       }
-      const buf = burnLib.segment(login, seg[2]);
+      const buf = await burnLib.segment(login, seg[2]);
       return buf ? send(res, 200, 'video/mp2t', buf, nc) : send(res, 404, 'text/plain; charset=utf-8', 'Segment introuvable');
     }
     if (seg[0] === 'chat' && seg[1]) { // chat Twitch en sous-titres : /chat/<chaîne>.m3u8, /chat/<chaîne>/<n>.vtt, /chat/<chaîne>/debug
