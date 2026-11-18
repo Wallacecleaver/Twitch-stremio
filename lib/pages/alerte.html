@@ -492,7 +492,8 @@ dialog input:focus { border-color: var(--violet); outline: 0; box-shadow: 0 0 0 
           <div class="head"><h3 id="telegram-title">Telegram</h3><span class="pill" id="telegram-state">Non connecté</span></div>
           <p class="hint" id="telegram-hint">Reçois les alertes dans une conversation privée avec le bot.</p>
           <div class="actions">
-            <button type="button" id="telegram-connect">Connecter Telegram</button>
+            <button type="button" id="telegram-search" aria-describedby="telegram-hint" hidden>Rechercher une chaîne</button>
+            <button type="button" id="telegram-connect" aria-describedby="telegram-hint" disabled>Connecter Telegram</button>
             <a id="telegram-link" class="back" target="_blank" rel="noopener noreferrer" hidden>Ouvrir le bot Telegram ↗</a>
             <button type="button" id="telegram-test" hidden>Tester Telegram</button>
             <button type="button" id="telegram-stop" hidden>Déconnecter Telegram</button>
