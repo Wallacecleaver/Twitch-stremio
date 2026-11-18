@@ -797,10 +797,15 @@ const vodMeta = (v, withVideos) => {
   const top = Object.keys(games).sort((a, b) => games[b] - games[a]).slice(0, 3);
   // Stremio peut aplatir les retours à la ligne. Le résumé se lit aussi en texte continu.
   const releaseInfo = [nA && nA + ' rediff' + (nA > 1 ? 's' : ''), nH && nH + ' temps fort' + (nH > 1 ? 's' : '')].filter(Boolean).join(' · ');
-  const title = (last?.title || '').trim().replace(/(?:\s+![\w-]+)+$/u, '').replace(/^(?:\p{Extended_Pictographic}\uFE0F?\s*)+|(?:\s*\p{Extended_Pictographic}\uFE0F?)+$/gu, '').trim();
-  const details = last ? [ago(last.publishedAt), last.lengthSeconds > 0 ? dur(last.lengthSeconds) : '', last.game?.displayName].filter(Boolean).join(' · ') : '';
-  const summary = last ? 'Dernière rediffusion' + (title ? ' — « ' + title + ' »' : '') + (details ? ' (' + details + ')' : '') + '.' : '';
-  const description = [summary, v.bio.replace(/\s+/g, ' ').trim()].filter(Boolean).join(' ') || 'Rediffusions de ' + v.name;
+  const title = (last?.title || '').trim().replace(/(?:\s+![\w-]+)+$/u, '');
+  const date = last ? ago(last.publishedAt) : '';
+  const details = last ? [
+    date && '📅 ' + date,
+    last.lengthSeconds > 0 && '⏱ ' + dur(last.lengthSeconds),
+    last.game?.displayName && '🎮 ' + last.game.displayName,
+  ].filter(Boolean).join(' · ') : '';
+  const summary = last ? ['📼 Dernière rediff' + (title ? ' · ' + title : ''), details].filter(Boolean).join('\n') : '';
+  const description = [summary, v.bio.replace(/\s+/g, ' ').trim()].filter(Boolean).join('\n\n') || 'Rediffusions de ' + v.name;
   const m = { id: 'twitchvod:' + v.login, type: 'series', name: v.name, poster: logo, posterShape: 'square', background: v.banner || undefined, ...(logo ? { logo } : {}), description, releaseInfo: releaseInfo || undefined, ...(top.length ? { genres: top } : {}), links: [{ name: 'Voir les rediffs sur Twitch', category: 'Twitch', url: 'https://www.twitch.tv/' + v.login + '/videos?filter=archives&sort=time' }] };
   if (!withVideos) return m;
   // Épisode : titre de la rediff, puis « durée · date · jeu · vues » dans le résumé (les temps forts n'ont pas toujours de jeu)
