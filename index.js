@@ -1941,6 +1941,7 @@ async function handler(req, res) {
       const scope = F.vods && sealLib.available() ? replayScope(login, base, auth) : '';
       const mediaUrl = v => scope && v.url.startsWith('https://') ? bufferedMediaUrl(origin, base, login, scope, v.url, v.audio)
         : !v.audio && (pcOn(cfg) || sm0 !== 'direct') ? pcUrl(origin, base, v.url, sm0) : v.url;
+      const liveHints = scope ? { behaviorHints: { twitchioLiveDvr: true } } : {};
       const rewind = F.vods && video.length ? [{
         name: BR + '\nRetour arrière',
         title: 'Extrait avec barre de lecture\nCompatible Stremio Windows',
@@ -1954,14 +1955,14 @@ async function handler(req, res) {
       // Mise en forme choisie par la personne (cfg.fmt) : voir lib/format.js
       const gameTxt = info && info.game ? cut(info.game, 22) : '';
       const dOf = v => { const m = /(\d{3,4})p(\d+)?/.exec(v.name) || [], h = Number(m[1] || v.h || 0), f = m[2] || (v.fps > 30 ? String(v.fps) : '30'); return { h, fps: Number(f), short: h ? h + 'p' + (m[2] || (v.fps > 30 ? v.fps : '')) : v.name.replace(/ \(source\)/, ''), rawName: v.name, viewers: nb, game: gameTxt, cap: cfg.cap }; };
-      const fixed = video.slice(0, cfg.fixed).map(v => ({ ...fmtLib.render(cfg.fmt, { brand: BR, kind: 'fixed', ...dOf(v), noAd: !!relayUrls && relayUrls.has(v.url) }), url: mediaUrl(v) }));
-      const auto = { ...fmtLib.render(cfg.fmt, { brand: BR, kind: 'auto', viewers: nb, game: gameTxt, cap: cfg.cap, noAd: !!b }), url: origin + base + '/p/' + login + '.m3u8' };
-      const audio = cfg.audio ? vars.filter(v => v.audio).slice(0, 1).map(v => ({ ...fmtLib.render(cfg.fmt, { brand: BR, kind: 'audio', noAd: !!b }), url: mediaUrl(v) })) : [];
+      const fixed = video.slice(0, cfg.fixed).map(v => ({ ...fmtLib.render(cfg.fmt, { brand: BR, kind: 'fixed', ...dOf(v), noAd: !!relayUrls && relayUrls.has(v.url) }), ...liveHints, url: mediaUrl(v) }));
+      const auto = { ...fmtLib.render(cfg.fmt, { brand: BR, kind: 'auto', viewers: nb, game: gameTxt, cap: cfg.cap, noAd: !!b }), ...liveHints, url: origin + base + '/p/' + login + '.m3u8' };
+      const audio = cfg.audio ? vars.filter(v => v.audio).slice(0, 1).map(v => ({ ...fmtLib.render(cfg.fmt, { brand: BR, kind: 'audio', noAd: !!b }), ...liveHints, url: mediaUrl(v) })) : [];
       return json(res, { streams: [auto, ...fixed, ...audio, ...rewind] });
       } catch (e) { // mise en forme impossible : liste simple, pour ne jamais perdre les flux
         store.log({ k: 'erreur', u: pseudo || undefined, ou: 'mise en forme des sources', msg: e.message });
-        const plain = video.slice(0, cfg.fixed).map(v => ({ name: BR + ' ' + v.name.replace(/ \(source\)/, ''), title: 'En direct · qualité fixe' + (b ? ' · sans pub' : ''), url: mediaUrl(v) }));
-        return json(res, { streams: [{ name: 'Twitch', title: 'En direct · qualité automatique' + (b ? ' · sans pub' : ''), url: origin + base + '/p/' + login + '.m3u8' }, ...plain, ...rewind] });
+        const plain = video.slice(0, cfg.fixed).map(v => ({ name: BR + ' ' + v.name.replace(/ \(source\)/, ''), title: 'En direct · qualité fixe' + (b ? ' · sans pub' : ''), ...liveHints, url: mediaUrl(v) }));
+        return json(res, { streams: [{ name: 'Twitch', title: 'En direct · qualité automatique' + (b ? ' · sans pub' : ''), ...liveHints, url: origin + base + '/p/' + login + '.m3u8' }, ...plain, ...rewind] });
       }
     }
     send(res, 404, 'text/html; charset=utf-8', BLANK);
