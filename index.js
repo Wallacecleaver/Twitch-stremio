@@ -13,7 +13,6 @@ const path = require('path');
 const crypto = require('crypto');
 const { Readable, pipeline } = require('stream');
 const zlib = require('zlib');
-const { currentArchive, replayPlaylist, createLiveBuffer, LIVE_SECONDS } = require('./lib/live-replay');
 
 // Configuration : fichier .env à côté de index.js. Il est créé au premier lancement (mot de passe du dashboard et clé de chiffrement générés).
 (function loadEnv() {
@@ -358,7 +357,7 @@ function segMode(req, cfg) { // 'direct' | 'worker' | 'addon'
 }
 const segExt = u => { const m = /\.(ts|mp4|m4s|aac|m4a|cmfv|cmfa)(?:$|\?)/i.exec(String(u).split('#')[0]); return m ? '.' + m[1].toLowerCase() : ''; };
 const segmentId = u => crypto.createHash('sha256').update(u.split(/[?#]/, 1)[0]).digest('hex');
-// HLS.js exige le même chemin pour un numéro de segment donné. La cible chiffrée peut changer à chaque lecture.
+// Le chemin d'un segment HLS reste stable quand sa cible chiffrée est renouvelée.
 const segUrl = (origin, base, u, mode) => (mode === 'worker' ? segOrigin() : origin + base) + '/s/' + segmentId(u) + segExt(u) + '?t=' + sealLib.seal(u);
 function viaAddonSegments(text, origin, base, mode) { // morceaux et segment d'initialisation → adresses de l'addon (ou du worker)
   return text.split(/\r?\n/).map(l => {
@@ -367,14 +366,14 @@ function viaAddonSegments(text, origin, base, mode) { // morceaux et segment d'i
   }).join('\n');
 }
 const pcUrl = (origin, base, u, mode) => (mode === 'worker' ? segOrigin() : origin + base) + '/m/' + sealLib.seal(u) + '.m3u8';
-function pcMaster(text, origin, base, mode, mediaUrl = u => pcUrl(origin, base, u, mode)) {
+function pcMaster(text, origin, base, mode) {
   const L = text.split(/\r?\n/), out = [];
   for (let i = 0; i < L.length; i++) {
     if (L[i].startsWith('#EXT-X-MEDIA')) continue;
     if (L[i].startsWith('#EXT-X-STREAM-INF')) {
       const u = L[i + 1] || '';
       if (/audio_only/i.test(L[i] + u) || !/RESOLUTION=/.test(L[i])) { i++; continue; }
-      out.push(L[i].replace(/,?AUDIO="[^"]*"/, '').replace(/,?VIDEO="[^"]*"/, ''), /^https?:/.test(u) ? mediaUrl(u) : u); i++;
+      out.push(L[i].replace(/,?AUDIO="[^"]*"/, '').replace(/,?VIDEO="[^"]*"/, ''), /^https?:/.test(u) ? pcUrl(origin, base, u, mode) : u); i++;
     } else out.push(L[i]);
   }
   return out.join('\n');
@@ -962,10 +961,8 @@ async function vodToken(id, cid = GQL_CLIENT_ID, playerType = 'site', oauth = nu
 }
 // Plusieurs variantes en parallèle (identifiant client, type de lecteur, adresse usher) : on garde la première qui répond.
 const VOD_TRIES = [{ cid: GQL_CLIENT_ID, pt: 'site', path: '/vod/' }, { cid: GQL_CLIENT_ID, pt: 'site', path: '/vod/v2/' }, { cid: GQL_CLIENT_ID, pt: 'embed', path: '/vod/' }, { cid: TV_ID, pt: 'site', path: '/vod/' }, { cid: ANDROID_ID, pt: 'site', path: '/vod/' }];
-async function vodMaster(id, oauth, { replay = false } = {}) { // le compte Twitch lié donne accès aux rediffs incluses dans son abonnement
-  const errs = [], direct = replay ? VOD_TRIES.slice(0, 1) : VOD_TRIES;
-  const authenticated = direct.slice(0, 2).map(v => ({ ...v, auth: 1 }));
-  const tries = oauth ? [...authenticated, ...direct] : direct;
+async function vodMaster(id, oauth) { // avec le compte Twitch lié : les rediffs réservées aux abonnés s'ouvrent si le compte est abonné
+  const errs = [], tries = oauth ? [{ cid: GQL_CLIENT_ID, pt: 'site', path: '/vod/', auth: 1 }, { cid: GQL_CLIENT_ID, pt: 'site', path: '/vod/v2/', auth: 1 }, ...VOD_TRIES] : VOD_TRIES;
   const one = async (t, i) => {
     try {
       const k = await vodToken(id, t.cid, t.pt, t.auth ? oauth : null);
@@ -976,56 +973,9 @@ async function vodMaster(id, oauth, { replay = false } = {}) { // le compte Twit
       return { url, text };
     } catch (e) { errs.push('essai ' + (i + 1) + (t.auth ? ' (compte)' : '') + ' ' + e.message); throw e; }
   };
-  try { return await Promise.any(tries.map(one)); } catch {
-    if (replay) return null;
-  }
+  try { return await Promise.any(tries.map(one)); } catch { /* usher refuse (403) : lecture directe depuis le CDN de Twitch */ }
   try { return await vodDirect(id); } catch (e) { errs.push('cdn ' + e.message); }
   throw new Error('Rediffusion indisponible — ' + errs.join(' ; '));
-}
-
-// L’archive doit correspondre au direct en cours et être accessible via le lecteur officiel.
-const liveReplayCache = new Map();
-const liveBuffer = createLiveBuffer();
-const replayScope = (login, base, auth) => crypto.createHash('sha256').update(JSON.stringify([login, base, auth || ''])).digest('hex');
-const bufferedMediaUrl = (origin, base, login, scope, url, audio = false) => origin + base + '/m/' + sealLib.seal(JSON.stringify([login, scope, url, audio])) + '.m3u8';
-function liveReplay(login, auth) {
-  const key = login + '|' + (auth ? crypto.createHash('sha256').update(auth).digest('hex') : '');
-  const cached = liveReplayCache.get(key);
-  if (cached && cached.expires > Date.now()) return cached.result;
-  if (liveReplayCache.size >= 100) liveReplayCache.delete(liveReplayCache.keys().next().value);
-  const result = (async () => {
-    const data = await gqlRaw('query { user(login: ' + JSON.stringify(login) + ') { stream { createdAt archiveVideo { id } } videos(first: 1, type: ARCHIVE, sort: TIME) { edges { node { id createdAt } } } } }');
-    const id = currentArchive(data.user);
-    if (!id) return null;
-    const master = await vodMaster(id, auth, { replay: true });
-    return master ? { id, variants: variantsOf(master.text) } : null;
-  })().catch(() => null);
-  liveReplayCache.set(key, { expires: Date.now() + 20000, result });
-  return result;
-}
-
-function replayVariant(replay, cfg) {
-  return replay?.variants.filter(v => !v.audio && v.url.startsWith('https://') && cfgLib.keepVariant(v, cfg)).sort(byQuality)[0];
-}
-
-async function replayFromVariant(variant, windowSeconds) {
-  if (!variant) return null;
-  const upstream = await fetchPlaylist(variant.url).catch(() => null);
-  return upstream?.ok ? replayPlaylist(absolutize(upstream.text, upstream.url), windowSeconds) : null;
-}
-
-async function replayFromLive(login, cfg, auth) {
-  const [relay, source] = await Promise.all([
-    cfg.relay ? bestProxy(login, cfg.hevc).catch(() => null) : null,
-    liveStream(login, cfg.hevc, auth).catch(() => null),
-  ]);
-  if (source?.offline) return null;
-  if (relay) {
-    const variant = replayVariant({ variants: variantsOf(mergedMaster(relay, source, cfg)) }, cfg);
-    const fromRelay = await replayFromVariant(variant, LIVE_SECONDS);
-    if (fromRelay) return fromRelay;
-  }
-  return replayFromVariant(replayVariant(source, cfg), LIVE_SECONDS);
 }
 // Lecture directe sur le CDN de Twitch (méthode « TwitchNoSub ») : les rediffs, même réservées aux abonnés, sont servies par CloudFront à une adresse
 // déduite de l'aperçu de la vidéo (…/<dossier>/storyboards/…). Utilisé quand usher refuse (403).
@@ -1132,10 +1082,6 @@ const account = {
 const pageCache = {};
 const rawPage = name => pageCache[name] ||= fs.readFileSync(path.join(__dirname, 'lib', 'pages', name), 'utf8');
 const alertsPageRevision = crypto.createHash('sha256').update(rawPage('alerte.html')).update(rawPage('alerte.js')).digest('hex').slice(0, 16);
-const playerRevision = crypto.createHash('sha256')
-  .update(rawPage('lecteur.html')).update(rawPage('lecteur.css')).update(rawPage('lecteur.js')).digest('hex').slice(0, 16);
-const playerHlsVersion = require('./package.json').dependencies['hls.js'];
-const PLAYER_CSP = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self' https:; media-src 'self' https: blob: data:; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'none'";
 const page = rawPage;
 const escH = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const accentCss = hex => { const rgb = [1, 3, 5].map(k => parseInt(hex.slice(k, k + 2), 16)), dark = rgb.map(x => Math.round(x * .72).toString(16).padStart(2, '0')).join(''); return ':root{--a:' + hex + ';--ah:#' + dark + ';--as:rgba(' + rgb.join(',') + ',.15)}'; };
@@ -1594,28 +1540,6 @@ async function handler(req, res) {
       return send(res, 200, 'image/svg+xml', svg, { 'Cache-Control': 'private, max-age=45', Vary: 'User-Agent' });
     }
     if (seg[0] === 'logo.svg') return send(res, 200, 'image/svg+xml', asset('logo.svg'), { 'Cache-Control': 'public, max-age=86400' });
-    if (!base && seg.length === 1 && ['lecteur.css', 'lecteur.js', 'lecteur-hls.js'].includes(seg[0])) {
-      const name = seg[0], vendor = name === 'lecteur-hls.js';
-      const body = vendor
-        ? pageCache.hls ||= fs.readFileSync(path.join(__dirname, 'node_modules', 'hls.js', 'dist', 'hls.min.js'), 'utf8')
-        : rawPage(name);
-      const type = name.endsWith('.css') ? 'text/css' : 'application/javascript';
-      return send(res, 200, type + '; charset=utf-8', body, { 'Cache-Control': 'public, max-age=3600' });
-    }
-    if (seg[0] === 'lecteur' && seg.length === 2 && F.vods) {
-      const login = seg[1].toLowerCase();
-      if (!LOGIN_RE.test(login)) return send(res, 404, 'text/plain; charset=utf-8', 'Chaîne invalide');
-      const fields = {
-        LOGIN: login,
-        NAME: SS.name,
-        LOGO_VERSION: SS.logoV,
-        HLS_VERSION: playerHlsVersion,
-        REVISION: playerRevision,
-        SOURCES: base + '/lecteur/' + login + '/sources.json',
-      };
-      const html = rawPage('lecteur.html').replace(/\{\{(\w+)\}\}/g, (_, key) => escH(fields[key]));
-      return send(res, 200, 'text/html; charset=utf-8', html, { 'Cache-Control': 'no-store', 'Content-Security-Policy': PLAYER_CSP });
-    }
     if (!base && seg.length === 1 && seg[0] === 'alerte') {
       if (!alerts.isSignedIn(readSession(req))) {
         const next = '/alerte' + new URL(req.url, 'http://x').search;
@@ -1766,22 +1690,19 @@ async function handler(req, res) {
 
     if (seg[0] === 'm' && seg[1]) { // liste de lecture d'une qualité, nettoyée (mode ordinateur)
       let u = sealLib.open(strip(seg[1]).replace(/\.m3u8$/, ''));
-      let scope;
       if (u?.startsWith('[')) {
-        const [login, signedScope, url, audio] = JSON.parse(u);
-        scope = replayScope(login, base, auth);
+        // Les lecteurs déjà ouverts continuent de recevoir le direct avec leur ancien lien.
+        const [login, signedScope, url] = JSON.parse(u);
+        const scope = crypto.createHash('sha256').update(JSON.stringify([login, base, auth || ''])).digest('hex');
         if (scope !== signedScope) return send(res, 403, 'text/plain; charset=utf-8', 'Lien réservé à ce profil');
-        if (audio) scope += '|audio';
         u = url;
       }
       if (!u || !/^https:\/\//.test(u)) return send(res, 400, 'text/plain; charset=utf-8', 'Lien invalide');
       const r = await fetchPlaylist(u), t = r.text;
       if (!r.ok || !t.startsWith('#EXTM3U')) return send(res, r.ok ? 502 : r.status, 'text/plain; charset=utf-8', 'Flux indisponible');
-      const sm = segMode(req, cfg); res._dbg = 'seg=' + sm;
-      let absolute = absolutize(t, r.url);
-      if (scope && F.vods) absolute = liveBuffer.playlist(scope, u, absolute);
-      let body = scope && !pcOn(cfg) && sm === 'direct' ? absolute : cleanMedia(absolute);
+      let body = cleanMedia(absolutize(t, r.url));
       if (/cloudfront/.test(u)) body = body.replace(/-unmuted/g, '-muted'); // rediffs réservées aux abonnés : seuls les segments « muted » sont ouverts
+      const sm = segMode(req, cfg); res._dbg = 'seg=' + sm;
       if (sm !== 'direct') body = viaAddonSegments(body, originOf(req), base, sm);
       return send(res, 200, 'application/vnd.apple.mpegurl', body, { 'Cache-Control': 'no-store' });
     }
@@ -1797,45 +1718,11 @@ async function handler(req, res) {
       return relaySegment(req, res, u, akChk.id);
     }
 
-    if (seg[0] === 'replay' && seg.length === 3 && F.vods) {
-      const [, login, file] = seg;
-      const id = /^(live|\d+)\.m3u8$/.exec(file)?.[1];
-      if (!LOGIN_RE.test(login) || !id) return send(res, 400, 'text/plain; charset=utf-8', 'Lien de retour arrière invalide.');
-      if (F.maint) return send(res, 503, 'text/plain; charset=utf-8', 'Addon en maintenance');
-      const replay = await withTimeout(liveReplay(login, auth), 2300, null);
-      let playlist;
-      // Un extrait à durée fixe reste navigable dans le lecteur Windows, même quand l’archive Twitch est encore en cours.
-      if (id === 'live' || replay?.id === id) playlist = await replayFromVariant(replayVariant(replay, cfg), Infinity);
-      if (!playlist && id === 'live') {
-        playlist = liveBuffer.snapshot(replayScope(login, base, auth)) || await replayFromLive(login, cfg, auth);
-      }
-      if (!playlist) {
-        return send(res, 404, 'text/plain; charset=utf-8', 'Retour arrière indisponible pour ce direct.', { 'Cache-Control': 'no-store' });
-      }
-      const sm = segMode(req, cfg);
-      const media = sm === 'direct' ? playlist : viaAddonSegments(playlist, originOf(req), base, sm);
-      return send(res, 200, 'application/vnd.apple.mpegurl', media, { 'Cache-Control': 'no-store' });
-    }
-
     if (seg[0] === 'p' && seg[1]) { // liste de lecture « sans pub » : récupérée côté serveur auprès d'un relais, puis servie au lecteur
       const login = strip(seg[1]).replace(/\.m3u8$/, '').toLowerCase();
       if (!LOGIN_RE.test(login)) return send(res, 400, 'text/plain; charset=utf-8', 'Nom de chaîne invalide');
       if (F.maint) return send(res, 503, 'text/plain; charset=utf-8', 'Addon en maintenance');
-      const sm = segMode(req, cfg), origin = originOf(req);
-      const scope = F.vods && sealLib.available() ? replayScope(login, base, auth) : '';
-      const wrap = scope ? (u, audio) => bufferedMediaUrl(origin, base, login, scope, u, audio) : undefined;
-      const fin = m => {
-        if (pcOn(cfg) || sm !== 'direct') return oneAudio(pcMaster(m, origin, base, sm, wrap), req);
-        const master = oneAudio(m, req);
-        if (!wrap) return master;
-        const variants = new Map(variantsOf(master).map(v => [v.url, v.audio]));
-        return master.split(/\r?\n/).map(line => {
-          const url = line.trim();
-          if (variants.has(url)) return wrap(url, variants.get(url));
-          const rendition = /^#EXT-X-MEDIA:.*\bTYPE=(AUDIO|VIDEO)(?:,|$)/.exec(line);
-          return rendition ? line.replace(/URI="(https:\/\/[^"]+)"/, (_, u) => 'URI="' + wrap(u, rendition[1] === 'AUDIO') + '"') : line;
-        }).join('\n');
-      };
+      const sm = segMode(req, cfg), fin = m => oneAudio(pcOn(cfg) || sm !== 'direct' ? pcMaster(m, originOf(req), base, sm) : m, req);
       const [b, lv] = await Promise.all([cfg.relay ? bestProxy(login, cfg.hevc) : null, cfg.hevc && cfg.relay ? liveStream(login, true, auth).catch(() => null) : null]);
       store.incr('play'); store.top(login); store.user(pseudo, { ch: login, dev: cfg.device }); store.incr('seg_' + sm); store.incr('d:' + store.day() + ':seg_' + sm);
       store.log({ k: 'play', u: pseudo || undefined, ch: login, seg: sm, lecteur: String(req.headers['user-agent'] || '').slice(0, 40) || undefined, relais: b ? b.name : cfg.relay ? 'officiel (repli)' : 'officiel (relais coupés)', ms: Date.now() - t0, appareil: cfg.device || undefined, dev });
@@ -1843,7 +1730,7 @@ async function handler(req, res) {
       const s = await liveStream(login, cfg.hevc, auth); // aucun relais : flux officiel, servi par nous pour appliquer le plafond de qualité
       if (s.offline) return send(res, 404, 'text/plain; charset=utf-8', 'Chaîne hors ligne');
       const o = await fetch(s.url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(8000) }).then(r => r.text());
-      return send(res, 200, 'application/vnd.apple.mpegurl', fin(cfgLib.filterMaster(absolutize(o, s.url), cfg)), { 'Cache-Control': 'no-store' });
+      return send(res, 200, 'application/vnd.apple.mpegurl', fin(cfgLib.filterMaster(o, cfg)), { 'Cache-Control': 'no-store' });
     }
     if (seg[0] === 'relais' && seg[1]) { // diagnostic : quels relais répondent depuis ce PC ?
       const login = seg[1].toLowerCase();
@@ -1953,17 +1840,14 @@ async function handler(req, res) {
       if (S.dcOn && siteLib.DISCORD_RE.test(S.dcUrl)) meta.links.push({ name: 'Rejoins ' + S.name + ' sur Discord', category: 'Discord', url: S.dcUrl });
       return json(res, { meta });
     }
-    const playerSources = seg[0] === 'lecteur' && seg.length === 3 && seg[2] === 'sources.json' && F.vods;
-    if ((seg[0] === 'stream' && seg[1] === 'tv') || playerSources) {
-      const login = (playerSources ? seg[1] : strip(seg[2]).replace(/^twitch:/, '')).toLowerCase();
-      const noSources = () => json(res, playerSources ? { sources: [] } : { streams: [] });
-      if (playerSources && F.maint) return send(res, 503, 'application/json; charset=utf-8', JSON.stringify({ error: F.maintMsg || 'TwitchIO est en maintenance.' }), { 'Cache-Control': 'no-store' });
-      if (!LOGIN_RE.test(login)) return noSources();
+    if (seg[0] === 'stream' && seg[1] === 'tv') {
+      const login = strip(seg[2]).replace(/^twitch:/, '').toLowerCase();
+      if (!LOGIN_RE.test(login)) return json(res, { streams: [] });
       if (F.maint) return maint();
       const [s, b, info] = await Promise.all([liveStream(login, cfg.hevc, auth), cfg.relay ? bestProxy(login, cfg.hevc) : null, Promise.race([channelInfo(login), new Promise(r => setTimeout(() => r(null), 1500))])]);
       store.incr('stream'); store.incr('d:' + store.day() + ':stream'); store.user(pseudo, { ch: login, dev: cfg.device });
       const who = { u: pseudo || undefined, appareil: cfg.device || undefined, dev };
-      if (s.offline) { store.incr('stream_offline'); store.log({ k: 'stream', ...who, ch: login, etat: 'hors ligne', ms: Date.now() - t0 }); return noSources(); }
+      if (s.offline) { store.incr('stream_offline'); store.log({ k: 'stream', ...who, ch: login, etat: 'hors ligne', ms: Date.now() - t0 }); return json(res, { streams: [] }); }
       store.incr(b ? 'stream_relay' : 'stream_official'); store.top(login);
       store.log({ k: 'stream', ...who, ch: login, relais: b ? b.name : cfg.relay ? 'aucun (officiel)' : 'coupés (officiel)', relais_ms: b ? b.ms : undefined, ms: Date.now() - t0, plafond: cfg.cap || undefined });
       // Un relais répond : tous les flux passent par lui (sans pub). Sinon : flux officiel.
@@ -1971,31 +1855,7 @@ async function handler(req, res) {
       const relayUrls = b ? new Set(variantsOf(absolutize(b.text, b.url)).map(v => v.url)) : null;
       const video = vars.filter(v => !v.audio && cfgLib.keepVariant(v, cfg)).sort(byQuality);
       // Affichage dans la liste des sources de Stremio : nom court à gauche, détails sur plusieurs lignes à droite.
-      const sm0 = segMode(NOUA, cfg), origin = originOf(req);
-      const scope = F.vods && sealLib.available() ? replayScope(login, base, auth) : '';
-      const mediaUrl = v => scope && v.url.startsWith('https://') ? bufferedMediaUrl(origin, base, login, scope, v.url, v.audio)
-        : !v.audio && (pcOn(cfg) || sm0 !== 'direct') ? pcUrl(origin, base, v.url, sm0) : v.url;
-      const autoUrl = origin + base + '/p/' + login + '.m3u8';
-      const fixedVariants = video.slice(0, cfg.fixed);
-      const audioVariant = cfg.audio && vars.find(v => v.audio);
-      const qualityLabel = v => v.name.replace(/ \(source\)/, '');
-      if (playerSources) {
-        const sources = [{ label: 'Auto', url: autoUrl }, ...fixedVariants.map(v => ({ label: qualityLabel(v), url: mediaUrl(v) }))];
-        if (audioVariant) sources.push({ label: 'Audio seul', audio: true, url: mediaUrl(audioVariant) });
-        return json(res, { channel: info?.name || login, sources });
-      }
-      const hosted = F.vods ? [{
-        name: BR + '\nLecteur web',
-        title: 'Retour arrière en direct\nOuvre dans le navigateur',
-        externalUrl: origin + base + '/lecteur/' + login,
-      }] : [];
-      const liveHints = scope ? { behaviorHints: { twitchioLiveDvr: true } } : {};
-      const rewind = F.vods && video.length ? [{
-        name: BR + '\nRetour arrière',
-        title: 'Extrait avec barre de lecture\nCompatible Stremio Windows',
-        url: origin + base + '/replay/' + login + '/live.m3u8',
-        ...(sm0 === 'direct' ? { behaviorHints: { notWebReady: true } } : {}),
-      }] : [];
+      const sm0 = segMode(NOUA, cfg);
       try {
       // Colonne de droite étroite dans Stremio : lignes courtes (≈ 24 caractères) pour ne rien couper.
       const cut = (t, n) => (t.length > n ? t.slice(0, n - 1).trimEnd() + '…' : t);
@@ -2003,14 +1863,14 @@ async function handler(req, res) {
       // Mise en forme choisie par la personne (cfg.fmt) : voir lib/format.js
       const gameTxt = info && info.game ? cut(info.game, 22) : '';
       const dOf = v => { const m = /(\d{3,4})p(\d+)?/.exec(v.name) || [], h = Number(m[1] || v.h || 0), f = m[2] || (v.fps > 30 ? String(v.fps) : '30'); return { h, fps: Number(f), short: h ? h + 'p' + (m[2] || (v.fps > 30 ? v.fps : '')) : v.name.replace(/ \(source\)/, ''), rawName: v.name, viewers: nb, game: gameTxt, cap: cfg.cap }; };
-      const fixed = fixedVariants.map(v => ({ ...fmtLib.render(cfg.fmt, { brand: BR, kind: 'fixed', ...dOf(v), noAd: !!relayUrls && relayUrls.has(v.url) }), ...liveHints, url: mediaUrl(v) }));
-      const auto = { ...fmtLib.render(cfg.fmt, { brand: BR, kind: 'auto', viewers: nb, game: gameTxt, cap: cfg.cap, noAd: !!b }), ...liveHints, url: autoUrl };
-      const audio = audioVariant ? [{ ...fmtLib.render(cfg.fmt, { brand: BR, kind: 'audio', noAd: !!b }), ...liveHints, url: mediaUrl(audioVariant) }] : [];
-      return json(res, { streams: [auto, ...hosted, ...fixed, ...audio, ...rewind] });
+      const fixed = video.slice(0, cfg.fixed).map(v => ({ ...fmtLib.render(cfg.fmt, { brand: BR, kind: 'fixed', ...dOf(v), noAd: !!relayUrls && relayUrls.has(v.url) }), url: pcOn(cfg) || sm0 !== 'direct' ? pcUrl(originOf(req), base, v.url, sm0) : v.url }));
+      const auto = { ...fmtLib.render(cfg.fmt, { brand: BR, kind: 'auto', viewers: nb, game: gameTxt, cap: cfg.cap, noAd: !!b }), url: originOf(req) + base + '/p/' + login + '.m3u8' };
+      const audio = cfg.audio ? vars.filter(v => v.audio).slice(0, 1).map(v => ({ ...fmtLib.render(cfg.fmt, { brand: BR, kind: 'audio', noAd: !!b }), url: sm0 !== 'direct' ? pcUrl(originOf(req), base, v.url, sm0) : v.url })) : [];
+      return json(res, { streams: [auto, ...fixed, ...audio] });
       } catch (e) { // mise en forme impossible : liste simple, pour ne jamais perdre les flux
         store.log({ k: 'erreur', u: pseudo || undefined, ou: 'mise en forme des sources', msg: e.message });
-        const plain = fixedVariants.map(v => ({ name: BR + ' ' + qualityLabel(v), title: 'En direct · qualité fixe' + (b ? ' · sans pub' : ''), ...liveHints, url: mediaUrl(v) }));
-        return json(res, { streams: [{ name: 'Twitch', title: 'En direct · qualité automatique' + (b ? ' · sans pub' : ''), ...liveHints, url: autoUrl }, ...hosted, ...plain, ...rewind] });
+        const plain = video.slice(0, cfg.fixed).map(v => ({ name: BR + ' ' + v.name.replace(/ \(source\)/, ''), title: 'En direct · qualité fixe' + (b ? ' · sans pub' : ''), url: pcOn(cfg) || sm0 !== 'direct' ? pcUrl(originOf(req), base, v.url, sm0) : v.url }));
+        return json(res, { streams: [{ name: 'Twitch', title: 'En direct · qualité automatique' + (b ? ' · sans pub' : ''), url: originOf(req) + base + '/p/' + login + '.m3u8' }, ...plain] });
       }
     }
     send(res, 404, 'text/html; charset=utf-8', BLANK);

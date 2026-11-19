@@ -10,7 +10,6 @@
     "start": "node index.js"
   },
   "dependencies": {
-    "hls.js": "1.7.4",
     "web-push": "3.6.7"
   }
 }
