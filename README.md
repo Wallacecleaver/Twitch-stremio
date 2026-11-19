@@ -169,6 +169,10 @@ En complément de l'addon, la page **`/alerte`** te prévient quand un streamer 
 
 La liste et les préférences de ton compte se synchronisent entre appareils. Telegram est lié au compte. Les notifications du navigateur s’activent sur chaque appareil et s’arrêtent sur celui où tu te déconnectes.
 
+**Installer les catalogues Alertes dans Stremio**
+
+Sur la page Alertes, ouvre **Catalogues Stremio** sous **Chaînes surveillées**. Saisis l’identifiant ou le lien d’installation de ta configuration TwitchIO et le mot de passe de ce profil. Installe ensuite **TwitchIO · Alertes** avec le lien personnel généré. **Alertes · En direct** affiche les chaînes de ta liste actuellement en live quand Stremio recharge le catalogue. **Alertes · Calendrier** affiche les lives annoncés par Twitch pour les 14 prochains jours, dans le fuseau de ton navigateur au moment de la liaison. Tu peux désactiver le lien depuis la même section.
+
 **Affiner ce que tu reçois**
 
 | Réglage | Effet |

@@ -64,6 +64,7 @@ const akeys = require('./lib/akeys');
 const siteLib = require('./lib/site');
 const { createAlerts } = require('./lib/alerts');
 const { readSession, sessionCookie } = require('./lib/alert-accounts');
+const { LIVE_CATALOG, SCHEDULE_CATALOG, LIVE_PREFIX, SCHEDULE_PREFIX, scheduleId, isUpcoming, scheduleMeta } = require('./lib/alerts-stremio');
 
 const PORT = process.env.PORT || 7000;
 const HOST = process.env.HOST || '0.0.0.0';
@@ -1370,6 +1371,28 @@ function checkSession(t, id) {
 const resetOk = (code, r) => !!r && r.exp > Date.now() && pwCheck(String(code || '').toUpperCase().replace(/[^A-Z0-9]/g, ''), r.h);
 const locked = id => { const f = fails.get(id); return !!f && f.n >= 8 && Date.now() - f.t < 600000; };
 const failed = id => { const f = fails.get(id), now = Date.now(); fails.set(id, f && now - f.t < 600000 ? { n: f.n + 1, t: f.t } : { n: 1, t: now }); if (fails.size > 500) fails.clear(); };
+async function configureAlertCatalog(req) {
+  const session = readSession(req);
+  if (!alerts.isSignedIn(session)) return { error: 'Connecte-toi à ton compte Alertes.', sessionChanged: true };
+  if (tooMany(req)) return { error: 'Trop de demandes. Réessaie dans une minute.' };
+  let input;
+  try { input = JSON.parse(await readBody(req)); } catch { return { error: 'Requête invalide.' }; }
+  if (input?.action === 'unlink') return alerts.configureStremio(session);
+  if (input?.action !== 'link') return { error: 'Action inconnue.' };
+  const id = typeof input.id === 'string' ? input.id.trim() : '';
+  if (!ID_RE.test(id)) return { error: 'Identifiant de configuration invalide.' };
+  const password = input.password;
+  if (typeof password !== 'string' || !password.length || password.length > 100) return { error: 'Saisis le mot de passe de ton profil Stremio.' };
+  const ip = store.ipOf(req);
+  if (locked(id) || ipLocked(ip)) return { error: 'Trop d’essais. Réessaie dans quelques minutes.' };
+  const profile = await loadProfile(id);
+  if (!profile?.pw || !pwCheck(password, profile.pw)) {
+    failed(id);
+    ipFailed(ip);
+    return { error: 'Identifiant ou mot de passe du profil Stremio incorrect.' };
+  }
+  return alerts.configureStremio(session, id, input.timeZone);
+}
 async function profileApi(req) {
   if (tooMany(req)) return { ok: false, error: 'trop de demandes, réessaie dans une minute' };
   const AN = siteLib.annOf(await siteLib.load()); // annonce avec blocage : plus de création ni de modification de profil
@@ -1480,7 +1503,7 @@ async function relaySegment(req, res, u, akId) {
 async function handler(req, res) {
   let pseudo = '';
   if (process.env.DEBUG_HTTP === '1') { // diagnostic (désactivé par défaut) : une ligne par requête, avec le lecteur, le statut, les octets envoyés et la durée ; « COUPÉ » = le lecteur a abandonné
-    const t = Date.now(), p = String(req.url).split('?')[0].split('/').map(x => (x.length > 30 ? x.slice(0, 10) + '…' : x)).join('/');
+    const t = Date.now(), p = String(req.url).split('?')[0].replace(/^\/a\/[^/]+/, '/a/…').split('/').map(x => (x.length > 30 ? x.slice(0, 10) + '…' : x)).join('/');
     let n = 0; const w = res.write, e = res.end, add = c => { if (typeof c === 'string' || Buffer.isBuffer(c)) n += Buffer.byteLength(c); };
     res.write = function (c, ...a) { add(c); return w.call(this, c, ...a); };
     res.end = function (c, ...a) { add(c); return e.call(this, c, ...a); };
@@ -1490,7 +1513,7 @@ async function handler(req, res) {
   try {
     let seg = new URL(req.url, 'http://x').pathname.split('/').filter(Boolean).map(decodeURIComponent);
     // adresse personnelle : /c/<pseudo>/<réglages>/... (le pseudo et les réglages voyagent dans l'adresse)
-    let cfg = cfgLib.DEFAULTS, base = '', auth = null;
+    let cfg = cfgLib.DEFAULTS, base = '', auth = null, alertCatalog = null;
     if (seg[0] === 'c' && seg.length >= 3) { pseudo = cfgLib.cleanPseudo(seg[1]); cfg = cfgLib.decode(seg[2]) || cfgLib.DEFAULTS; auth = cfg.hevc && cfg.tok ? sealLib.open(cfg.tok) : null; base = '/c/' + encodeURIComponent(seg[1]) + '/' + seg[2]; seg = seg.slice(3); }
     if (seg[0] === 'u' && ID_RE.test(seg[1] || '')) {
       if (!seg[2]) return send(res, 302, 'text/plain', '', { Location: '/u/' + seg[1] + '/configure' });
@@ -1499,6 +1522,21 @@ async function handler(req, res) {
         if (!p) return send(res, 404, 'text/plain; charset=utf-8', 'Profil introuvable : crée un nouveau lien sur /config');
         pseudo = p.pseudo; cfg = p.cfg; auth = cfg.hevc && cfg.tok ? sealLib.open(cfg.tok) : null; base = '/u/' + seg[1];
       }
+      seg = seg.slice(2);
+    }
+    if (!base && seg[0] === 'a') {
+      const [, key, resource, type] = seg;
+      alertCatalog = alerts.stremioByKey(key);
+      const profile = alertCatalog && await loadProfile(alertCatalog.profileId);
+      const standard = ['manifest.json', 'p', 'm', 's'].includes(resource);
+      const content = type === 'tv' && ['catalog', 'meta', 'stream'].includes(resource);
+      if (!profile || (!standard && !content)) {
+        return send(res, 404, 'text/plain; charset=utf-8', 'Lien Alertes indisponible.', { 'Cache-Control': 'no-store' });
+      }
+      pseudo = profile.pseudo;
+      cfg = profile.cfg;
+      auth = cfg.hevc && cfg.tok ? sealLib.open(cfg.tok) : null;
+      base = '/a/' + key;
       seg = seg.slice(2);
     }
     const strip = s => String(s || '').replace(/\.json$/, '');
@@ -1597,6 +1635,11 @@ async function handler(req, res) {
       const cookies = session === undefined ? undefined : { 'Set-Cookie': ['/api/alerts', '/alerte'].map(path => sessionCookie(req, session, path)) };
       return json(res, result, cookies);
     }
+    if (!base && seg.length === 3 && seg[0] === 'api' && seg[1] === 'alerts' && seg[2] === 'stremio') {
+      if (req.method !== 'POST') return send(res, 405, 'text/plain', 'Méthode non autorisée', { Allow: 'POST' });
+      if (!/^application\/json(?:;|$)/i.test(req.headers['content-type'] || '')) return send(res, 415, 'text/plain', 'JSON attendu');
+      return json(res, await configureAlertCatalog(req));
+    }
     if (!base && seg.length === 3 && seg[0] === 'api' && seg[1] === 'alerts' && seg[2] === 'discover' && req.method === 'GET') {
       if (tooMany(req)) return json(res, { error: 'Trop de demandes. Réessaie dans un instant.' });
       // mode=top : les lives les plus regardés de tout Twitch ; sinon lives français (repli sur le top mondial si Twitch n'en renvoie aucun)
@@ -1650,6 +1693,22 @@ async function handler(req, res) {
     if (seg[0] === 'api' && seg[1] === 'twitch' && seg[2] === 'poll' && req.method === 'POST') return json(res, await devicePoll(req));
     if (seg[0] === 'api' && seg[1] === 'report' && req.method === 'POST') return json(res, await report(req, dev));
     if (seg[0] === 'manifest.json') {
+      if (alertCatalog) {
+        return json(res, {
+          id: 'community.twitch.lives.alerts',
+          version: MANIFEST.version,
+          name: SS.name + ' · Alertes',
+          description: 'Les directs et les prochains lives des chaînes surveillées sur TwitchIO Alertes.',
+          logo: originOf(req) + '/logo.png?v=' + SS.logoV,
+          types: ['tv'],
+          resources: ['catalog', 'meta', 'stream'],
+          idPrefixes: [LIVE_PREFIX, SCHEDULE_PREFIX],
+          catalogs: [
+            { id: LIVE_CATALOG, type: 'tv', name: 'Alertes · En direct' },
+            { id: SCHEDULE_CATALOG, type: 'tv', name: 'Alertes · Calendrier', extra: [{ name: 'skip', isRequired: false }] },
+          ],
+        });
+      }
       if (!pseudo) return send(res, 403, 'text/plain; charset=utf-8', 'Configuration obligatoire : crée ton lien personnel sur ' + originOf(req) + '/config', { 'Cache-Control': 'no-store' }); // manifest « nu » (sans profil) refusé : on ne peut installer l'addon qu'avec un lien généré par /config
       store.log({ k: 'install', u: pseudo || undefined, appareil: cfg.device || undefined, reglages: pseudo ? summary(cfg) : 'défaut', dev }); store.user(pseudo, { cfg: { ...cfg, tok: undefined, compte: !!cfg.tok }, dev: cfg.device });
       const S = await siteLib.load(), mf = { ...MANIFEST, name: S.name, logo: originOf(req) + '/logo.png?v=' + S.logoV }, GL = await Promise.race([gameList(), new Promise(r => setTimeout(() => r(GAMES), 3000))]);
@@ -1722,6 +1781,7 @@ async function handler(req, res) {
     if (seg[0] === 'p' && seg[1]) { // liste de lecture « sans pub » : récupérée côté serveur auprès d'un relais, puis servie au lecteur
       const login = strip(seg[1]).replace(/\.m3u8$/, '').toLowerCase();
       if (!LOGIN_RE.test(login)) return send(res, 400, 'text/plain; charset=utf-8', 'Nom de chaîne invalide');
+      if (alertCatalog && !alertCatalog.logins.includes(login)) return send(res, 404, 'text/plain', 'Chaîne non surveillée');
       if (F.maint) return send(res, 503, 'text/plain; charset=utf-8', 'Addon en maintenance');
       const sm = segMode(req, cfg), fin = m => oneAudio(pcOn(cfg) || sm !== 'direct' ? pcMaster(m, originOf(req), base, sm) : m, req);
       const [b, lv] = await Promise.all([cfg.relay ? bestProxy(login, cfg.hevc) : null, cfg.hevc && cfg.relay ? liveStream(login, true, auth).catch(() => null) : null]);
@@ -1788,6 +1848,59 @@ async function handler(req, res) {
       const vm = await vodMaster(id, auth), fin = pcOn(cfg) || (vm.direct && sealLib.available()) ? pcMaster(vm.text, originOf(req), base, segMode(NOUA, cfg)) : vm.text;
       return send(res, 200, 'application/vnd.apple.mpegurl', cfgLib.filterMaster(fin, cfg), { 'Cache-Control': 'no-store' });
     }
+    if (alertCatalog && seg[0] === 'catalog') {
+      const catalog = strip(seg[2]), { logins, timeZone } = alertCatalog;
+      if (F.maint || !logins.length) return json(res, { metas: [] });
+      if (catalog === LIVE_CATALOG) {
+        const channels = await Promise.all(logins.map(async login => ({ login, info: await channelInfo(login) })));
+        const metas = badge(channels.filter(({ info }) => info?.live).sort(byViewers).map(catalogMeta), req)
+          .map(meta => ({ ...meta, id: LIVE_PREFIX + meta.id.slice(7) }));
+        return json(res, { metas });
+      }
+      if (catalog === SCHEDULE_CATALOG) {
+        const now = Date.now(), logo = originOf(req) + '/logo.png?v=' + SS.logoV;
+        const groups = await Promise.all(logins.map(async login => {
+          const { events } = await alertSchedule(login);
+          const upcoming = events.filter(event => isUpcoming(event, now));
+          if (!upcoming.length) return [];
+          const info = await channelInfo(login);
+          return upcoming.map(event => ({
+            at: Date.parse(event.startAt),
+            meta: scheduleMeta(login, event, info, timeZone, logo),
+          }));
+        }));
+        const skip = Math.max(0, parseInt(extraOf(seg[3]).get('skip'), 10) || 0);
+        const ordered = groups.flat().sort((a, b) => a.at - b.at);
+        const unique = new Map(ordered.map(({ meta }) => [meta.id, meta]));
+        return json(res, { metas: [...unique.values()].slice(skip, skip + 100) });
+      }
+      return json(res, { metas: [] });
+    }
+    if (alertCatalog && (seg[0] === 'meta' || seg[0] === 'stream')) {
+      const id = strip(seg[2]);
+      if (id.startsWith(SCHEDULE_PREFIX)) {
+        const match = /^twitchschedule:([a-z0-9_]{3,25}):(\d{13})$/.exec(id);
+        const login = match?.[1];
+        const empty = seg[0] === 'meta' ? { meta: null } : { streams: [] };
+        if (!alertCatalog.logins.includes(login)) return json(res, empty);
+        const { events } = await alertSchedule(login);
+        const event = events.find(item => scheduleId(login, item) === id && Date.parse(item.endAt) > Date.now());
+        if (!event) return json(res, empty);
+        if (seg[0] === 'meta') {
+          const info = await channelInfo(login);
+          return json(res, { meta: scheduleMeta(login, event, info, alertCatalog.timeZone, originOf(req) + '/logo.png?v=' + SS.logoV) });
+        }
+        if (F.maint) return maint();
+        if (Date.parse(event.startAt) > Date.now()) {
+          return json(res, { streams: [{ name: 'Planning Twitch', externalUrl: 'https://www.twitch.tv/' + login + '/schedule' }] });
+        }
+        seg[2] = 'twitch:' + login + '.json';
+      } else {
+        const login = id.startsWith(LIVE_PREFIX) ? id.slice(LIVE_PREFIX.length) : '';
+        if (!alertCatalog.logins.includes(login)) return json(res, seg[0] === 'meta' ? { meta: null } : { streams: [] });
+        seg[2] = 'twitch:' + login + '.json';
+      }
+    }
     if (seg[0] === 'catalog' && seg[1] === 'tv' && strip(seg[2]) === 'twitch-followed') {
       if (!auth || !F.followed) return json(res, { metas: [] });
       try {
@@ -1834,10 +1947,11 @@ async function handler(req, res) {
       const info = await channelInfo(login);
       let meta = info ? metaFromInfo(login, info) : { id: 'twitch:' + login, type: 'tv', name: login, poster: 'https://static-cdn.jtvnw.net/previews-ttv/live_user_' + login + '-440x248.jpg', posterShape: 'landscape' };
       if (!info) { try { const s = (await helix('/streams', { user_login: login }))[0]; if (s) meta = metaOf(s); } catch { /* fiche minimale */ } }
+      if (alertCatalog) meta.id = LIVE_PREFIX + login;
       // liens de la fiche : la chaîne sur Twitch, le catalogue du jeu en cours (dans cet addon), le Discord
       const S = await siteLib.load(), game = info && info.live && info.game ? info.game : (meta.genres && meta.genres[0]) || '';
       meta.links = [{ name: 'Ouvrir sur Twitch', category: 'Twitch', url: 'https://www.twitch.tv/' + login }];
-      if (game) meta.links.push({ name: game, category: 'Jeu en cours', url: 'stremio:///discover/' + encodeURIComponent(originOf(req) + base + '/manifest.json') + '/tv/twitch-top?genre=' + encodeURIComponent(game) });
+      if (game && !alertCatalog) meta.links.push({ name: game, category: 'Jeu en cours', url: 'stremio:///discover/' + encodeURIComponent(originOf(req) + base + '/manifest.json') + '/tv/twitch-top?genre=' + encodeURIComponent(game) });
       if (S.dcOn && siteLib.DISCORD_RE.test(S.dcUrl)) meta.links.push({ name: 'Rejoins ' + S.name + ' sur Discord', category: 'Discord', url: S.dcUrl });
       return json(res, { meta });
     }
@@ -1877,7 +1991,7 @@ async function handler(req, res) {
     send(res, 404, 'text/html; charset=utf-8', BLANK);
   } catch (e) {
     console.error('requête :', e.message);
-    store.incr('err'); store.incr('d:' + store.day() + ':err'); store.log({ k: 'erreur', u: pseudo || undefined, ou: String(req.url).split('?')[0].slice(0, 60), msg: e.message });
+    store.incr('err'); store.incr('d:' + store.day() + ':err'); store.log({ k: 'erreur', u: pseudo || undefined, ou: String(req.url).split('?')[0].replace(/^\/a\/[^/]+/, '/a/…').slice(0, 60), msg: e.message });
     if (!res.headersSent) json(res, { error: e.message });
   }
 }

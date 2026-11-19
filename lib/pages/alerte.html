@@ -206,7 +206,7 @@ ul { margin: 0; list-style: none; padding: 0; }
 .list-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 4px; margin-top: 10px; }
 .list-tools button { padding: 5px 10px; font-size: .78rem; color: var(--dim); background: transparent; border-color: transparent; }
 .list-tools button:hover { color: var(--red); }
-.list-tools #open-follows:hover { color: var(--text); }
+.list-tools :is(#open-follows, #open-stremio-catalog):hover { color: var(--text); }
 
 .alerts .primary { width: 100%; padding: 12px; font-size: .92rem; }
 .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
@@ -309,7 +309,7 @@ dialog::backdrop { background: #07050dc2; backdrop-filter: blur(3px); }
 }
 .account-footer .search-status { flex: 1 1 160px; margin: 0; }
 .account-footer button { color: #f5bbca; }
-#connection[data-view="import"] :is(#account-connected, .account-tabs, .account-footer, #profile-details > summary) { display: none; }
+#connection[data-view="import"] :is(#account-connected, .account-tabs, .account-footer, #stremio-catalog, #profile-details > summary) { display: none; }
 #watchlist, #notification-settings { scroll-margin-top: 90px; }
 
 .tabs.account-tabs { display: flex; }
@@ -375,22 +375,29 @@ dialog::backdrop { background: #07050dc2; backdrop-filter: blur(3px); }
 .profile-note a { text-decoration: underline; }
 .profile-tools { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
 .profile-tools input { flex: 1 1 160px; }
-#profile-details {
+.account-fold {
   margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 14px; background: #151220;
 }
-#profile-details > summary {
+.account-fold + .account-fold { margin-top: 9px; }
+.account-fold > summary {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
   padding: 12px 15px; border-radius: 13px; font-weight: 650; list-style: none;
 }
-#profile-details > summary::-webkit-details-marker { display: none; }
-#profile-details > summary:hover { background: var(--panel2); }
-#profile-details > summary::after {
+.account-fold > summary::-webkit-details-marker { display: none; }
+.account-fold > summary:hover { background: var(--panel2); }
+.account-fold > summary::after {
   content: ""; width: 7px; height: 7px; flex: none;
   border: solid var(--muted); border-width: 0 2px 2px 0; transform: rotate(45deg);
 }
-#profile-details[open] > summary::after { transform: rotate(225deg); }
+.account-fold[open] > summary::after { transform: rotate(225deg); }
+.account-fold .pill { margin-inline-start: auto; }
 .profile-import-body { padding: 2px 15px 15px; }
 .profile-import-body .search-status { margin: 10px 0 0; }
+.profile-import-body .search-status[data-error] { color: #ffb2bd; }
+.stremio-install-tools { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.stremio-install-tools .connect { max-width: none; }
+.stremio-link { display: grid; gap: 6px; color: var(--muted); font-size: .8rem; }
+#stremio-catalog-form .back { justify-self: start; }
 .profile-linked { flex-wrap: wrap; margin-top: 10px; }
 .profile-linked strong { min-width: 0; overflow-wrap: anywhere; }
 #connection[data-view="import"] #profile-details { border: 0; background: transparent; }
@@ -613,7 +620,7 @@ dialog input:focus { border-color: var(--violet); outline: 0; box-shadow: 0 0 0 
           <strong>Aucune chaîne pour l’instant</strong>
           <p>Ajoute une première chaîne pour recevoir ses alertes de live.</p>
         </div>
-        <div class="list-tools"><button type="button" id="open-follows">Importer mes suivis Twitch</button><a class="back" id="agenda-jump" href="#watch-agenda" hidden>Voir l’agenda ↓</a><button type="button" id="clear-all" hidden>Tout retirer</button></div>
+        <div class="list-tools"><button type="button" id="open-stremio-catalog">Catalogues Stremio</button><button type="button" id="open-follows">Importer mes suivis Twitch</button><a class="back" id="agenda-jump" href="#watch-agenda" hidden>Voir l’agenda ↓</a><button type="button" id="clear-all" hidden>Tout retirer</button></div>
       </section>
       <section class="panel alerts" id="notification-settings" aria-labelledby="push-title" tabindex="-1">
         <div class="head">
@@ -708,7 +715,28 @@ dialog input:focus { border-color: var(--violet); outline: 0; box-shadow: 0 0 0 
             </dl>
           </section>
         </div>
-        <details id="profile-details">
+        <details class="account-fold" id="stremio-catalog" name="account-integrations">
+          <summary>Catalogues Stremio <span class="pill active" id="stremio-catalog-badge" hidden>Reliés</span></summary>
+          <div class="profile-import-body">
+            <p class="profile-note">Retrouve les catalogues <strong>En direct</strong> et <strong>Calendrier</strong> pour les chaînes de ta liste Alertes.</p>
+            <form id="stremio-catalog-form" class="profile-form" method="post">
+              <label>Identifiant de config ou lien d’installation<input id="stremio-catalog-id" required maxlength="260" autocomplete="username" spellcheck="false"></label>
+              <label>Mot de passe du profil Stremio<input id="stremio-catalog-password" type="password" required maxlength="100" autocomplete="current-password"></label>
+              <button type="submit" class="primary" id="stremio-catalog-link">Créer mes catalogues</button>
+              <a class="back" href="/config">Ouvrir la configuration Stremio ↗</a>
+            </form>
+            <div id="stremio-catalog-connected" hidden>
+              <label class="stremio-link">Lien personnel d’installation<input id="stremio-catalog-url" type="url" readonly spellcheck="false"></label>
+              <div class="stremio-install-tools">
+                <a class="connect" id="stremio-catalog-install">Installer dans Stremio</a>
+                <button type="button" id="stremio-catalog-copy">Copier le lien</button>
+                <button type="button" id="stremio-catalog-unlink" class="ghost">Désactiver le lien</button>
+              </div>
+            </div>
+            <p class="search-status" id="stremio-catalog-status" role="status"></p>
+          </div>
+        </details>
+        <details class="account-fold" id="profile-details" name="account-integrations">
           <summary>Importer mes suivis Twitch</summary>
           <div class="profile-import-body">
             <div id="profile-signin">
