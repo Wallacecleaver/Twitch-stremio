@@ -13,7 +13,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { Readable, pipeline } = require('stream');
 const zlib = require('zlib');
-const { currentArchive, replayPlaylist, archivePlaylist, hiddenArchiveDirs, createLiveBuffer, LIVE_SECONDS } = require('./lib/live-replay');
+const { currentArchive, replayPlaylist, createLiveBuffer, LIVE_SECONDS } = require('./lib/live-replay');
 
 // Configuration : fichier .env à côté de index.js. Il est créé au premier lancement (mot de passe du dashboard et clé de chiffrement générés).
 (function loadEnv() {
@@ -992,49 +992,14 @@ function liveReplay(login, auth) {
   if (cached && cached.expires > Date.now()) return cached.result;
   if (liveReplayCache.size >= 100) liveReplayCache.delete(liveReplayCache.keys().next().value);
   const result = (async () => {
-    const data = await gqlRaw('query { user(login: ' + JSON.stringify(login) + ') { stream { id createdAt archiveVideo { id } } videos(first: 2, type: ARCHIVE, sort: TIME) { edges { node { id createdAt seekPreviewsURL } } } } }');
+    const data = await gqlRaw('query { user(login: ' + JSON.stringify(login) + ') { stream { createdAt archiveVideo { id } } videos(first: 1, type: ARCHIVE, sort: TIME) { edges { node { id createdAt } } } } }');
     const id = currentArchive(data.user);
-    const master = id ? await vodMaster(id, auth, { replay: true }) : null;
-    if (master) return { id, variants: variantsOf(master.text) };
-    return hiddenArchive(login, data.user); // archive masquée ou refusée par usher : adresse CloudFront reconstruite
+    if (!id) return null;
+    const master = await vodMaster(id, auth, { replay: true });
+    return master ? { id, variants: variantsOf(master.text) } : null;
   })().catch(() => null);
   liveReplayCache.set(key, { expires: Date.now() + 20000, result });
   return result;
-}
-
-// Archive du direct en cours reconstruite sans passer par l’API (méthode utilisée par le script Twitch HLS Proxy de razeNFR).
-const CF_HOSTS = ['d1ndex63qxojbr', 'd2vi6trrdongqn', 'd3stzm2eumvgb4', 'd3fi1amfgojobc', 'd3aqoihi2n8ty8', 'ddacn6pr5v0tl', 'd1mhjrowxxagfy', 'd1ymi26ma8va5x', 'd2vjef5jvl6bfs',
-  'd3vd9lfkzbru3h', 'd1m7jfoe9zdc1j', 'dgeft87wbj63p', 'd3c27h4odz752x', 'd2aba1wr3818hz', 'd2nvs31859zcd8', 'ds0h3roq6wcgc', 'dqrpb9wgowsf5', 'd2e2de1etea730', 'd1xhnb4ptk05mw']
-  .map(h => 'https://' + h + '.cloudfront.net').concat(['https://vod-pop-secure.twitch.tv', 'https://vod-secure.twitch.tv', 'https://vod-metro.twitch.tv']);
-const hiddenBases = new Map(); // direct (login_idDuDirect) -> dossier CloudFront trouvé
-async function hiddenArchive(login, user) {
-  const stream = user && user.stream, started = Date.parse(stream && stream.createdAt);
-  if (!stream || !/^\d+$/.test(String(stream.id)) || !Number.isFinite(started)) return null;
-  const key = login + '_' + stream.id, probe = async base => {
-    const r = await fetch(base + '/chunked/index-dvr.m3u8', { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(5000) });
-    if (!r.ok || !(await r.text()).startsWith('#EXTM3U')) throw new Error('HTTP ' + r.status);
-    return base;
-  };
-  let base = null;
-  if (hiddenBases.has(key)) base = await probe(hiddenBases.get(key)).catch(() => null);
-  if (!base) {
-    const dirs = hiddenArchiveDirs(login, stream.id, started, s => crypto.createHash('sha1').update(s).digest('hex'));
-    const preferred = (user.videos?.edges || []).map(e => { try { return new URL(e.node.seekPreviewsURL).origin; } catch { return null; } }).find(Boolean);
-    const hosts = [...new Set([preferred, ...CF_HOSTS].filter(Boolean))];
-    const first = hosts[0] + '/' + dirs[0]; // cas le plus courant : hôte habituel du streamer, heure exacte
-    base = await probe(first).catch(() => null);
-    if (!base) {
-      const rest = [...dirs.slice(1).map(d => hosts[0] + '/' + d), ...dirs.slice(0, 5).flatMap(d => hosts.slice(1).map(h => h + '/' + d))];
-      for (let i = 0; i < rest.length && !base; i += 8) base = await Promise.any(rest.slice(i, i + 8).map(probe)).catch(() => null);
-    }
-    if (!base) return null;
-    if (hiddenBases.size >= 40) hiddenBases.delete(hiddenBases.keys().next().value);
-    hiddenBases.set(key, base);
-  }
-  const ok = (await Promise.all(CDN_Q.map(async q => { try { const u = base + '/' + q[0] + '/index-dvr.m3u8', r = await fetch(u, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(5000) }); return r.ok ? { q, u } : null; } catch { return null; } }))).filter(Boolean);
-  if (!ok.length) return null;
-  const text = '#EXTM3U\n' + ok.map(o => '#EXT-X-STREAM-INF:BANDWIDTH=' + o.q[3] + ',RESOLUTION=' + o.q[1] + ',FRAME-RATE=' + o.q[2] + '.000\n' + o.u).join('\n') + '\n';
-  return { id: 'cf_' + stream.id, variants: variantsOf(text) };
 }
 
 function replayVariant(replay, cfg) {
@@ -1044,9 +1009,7 @@ function replayVariant(replay, cfg) {
 async function replayFromVariant(variant, windowSeconds) {
   if (!variant) return null;
   const upstream = await fetchPlaylist(variant.url).catch(() => null);
-  if (!upstream?.ok) return null;
-  const text = absolutize(upstream.text, upstream.url);
-  return windowSeconds === undefined ? archivePlaylist(text) : replayPlaylist(text, windowSeconds); // sans durée : tout le live depuis le début
+  return upstream?.ok ? replayPlaylist(absolutize(upstream.text, upstream.url), windowSeconds) : null;
 }
 
 async function replayFromLive(login, cfg, auth) {
@@ -1810,7 +1773,8 @@ async function handler(req, res) {
       if (F.maint) return send(res, 503, 'text/plain; charset=utf-8', 'Addon en maintenance');
       const replay = await withTimeout(liveReplay(login, auth), 2300, null);
       let playlist;
-      if (id === 'live' || replay?.id === id) playlist = await replayFromVariant(replayVariant(replay, cfg));
+      // Un extrait à durée fixe reste navigable dans le lecteur Windows, même quand l’archive Twitch est encore en cours.
+      if (id === 'live' || replay?.id === id) playlist = await replayFromVariant(replayVariant(replay, cfg), Infinity);
       if (!playlist && id === 'live') {
         playlist = liveBuffer.snapshot(replayScope(login, base, auth)) || await replayFromLive(login, cfg, auth);
       }
@@ -1979,7 +1943,7 @@ async function handler(req, res) {
         : !v.audio && (pcOn(cfg) || sm0 !== 'direct') ? pcUrl(origin, base, v.url, sm0) : v.url;
       const rewind = F.vods && video.length ? [{
         name: BR + '\nRetour arrière',
-        title: 'Revoir les moments précédents\nUtilise la barre de lecture',
+        title: 'Extrait avec barre de lecture\nCompatible Stremio Windows',
         url: origin + base + '/replay/' + login + '/live.m3u8',
         ...(sm0 === 'direct' ? { behaviorHints: { notWebReady: true } } : {}),
       }] : [];
