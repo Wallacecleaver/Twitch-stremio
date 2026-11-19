@@ -985,7 +985,7 @@ async function vodMaster(id, oauth, { replay = false } = {}) { // le compte Twit
 const liveReplayCache = new Map();
 const liveBuffer = createLiveBuffer();
 const replayScope = (login, base, auth) => crypto.createHash('sha256').update(JSON.stringify([login, base, auth || ''])).digest('hex');
-const bufferedMediaUrl = (origin, base, login, scope, url) => origin + base + '/m/' + sealLib.seal(JSON.stringify([login, scope, url])) + '.m3u8';
+const bufferedMediaUrl = (origin, base, login, scope, url, audio = false) => origin + base + '/m/' + sealLib.seal(JSON.stringify([login, scope, url, audio])) + '.m3u8';
 function liveReplay(login, auth) {
   const key = login + '|' + (auth ? crypto.createHash('sha256').update(auth).digest('hex') : '');
   const cached = liveReplayCache.get(key);
@@ -1740,17 +1740,18 @@ async function handler(req, res) {
       let u = sealLib.open(strip(seg[1]).replace(/\.m3u8$/, ''));
       let scope;
       if (u?.startsWith('[')) {
-        const [login, signedScope, url] = JSON.parse(u);
+        const [login, signedScope, url, audio] = JSON.parse(u);
         scope = replayScope(login, base, auth);
         if (scope !== signedScope) return send(res, 403, 'text/plain; charset=utf-8', 'Lien réservé à ce profil');
+        if (audio) scope += '|audio';
         u = url;
       }
       if (!u || !/^https:\/\//.test(u)) return send(res, 400, 'text/plain; charset=utf-8', 'Lien invalide');
       const r = await fetchPlaylist(u), t = r.text;
       if (!r.ok || !t.startsWith('#EXTM3U')) return send(res, r.ok ? 502 : r.status, 'text/plain; charset=utf-8', 'Flux indisponible');
       const sm = segMode(req, cfg); res._dbg = 'seg=' + sm;
-      const absolute = absolutize(t, r.url);
-      if (scope && F.vods) liveBuffer.track(scope, u, absolute);
+      let absolute = absolutize(t, r.url);
+      if (scope && F.vods) absolute = liveBuffer.playlist(scope, u, absolute);
       let body = scope && !pcOn(cfg) && sm === 'direct' ? absolute : cleanMedia(absolute);
       if (/cloudfront/.test(u)) body = body.replace(/-unmuted/g, '-muted'); // rediffs réservées aux abonnés : seuls les segments « muted » sont ouverts
       if (sm !== 'direct') body = viaAddonSegments(body, originOf(req), base, sm);
@@ -1790,13 +1791,18 @@ async function handler(req, res) {
       if (F.maint) return send(res, 503, 'text/plain; charset=utf-8', 'Addon en maintenance');
       const sm = segMode(req, cfg), origin = originOf(req);
       const scope = F.vods && sealLib.available() ? replayScope(login, base, auth) : '';
-      const wrap = scope ? u => bufferedMediaUrl(origin, base, login, scope, u) : undefined;
+      const wrap = scope ? (u, audio) => bufferedMediaUrl(origin, base, login, scope, u, audio) : undefined;
       const fin = m => {
         if (pcOn(cfg) || sm !== 'direct') return oneAudio(pcMaster(m, origin, base, sm, wrap), req);
         const master = oneAudio(m, req);
         if (!wrap) return master;
-        const videoUrls = new Set(variantsOf(master).filter(v => !v.audio).map(v => v.url));
-        return master.split(/\r?\n/).map(line => videoUrls.has(line.trim()) ? wrap(line.trim()) : line).join('\n');
+        const variants = new Map(variantsOf(master).map(v => [v.url, v.audio]));
+        return master.split(/\r?\n/).map(line => {
+          const url = line.trim();
+          if (variants.has(url)) return wrap(url, variants.get(url));
+          const rendition = /^#EXT-X-MEDIA:.*\bTYPE=(AUDIO|VIDEO)(?:,|$)/.exec(line);
+          return rendition ? line.replace(/URI="(https:\/\/[^"]+)"/, (_, u) => 'URI="' + wrap(u, rendition[1] === 'AUDIO') + '"') : line;
+        }).join('\n');
       };
       const [b, lv] = await Promise.all([cfg.relay ? bestProxy(login, cfg.hevc) : null, cfg.hevc && cfg.relay ? liveStream(login, true, auth).catch(() => null) : null]);
       store.incr('play'); store.top(login); store.user(pseudo, { ch: login, dev: cfg.device }); store.incr('seg_' + sm); store.incr('d:' + store.day() + ':seg_' + sm);
@@ -1930,11 +1936,14 @@ async function handler(req, res) {
       const relayUrls = b ? new Set(variantsOf(absolutize(b.text, b.url)).map(v => v.url)) : null;
       const video = vars.filter(v => !v.audio && cfgLib.keepVariant(v, cfg)).sort(byQuality);
       // Affichage dans la liste des sources de Stremio : nom court à gauche, détails sur plusieurs lignes à droite.
-      const sm0 = segMode(NOUA, cfg);
+      const sm0 = segMode(NOUA, cfg), origin = originOf(req);
+      const scope = F.vods && sealLib.available() ? replayScope(login, base, auth) : '';
+      const mediaUrl = v => scope && v.url.startsWith('https://') ? bufferedMediaUrl(origin, base, login, scope, v.url, v.audio)
+        : !v.audio && (pcOn(cfg) || sm0 !== 'direct') ? pcUrl(origin, base, v.url, sm0) : v.url;
       const rewind = F.vods && video.length ? [{
         name: BR + '\nRetour arrière',
         title: 'Revoir les moments précédents\nUtilise la barre de lecture',
-        url: originOf(req) + base + '/replay/' + login + '/live.m3u8',
+        url: origin + base + '/replay/' + login + '/live.m3u8',
         ...(sm0 === 'direct' ? { behaviorHints: { notWebReady: true } } : {}),
       }] : [];
       try {
@@ -1944,14 +1953,14 @@ async function handler(req, res) {
       // Mise en forme choisie par la personne (cfg.fmt) : voir lib/format.js
       const gameTxt = info && info.game ? cut(info.game, 22) : '';
       const dOf = v => { const m = /(\d{3,4})p(\d+)?/.exec(v.name) || [], h = Number(m[1] || v.h || 0), f = m[2] || (v.fps > 30 ? String(v.fps) : '30'); return { h, fps: Number(f), short: h ? h + 'p' + (m[2] || (v.fps > 30 ? v.fps : '')) : v.name.replace(/ \(source\)/, ''), rawName: v.name, viewers: nb, game: gameTxt, cap: cfg.cap }; };
-      const fixed = video.slice(0, cfg.fixed).map(v => ({ ...fmtLib.render(cfg.fmt, { brand: BR, kind: 'fixed', ...dOf(v), noAd: !!relayUrls && relayUrls.has(v.url) }), url: pcOn(cfg) || sm0 !== 'direct' ? pcUrl(originOf(req), base, v.url, sm0) : v.url }));
-      const auto = { ...fmtLib.render(cfg.fmt, { brand: BR, kind: 'auto', viewers: nb, game: gameTxt, cap: cfg.cap, noAd: !!b }), url: originOf(req) + base + '/p/' + login + '.m3u8' };
-      const audio = cfg.audio ? vars.filter(v => v.audio).slice(0, 1).map(v => ({ ...fmtLib.render(cfg.fmt, { brand: BR, kind: 'audio', noAd: !!b }), url: v.url })) : [];
-      return json(res, { streams: [auto, ...rewind, ...fixed, ...audio] });
+      const fixed = video.slice(0, cfg.fixed).map(v => ({ ...fmtLib.render(cfg.fmt, { brand: BR, kind: 'fixed', ...dOf(v), noAd: !!relayUrls && relayUrls.has(v.url) }), url: mediaUrl(v) }));
+      const auto = { ...fmtLib.render(cfg.fmt, { brand: BR, kind: 'auto', viewers: nb, game: gameTxt, cap: cfg.cap, noAd: !!b }), url: origin + base + '/p/' + login + '.m3u8' };
+      const audio = cfg.audio ? vars.filter(v => v.audio).slice(0, 1).map(v => ({ ...fmtLib.render(cfg.fmt, { brand: BR, kind: 'audio', noAd: !!b }), url: mediaUrl(v) })) : [];
+      return json(res, { streams: [auto, ...fixed, ...audio, ...rewind] });
       } catch (e) { // mise en forme impossible : liste simple, pour ne jamais perdre les flux
         store.log({ k: 'erreur', u: pseudo || undefined, ou: 'mise en forme des sources', msg: e.message });
-        const plain = video.slice(0, cfg.fixed).map(v => ({ name: BR + ' ' + v.name.replace(/ \(source\)/, ''), title: 'En direct · qualité fixe' + (b ? ' · sans pub' : ''), url: pcOn(cfg) || sm0 !== 'direct' ? pcUrl(originOf(req), base, v.url, sm0) : v.url }));
-        return json(res, { streams: [{ name: 'Twitch', title: 'En direct · qualité automatique' + (b ? ' · sans pub' : ''), url: originOf(req) + base + '/p/' + login + '.m3u8' }, ...rewind, ...plain] });
+        const plain = video.slice(0, cfg.fixed).map(v => ({ name: BR + ' ' + v.name.replace(/ \(source\)/, ''), title: 'En direct · qualité fixe' + (b ? ' · sans pub' : ''), url: mediaUrl(v) }));
+        return json(res, { streams: [{ name: 'Twitch', title: 'En direct · qualité automatique' + (b ? ' · sans pub' : ''), url: origin + base + '/p/' + login + '.m3u8' }, ...plain, ...rewind] });
       }
     }
     send(res, 404, 'text/html; charset=utf-8', BLANK);

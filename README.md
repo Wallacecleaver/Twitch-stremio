@@ -87,7 +87,7 @@ La fiche d'une chaîne propose des liens vers Twitch, le catalogue du jeu en cou
 
 **Les sources.** Pour chaque live, Stremio liste une source *Auto*, des qualités fixes (de 0 à 6 selon ton réglage) et *Audio seul*. Le nom indique la qualité, les images par seconde et si le flux est **sans pub** ou officiel. La présentation se choisit à l'étape *Affichage* : **Classique**, **Compact** (une ligne par source, idéal sur TV ou téléphone), **Détaillé** (spectateurs et jeu en cours) ou **Sans emoji**.
 
-**Retour arrière.** Choisis **Retour arrière** dans les sources du live. Quand l’archive Twitch est lisible, l’extrait couvre environ cinq minutes. Sinon, il utilise les derniers segments du direct. Regarde en **Auto** pour remplir un tampon d’environ une minute. La durée disponible grandit à mesure que tu regardes. Sélectionne **Auto** pour revenir au direct.
+**Retour arrière dans le direct.** Les sources **Auto**, les qualités fixes et **Audio seul** conservent jusqu’à environ une minute de direct récent, selon les segments disponibles. Avec un lecteur qui accepte la navigation dans le direct, utilise sa barre de lecture sans quitter la source. Si ton client Stremio garde la barre désactivée en direct, ouvre **Retour arrière** en bas des sources pour lire un extrait navigable.
 
 **Qualité.**
 
