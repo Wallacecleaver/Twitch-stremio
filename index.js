@@ -1130,6 +1130,10 @@ const account = {
 const pageCache = {};
 const rawPage = name => pageCache[name] ||= fs.readFileSync(path.join(__dirname, 'lib', 'pages', name), 'utf8');
 const alertsPageRevision = crypto.createHash('sha256').update(rawPage('alerte.html')).update(rawPage('alerte.js')).digest('hex').slice(0, 16);
+const playerRevision = crypto.createHash('sha256')
+  .update(rawPage('lecteur.html')).update(rawPage('lecteur.css')).update(rawPage('lecteur.js')).digest('hex').slice(0, 16);
+const playerHlsVersion = require('./package.json').dependencies['hls.js'];
+const PLAYER_CSP = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self' https:; media-src 'self' https: blob:; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'none'";
 const page = rawPage;
 const escH = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const accentCss = hex => { const rgb = [1, 3, 5].map(k => parseInt(hex.slice(k, k + 2), 16)), dark = rgb.map(x => Math.round(x * .72).toString(16).padStart(2, '0')).join(''); return ':root{--a:' + hex + ';--ah:#' + dark + ';--as:rgba(' + rgb.join(',') + ',.15)}'; };
@@ -1588,6 +1592,28 @@ async function handler(req, res) {
       return send(res, 200, 'image/svg+xml', svg, { 'Cache-Control': 'private, max-age=45', Vary: 'User-Agent' });
     }
     if (seg[0] === 'logo.svg') return send(res, 200, 'image/svg+xml', asset('logo.svg'), { 'Cache-Control': 'public, max-age=86400' });
+    if (!base && seg.length === 1 && ['lecteur.css', 'lecteur.js', 'lecteur-hls.js'].includes(seg[0])) {
+      const name = seg[0], vendor = name === 'lecteur-hls.js';
+      const body = vendor
+        ? pageCache.hls ||= fs.readFileSync(path.join(__dirname, 'node_modules', 'hls.js', 'dist', 'hls.min.js'), 'utf8')
+        : rawPage(name);
+      const type = name.endsWith('.css') ? 'text/css' : 'text/javascript';
+      return send(res, 200, type + '; charset=utf-8', body, { 'Cache-Control': 'public, max-age=3600' });
+    }
+    if (seg[0] === 'lecteur' && seg.length === 2 && F.vods) {
+      const login = seg[1].toLowerCase();
+      if (!LOGIN_RE.test(login)) return send(res, 404, 'text/plain; charset=utf-8', 'Chaîne invalide');
+      const fields = {
+        LOGIN: login,
+        NAME: SS.name,
+        LOGO_VERSION: SS.logoV,
+        HLS_VERSION: playerHlsVersion,
+        REVISION: playerRevision,
+        SOURCES: base + '/lecteur/' + login + '/sources.json',
+      };
+      const html = rawPage('lecteur.html').replace(/\{\{(\w+)\}\}/g, (_, key) => escH(fields[key]));
+      return send(res, 200, 'text/html; charset=utf-8', html, { 'Cache-Control': 'no-store', 'Content-Security-Policy': PLAYER_CSP });
+    }
     if (!base && seg.length === 1 && seg[0] === 'alerte') {
       if (!alerts.isSignedIn(readSession(req))) {
         const next = '/alerte' + new URL(req.url, 'http://x').search;
@@ -1922,14 +1948,17 @@ async function handler(req, res) {
       if (S.dcOn && siteLib.DISCORD_RE.test(S.dcUrl)) meta.links.push({ name: 'Rejoins ' + S.name + ' sur Discord', category: 'Discord', url: S.dcUrl });
       return json(res, { meta });
     }
-    if (seg[0] === 'stream' && seg[1] === 'tv') {
-      const login = strip(seg[2]).replace(/^twitch:/, '').toLowerCase();
-      if (!LOGIN_RE.test(login)) return json(res, { streams: [] });
+    const playerSources = seg[0] === 'lecteur' && seg.length === 3 && seg[2] === 'sources.json' && F.vods;
+    if ((seg[0] === 'stream' && seg[1] === 'tv') || playerSources) {
+      const login = (playerSources ? seg[1] : strip(seg[2]).replace(/^twitch:/, '')).toLowerCase();
+      const noSources = () => json(res, playerSources ? { sources: [] } : { streams: [] });
+      if (playerSources && F.maint) return send(res, 503, 'application/json; charset=utf-8', JSON.stringify({ error: F.maintMsg || 'TwitchIO est en maintenance.' }), { 'Cache-Control': 'no-store' });
+      if (!LOGIN_RE.test(login)) return noSources();
       if (F.maint) return maint();
       const [s, b, info] = await Promise.all([liveStream(login, cfg.hevc, auth), cfg.relay ? bestProxy(login, cfg.hevc) : null, Promise.race([channelInfo(login), new Promise(r => setTimeout(() => r(null), 1500))])]);
       store.incr('stream'); store.incr('d:' + store.day() + ':stream'); store.user(pseudo, { ch: login, dev: cfg.device });
       const who = { u: pseudo || undefined, appareil: cfg.device || undefined, dev };
-      if (s.offline) { store.incr('stream_offline'); store.log({ k: 'stream', ...who, ch: login, etat: 'hors ligne', ms: Date.now() - t0 }); return json(res, { streams: [] }); }
+      if (s.offline) { store.incr('stream_offline'); store.log({ k: 'stream', ...who, ch: login, etat: 'hors ligne', ms: Date.now() - t0 }); return noSources(); }
       store.incr(b ? 'stream_relay' : 'stream_official'); store.top(login);
       store.log({ k: 'stream', ...who, ch: login, relais: b ? b.name : cfg.relay ? 'aucun (officiel)' : 'coupés (officiel)', relais_ms: b ? b.ms : undefined, ms: Date.now() - t0, plafond: cfg.cap || undefined });
       // Un relais répond : tous les flux passent par lui (sans pub). Sinon : flux officiel.
@@ -1941,6 +1970,20 @@ async function handler(req, res) {
       const scope = F.vods && sealLib.available() ? replayScope(login, base, auth) : '';
       const mediaUrl = v => scope && v.url.startsWith('https://') ? bufferedMediaUrl(origin, base, login, scope, v.url, v.audio)
         : !v.audio && (pcOn(cfg) || sm0 !== 'direct') ? pcUrl(origin, base, v.url, sm0) : v.url;
+      const autoUrl = origin + base + '/p/' + login + '.m3u8';
+      const fixedVariants = video.slice(0, cfg.fixed);
+      const audioVariant = cfg.audio && vars.find(v => v.audio);
+      const qualityLabel = v => v.name.replace(/ \(source\)/, '');
+      if (playerSources) {
+        const sources = [{ label: 'Auto', url: autoUrl }, ...fixedVariants.map(v => ({ label: qualityLabel(v), url: mediaUrl(v) }))];
+        if (audioVariant) sources.push({ label: 'Audio seul', audio: true, url: mediaUrl(audioVariant) });
+        return json(res, { channel: info?.name || login, sources });
+      }
+      const hosted = F.vods ? [{
+        name: BR + '\nLecteur web',
+        title: 'Retour arrière en direct\nOuvre dans le navigateur',
+        externalUrl: origin + base + '/lecteur/' + login,
+      }] : [];
       const liveHints = scope ? { behaviorHints: { twitchioLiveDvr: true } } : {};
       const rewind = F.vods && video.length ? [{
         name: BR + '\nRetour arrière',
@@ -1955,14 +1998,14 @@ async function handler(req, res) {
       // Mise en forme choisie par la personne (cfg.fmt) : voir lib/format.js
       const gameTxt = info && info.game ? cut(info.game, 22) : '';
       const dOf = v => { const m = /(\d{3,4})p(\d+)?/.exec(v.name) || [], h = Number(m[1] || v.h || 0), f = m[2] || (v.fps > 30 ? String(v.fps) : '30'); return { h, fps: Number(f), short: h ? h + 'p' + (m[2] || (v.fps > 30 ? v.fps : '')) : v.name.replace(/ \(source\)/, ''), rawName: v.name, viewers: nb, game: gameTxt, cap: cfg.cap }; };
-      const fixed = video.slice(0, cfg.fixed).map(v => ({ ...fmtLib.render(cfg.fmt, { brand: BR, kind: 'fixed', ...dOf(v), noAd: !!relayUrls && relayUrls.has(v.url) }), ...liveHints, url: mediaUrl(v) }));
-      const auto = { ...fmtLib.render(cfg.fmt, { brand: BR, kind: 'auto', viewers: nb, game: gameTxt, cap: cfg.cap, noAd: !!b }), ...liveHints, url: origin + base + '/p/' + login + '.m3u8' };
-      const audio = cfg.audio ? vars.filter(v => v.audio).slice(0, 1).map(v => ({ ...fmtLib.render(cfg.fmt, { brand: BR, kind: 'audio', noAd: !!b }), ...liveHints, url: mediaUrl(v) })) : [];
-      return json(res, { streams: [auto, ...fixed, ...audio, ...rewind] });
+      const fixed = fixedVariants.map(v => ({ ...fmtLib.render(cfg.fmt, { brand: BR, kind: 'fixed', ...dOf(v), noAd: !!relayUrls && relayUrls.has(v.url) }), ...liveHints, url: mediaUrl(v) }));
+      const auto = { ...fmtLib.render(cfg.fmt, { brand: BR, kind: 'auto', viewers: nb, game: gameTxt, cap: cfg.cap, noAd: !!b }), ...liveHints, url: autoUrl };
+      const audio = audioVariant ? [{ ...fmtLib.render(cfg.fmt, { brand: BR, kind: 'audio', noAd: !!b }), ...liveHints, url: mediaUrl(audioVariant) }] : [];
+      return json(res, { streams: [auto, ...hosted, ...fixed, ...audio, ...rewind] });
       } catch (e) { // mise en forme impossible : liste simple, pour ne jamais perdre les flux
         store.log({ k: 'erreur', u: pseudo || undefined, ou: 'mise en forme des sources', msg: e.message });
-        const plain = video.slice(0, cfg.fixed).map(v => ({ name: BR + ' ' + v.name.replace(/ \(source\)/, ''), title: 'En direct · qualité fixe' + (b ? ' · sans pub' : ''), ...liveHints, url: mediaUrl(v) }));
-        return json(res, { streams: [{ name: 'Twitch', title: 'En direct · qualité automatique' + (b ? ' · sans pub' : ''), ...liveHints, url: origin + base + '/p/' + login + '.m3u8' }, ...plain, ...rewind] });
+        const plain = fixedVariants.map(v => ({ name: BR + ' ' + qualityLabel(v), title: 'En direct · qualité fixe' + (b ? ' · sans pub' : ''), ...liveHints, url: mediaUrl(v) }));
+        return json(res, { streams: [{ name: 'Twitch', title: 'En direct · qualité automatique' + (b ? ' · sans pub' : ''), ...liveHints, url: autoUrl }, ...hosted, ...plain, ...rewind] });
       }
     }
     send(res, 404, 'text/html; charset=utf-8', BLANK);

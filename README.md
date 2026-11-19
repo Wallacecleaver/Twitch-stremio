@@ -87,7 +87,7 @@ La fiche d'une chaîne propose des liens vers Twitch, le catalogue du jeu en cou
 
 **Les sources.** Pour chaque live, Stremio liste une source *Auto*, des qualités fixes (de 0 à 6 selon ton réglage) et *Audio seul*. Le nom indique la qualité, les images par seconde et si le flux est **sans pub** ou officiel. La présentation se choisit à l'étape *Affichage* : **Classique**, **Compact** (une ligne par source, idéal sur TV ou téléphone), **Détaillé** (spectateurs et jeu en cours) ou **Sans emoji**.
 
-**Retour arrière dans le direct.** Les sources **Auto**, les qualités fixes et **Audio seul** conservent jusqu’à environ une minute de direct récent, selon les segments disponibles. Avec un lecteur qui accepte la navigation dans le direct, utilise sa barre de lecture sans quitter la source. Sur Stremio Windows, ouvre **Retour arrière** pour lire un extrait à durée fixe. Si Twitch rend l’archive lisible, l’extrait remonte au début du direct. Sinon, il reprend le tampon récent. Sur Windows, la barre apparaît à partir de 30 secondes de vidéo disponibles.
+**Retour arrière dans le direct.** Dans les sources Stremio, **TwitchIO Lecteur web** ouvre le lecteur hébergé avec l’addon. Choisis la qualité, utilise la barre ou les boutons de saut, puis **Revenir au direct**. Le tampon peut conserver environ une minute par qualité et se remplit pendant la lecture. La source **Retour arrière** reste disponible pour lire un extrait à durée fixe dans Stremio.
 
 **Qualité.**
 
