@@ -1133,7 +1133,7 @@ const alertsPageRevision = crypto.createHash('sha256').update(rawPage('alerte.ht
 const playerRevision = crypto.createHash('sha256')
   .update(rawPage('lecteur.html')).update(rawPage('lecteur.css')).update(rawPage('lecteur.js')).digest('hex').slice(0, 16);
 const playerHlsVersion = require('./package.json').dependencies['hls.js'];
-const PLAYER_CSP = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self' https:; media-src 'self' https: blob:; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'none'";
+const PLAYER_CSP = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self' https:; media-src 'self' https: blob: data:; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'none'";
 const page = rawPage;
 const escH = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const accentCss = hex => { const rgb = [1, 3, 5].map(k => parseInt(hex.slice(k, k + 2), 16)), dark = rgb.map(x => Math.round(x * .72).toString(16).padStart(2, '0')).join(''); return ':root{--a:' + hex + ';--ah:#' + dark + ';--as:rgba(' + rgb.join(',') + ',.15)}'; };
