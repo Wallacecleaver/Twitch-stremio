@@ -1597,7 +1597,7 @@ async function handler(req, res) {
       const body = vendor
         ? pageCache.hls ||= fs.readFileSync(path.join(__dirname, 'node_modules', 'hls.js', 'dist', 'hls.min.js'), 'utf8')
         : rawPage(name);
-      const type = name.endsWith('.css') ? 'text/css' : 'text/javascript';
+      const type = name.endsWith('.css') ? 'text/css' : 'application/javascript';
       return send(res, 200, type + '; charset=utf-8', body, { 'Cache-Control': 'public, max-age=3600' });
     }
     if (seg[0] === 'lecteur' && seg.length === 2 && F.vods) {
