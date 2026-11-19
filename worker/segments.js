@@ -26,6 +26,13 @@ async function seal(plain, secret) {
 }
 
 const segExt = u => { const m = /\.(ts|mp4|m4s|aac|m4a|cmfv|cmfa)(?:$|\?)/i.exec(String(u).split('#')[0]); return m ? '.' + m[1].toLowerCase() : ''; };
+async function segmentId(target) {
+  const digest = await crypto.subtle.digest('SHA-256', enc.encode(target.split(/[?#]/, 1)[0]));
+  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+}
+async function segmentUrl(origin, target, secret) {
+  return origin + '/s/' + await segmentId(target) + segExt(target) + '?t=' + await seal(target, secret);
+}
 const absolutize = (text, base) => { // adresses relatives → absolues
   const abs = u => { try { return new URL(u, base).href; } catch { return u; } };
   return text.split(/\r?\n/).map(l => !l || l.startsWith('#') ? l.replace(/URI="([^"]+)"/g, (_, u) => 'URI="' + abs(u) + '"') : abs(l)).join('\n');
@@ -42,9 +49,9 @@ async function playlist(target, origin, secret) { // liste de lecture d'une qual
   for (const l of body.split(/\r?\n/)) {
     if (/^#EXT-X-(MAP|KEY|PRELOAD-HINT):/.test(l)) {
       let line = l;
-      for (const m of [...l.matchAll(/URI="(https?:[^"]+)"/g)]) line = line.replace(m[0], 'URI="' + origin + '/s/' + (await seal(m[1], secret)) + segExt(m[1]) + '"');
+      for (const m of l.matchAll(/URI="(https?:[^"]+)"/g)) line = line.replace(m[0], 'URI="' + await segmentUrl(origin, m[1], secret) + '"');
       out.push(line);
-    } else out.push(/^https?:\/\//.test(l) ? origin + '/s/' + (await seal(l.trim(), secret)) + segExt(l) : l);
+    } else out.push(/^https?:\/\//.test(l) ? await segmentUrl(origin, l.trim(), secret) : l);
   }
   return new Response(out.join('\n'), { status: 200, headers: { 'Content-Type': 'application/vnd.apple.mpegurl', 'Cache-Control': 'no-store', ...CORS } });
 }
@@ -80,8 +87,11 @@ export default {
     if (k) return text(env.SECRET && (await open(k[1], env.SECRET)) === 'ok' ? 200 : 403, env.SECRET ? 'SECRET différent de celui de l\'addon' : 'SECRET manquant');
     const m = /^\/(m|s)\/([A-Za-z0-9_-]+)(?:\.[a-z0-9]{2,5})?$/.exec(url.pathname);
     if (!m || !env.SECRET) return text(404, 'Introuvable');
-    const target = await open(m[2], env.SECRET);
+    // Le chemin identifie le morceau HLS. La cible chiffrée peut varier entre deux actualisations.
+    const token = m[1] === 's' ? url.searchParams.get('t') : null;
+    const target = await open(token ?? m[2], env.SECRET);
     if (!target || !/^https:\/\//.test(target)) return text(400, 'Lien invalide');
+    if (token !== null && m[2] !== await segmentId(target)) return text(400, 'Segment invalide');
     try { return m[1] === 'm' ? await playlist(target, url.origin, env.SECRET) : await segment(req, target, ctx); } catch (e) { return text(502, 'Erreur : ' + e.message); }
   },
 };
