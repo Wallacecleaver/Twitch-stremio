@@ -357,7 +357,9 @@ function segMode(req, cfg) { // 'direct' | 'worker' | 'addon'
   return env === '1' || /libmpv|mpv|ffmpeg|lavf/i.test(String((req.headers || {})['user-agent'] || '')) ? viaWorker() : 'direct';
 }
 const segExt = u => { const m = /\.(ts|mp4|m4s|aac|m4a|cmfv|cmfa)(?:$|\?)/i.exec(String(u).split('#')[0]); return m ? '.' + m[1].toLowerCase() : ''; };
-const segUrl = (origin, base, u, mode) => (mode === 'worker' ? segOrigin() : origin + base) + '/s/' + sealLib.seal(u) + segExt(u);
+const segmentId = u => crypto.createHash('sha256').update(u.split(/[?#]/, 1)[0]).digest('hex');
+// HLS.js exige le même chemin pour un numéro de segment donné. La cible chiffrée peut changer à chaque lecture.
+const segUrl = (origin, base, u, mode) => (mode === 'worker' ? segOrigin() : origin + base) + '/s/' + segmentId(u) + segExt(u) + '?t=' + sealLib.seal(u);
 function viaAddonSegments(text, origin, base, mode) { // morceaux et segment d'initialisation → adresses de l'addon (ou du worker)
   return text.split(/\r?\n/).map(l => {
     if (/^#EXT-X-(MAP|KEY|PRELOAD-HINT):/.test(l)) return l.replace(/URI="(https?:[^"]+)"/g, (_, u) => 'URI="' + segUrl(origin, base, u, mode) + '"');
@@ -1787,8 +1789,11 @@ async function handler(req, res) {
     const akChk = seg[0] === 's' && seg[1] ? akeys.check(cfg.akey) : null;
     if (akChk && !akChk.ok) return send(res, 403, 'text/plain; charset=utf-8', 'Clé d\'accès requise pour passer par ce serveur (' + akChk.why + ')');
     if (seg[0] === 's' && seg[1]) { // morceau de vidéo relayé avec sa taille (lecteurs mpv/ffmpeg) ; l'adresse est chiffrée par nous : ce n'est pas un relais ouvert
-      const u = sealLib.open(strip(seg[1]).replace(/\.[a-z0-9]{2,4}$/i, ''));
+      const id = strip(seg[1]).replace(/\.[a-z0-9]{2,4}$/i, '');
+      const token = new URL(req.url, 'http://x').searchParams.get('t');
+      const u = sealLib.open(token ?? id);
       if (!u || !/^https:\/\//.test(u)) return send(res, 400, 'text/plain; charset=utf-8', 'Lien invalide');
+      if (token !== null && id !== segmentId(u)) return send(res, 400, 'text/plain; charset=utf-8', 'Segment invalide');
       return relaySegment(req, res, u, akChk.id);
     }
 
