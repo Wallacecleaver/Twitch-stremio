@@ -1,0 +1,105 @@
+<style>
+.alert-admin-nav{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+.alert-admin-nav a:last-child{margin-left:auto}
+#p-alerts .sec{scroll-margin-top:120px}
+.alert-users h2{margin:0;font-size:1rem}
+.alert-users p{margin:6px 0 0}
+.alert-users .dim{color:var(--t2)}
+.alert-users [hidden]{display:none!important}
+.alert-user-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:16px}
+.alert-user-metrics div{display:flex;flex-direction:column-reverse;background:var(--bg2);border:1px solid var(--bs);border-radius:10px;padding:12px 14px}
+.alert-user-metrics dt{font-size:.8rem;color:var(--t2)}
+.alert-user-metrics dd{margin:0 0 3px;font-weight:700;font-size:1.4rem;font-variant-numeric:tabular-nums}
+.alert-user-tools{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:12px}
+.alert-user-tools input{width:min(100%,280px)}
+.alert-users input:not([type=checkbox]),.alert-users select{min-height:36px;color:var(--t);background:var(--bg2);border:1px solid var(--bd);border-radius:8px;font:inherit;padding:7px 10px}
+.alert-users table{white-space:nowrap}
+.alert-users th:first-child,.alert-users td:first-child{padding-left:8px}
+.alert-users td:last-child{text-align:right}
+.alert-users .alert-user-channels{max-width:24ch;overflow:hidden;text-overflow:ellipsis;display:block}
+.alert-users .alert-user-role{margin-top:3px;color:var(--t2);font-size:.75rem}
+.alert-users .alert-user-error{color:#fca5a5}
+.alert-users dialog{width:min(470px,calc(100% - 30px));padding:0;border-radius:14px;background:var(--bg3);border:1px solid var(--bd);color:var(--t);box-shadow:0 24px 70px #0009}
+.alert-users dialog::backdrop{background:#09090bc0}
+.alert-users dialog .sh{padding:12px 18px}
+.alert-user-form{display:grid;gap:14px}
+.alert-user-field{display:grid;gap:6px}
+.alert-user-confirm{min-height:44px}
+.alert-user-code{margin-top:10px}
+.alert-user-code input{flex:1;min-width:0;font-family:monospace!important}
+@media(max-width:600px){.alert-user-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.alert-admin-nav a:last-child{margin-left:0}}
+@media(max-width:760px){
+  .alert-users table,.alert-users tbody{display:block;white-space:normal}
+  .alert-users thead{position:absolute;width:1px;height:1px;clip-path:inset(50%);overflow:hidden}
+  .alert-users tr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 12px;padding:12px;border:1px solid var(--bs);border-radius:9px;margin-top:8px}
+  .alert-users td,.alert-users td:first-child{border:0;padding:0;min-width:0}
+  .alert-users td[data-label]{grid-column:1/-1;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+  .alert-users td[data-label]::before{content:attr(data-label);color:var(--t2);font-size:.75rem;flex-shrink:0}
+  .alert-users td:last-child{grid-column:1/-1;border-top:1px solid var(--bs);padding-top:8px}
+  .alert-users tr:last-child td:last-child{border-top:1px solid var(--bs)}
+}
+</style>
+<section class="sec alert-users" id="alert-users" aria-labelledby="alertUsersTitle">
+  <header class="sh">
+    <div><h2 id="alertUsersTitle">Utilisateurs des alertes</h2><p class="dim">Gère les comptes de la page Alertes Twitch.</p></div>
+    <div class="ctl">
+      <button class="btn" id="alertUsersRefresh" type="button">Actualiser</button>
+      <button class="btn pr" id="alertUsersNew" type="button" disabled>Créer un compte</button>
+    </div>
+  </header>
+  <div class="sb">
+    <dl class="alert-user-metrics">
+      <div><dt>Comptes</dt><dd id="alertUsersTotal">–</dd></div>
+      <div><dt>Actifs</dt><dd id="alertUsersActive">–</dd></div>
+      <div><dt>À activer</dt><dd id="alertUsersPending">–</dd></div>
+      <div><dt>Suspendus</dt><dd id="alertUsersSuspended">–</dd></div>
+    </dl>
+    <div class="alert-user-tools">
+      <input type="search" id="alertUsersSearch" placeholder="Rechercher un pseudo" aria-label="Rechercher un pseudo">
+      <select id="alertUsersFilter" aria-label="Filtrer les comptes">
+        <option value="">Tous les comptes</option>
+        <option value="active">Actifs</option>
+        <option value="pending">À activer</option>
+        <option value="disabled">Suspendus</option>
+        <option value="admin">Administrateurs</option>
+      </select>
+    </div>
+    <p class="dim" id="alertUsersStatus" role="status">Chargement des comptes…</p>
+    <div class="tw" id="alertUsersTable" hidden>
+      <table>
+        <thead><tr><th scope="col">Pseudo</th><th scope="col">État</th><th scope="col">Chaînes</th><th scope="col">Notifications</th><th scope="col">Dernière connexion</th><th scope="col">Gestion</th></tr></thead>
+        <tbody id="alertUsersRows"></tbody>
+      </table>
+    </div>
+  </div>
+  <dialog id="alertUserDialog" aria-labelledby="alertUserDialogTitle">
+    <header class="sh">
+      <h2 id="alertUserDialogTitle"></h2>
+      <button class="btn" type="button" id="alertUserClose">Fermer</button>
+    </header>
+    <div class="sb">
+      <form id="alertUserForm" class="alert-user-form">
+        <label class="alert-user-field" id="alertUserNameField">Pseudo
+          <input id="alertUserName" minlength="3" maxlength="24" pattern="[a-zA-Z0-9_\-]{3,24}" spellcheck="false" autocomplete="off">
+        </label>
+        <label id="alertUserRoleField" hidden><input id="alertUserRole" type="checkbox"> Administrateur Alertes</label>
+        <div class="alert-user-field" id="alertUserActionField">
+          <label for="alertUserAction">Action</label>
+          <select id="alertUserAction"></select>
+        </div>
+        <p class="dim alert-user-confirm" id="alertUserHint"></p>
+        <div class="ctl"><button class="btn pr" id="alertUserSubmit" type="submit"></button></div>
+        <p class="alert-user-error" id="alertUserError" role="alert" hidden></p>
+      </form>
+      <div id="alertUserActivation" hidden>
+        <p>Ce code à usage unique est valable 24 h. Transmets-le en privé à <strong id="alertUserActivationName"></strong> pour choisir son mot de passe.</p>
+        <div class="ctl alert-user-code">
+          <input id="alertUserCode" readonly aria-label="Code à usage unique">
+          <button class="btn" id="alertUserCopy" type="button">Copier</button>
+        </div>
+        <p id="alertUserCopyStatus" role="status"></p>
+        <p><a href="/alerte/connexion?mode=recuperation" target="_blank" rel="noopener">Ouvrir le formulaire d’activation ↗</a></p>
+      </div>
+    </div>
+  </dialog>
+</section>

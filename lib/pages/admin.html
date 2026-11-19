@@ -241,8 +241,16 @@ pre{background:var(--bg2);border:1px solid var(--bs);border-radius:var(--r);padd
 </div>
 
 <div class="page" id="p-alerts">
-  <div class="sec">
-    <div class="sh"><div class="stt">Page Alertes Twitch</div><a class="btn" href="/alerte" target="_blank" rel="noopener">Ouvrir /alerte ↗</a></div>
+  <nav class="alert-admin-nav" aria-label="Gestion des alertes">
+    <a class="btn" href="#alert-users">Utilisateurs</a>
+    <a class="btn" href="#alert-settings">Réglages</a>
+    <a class="btn" href="#alert-bot">Telegram</a>
+    <a class="btn" href="#alert-monitoring">Suivi des envois</a>
+    <a class="btn" href="/alerte" target="_blank" rel="noopener">Ouvrir /alerte ↗</a>
+  </nav>
+  {{ALERT_USERS}}
+  <div class="sec" id="alert-settings">
+    <div class="sh"><div class="stt">Réglages de la page Alertes Twitch</div></div>
     <div class="sb">
       <form id="alertsForm">
         <div class="sform">
@@ -254,7 +262,7 @@ pre{background:var(--bg2);border:1px solid var(--bs);border-radius:var(--r);padd
       </form>
     </div>
   </div>
-  <div class="sec telegram-settings">
+  <div class="sec telegram-settings" id="alert-bot">
     <div class="sh"><div class="stt">Bot Telegram <span class="pill" id="telegramState">Chargement…</span></div></div>
     <div class="sb" id="telegramSettingsBody">
       <form id="telegramForm">
@@ -280,7 +288,7 @@ pre{background:var(--bg2);border:1px solid var(--bs);border-radius:var(--r);padd
       </div>
     </div>
   </div>
-  <div class="sec">
+  <div class="sec" id="alert-monitoring">
     <div class="sh"><div class="stt">Suivi des alertes <span class="pill" id="alertsState"></span></div><button class="btn" id="alertsRefresh" type="button">Actualiser</button></div>
     <div class="sb">
       <div class="us" id="alertsStats"></div>
@@ -383,6 +391,7 @@ pre{background:var(--bg2);border:1px solid var(--bs);border-radius:var(--r);padd
 </main>
 <div class="toast" id="toast"></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.13/hls.min.js"></script>
+<script>/*{{ALERT_USERS_JS}}*/</script>
 <script>
 /*{{ANNJS}}*/
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
@@ -397,7 +406,7 @@ const dur=s=>{s=Math.max(0,Math.floor(s));const d=Math.floor(s/86400),h=Math.flo
 let UP0=null,UPAT=0; // temps de fonctionnement : repris à chaque mise à jour du serveur, puis compté seconde par seconde ici
 setInterval(()=>{if(UP0!=null){const e=document.getElementById('upt');if(e)e.textContent=dur(UP0+(Date.now()-UPAT)/1000)}},1000);
 const toast=(m,e)=>{const d=document.createElement('div');d.className='tt'+(e?' e':'');d.textContent=m;$('#toast').append(d);setTimeout(()=>d.remove(),3200)};
-function go(k){cur=k;try{localStorage.admtab=k}catch{}if(k==='alerts')setTimeout(()=>{loadAlerts();telegramRequest()},0);if(k==='seg'&&typeof loadSeg==='function')setTimeout(()=>{loadSeg();loadKeys()},0);$$('.page').forEach(p=>p.classList.toggle('on',p.id==='p-'+k));$$('.tab').forEach(t=>t.classList.toggle('on',t.dataset.k===k))}
+function go(k){cur=k;try{localStorage.admtab=k}catch{}if(k==='alerts')setTimeout(()=>{window.loadAlertUsers();loadAlerts();telegramRequest()},0);if(k==='seg'&&typeof loadSeg==='function')setTimeout(()=>{loadSeg();loadKeys()},0);$$('.page').forEach(p=>p.classList.toggle('on',p.id==='p-'+k));$$('.tab').forEach(t=>t.classList.toggle('on',t.dataset.k===k))}
 
 let SITE0=null,SITE_OK=false;const dirty=v=>{const e=$('#sSt');e.textContent=v?'Modifications non enregistrées':'';e.classList.toggle('dirty',!!v)};const SWC=['#9d5cff','#6366f1','#0ea5e9','#10b981','#f59e0b','#ef4444','#ec4899'];let sCol='#9d5cff';
 const DEFLEGAL='Addon gratuit et non officiel · n\'héberge aucun contenu';
