@@ -161,7 +161,7 @@ En complément de l'addon, la page **`/alerte`** te prévient quand un streamer 
 - Cherche un streamer par pseudo ou colle le lien de sa chaîne.
 - Parcours *Tendance en français* et *Populaires sur Twitch*.
 - Ouvre une fiche streamer pour voir son calendrier Twitch et l'ajouter.
-- Dans **Connexion → Importer mes suivis Twitch**, utilise l’identifiant et le mot de passe de ton profil Stremio. Si ce profil est lié à Twitch, tu peux choisir les chaînes à importer.
+- Sous **Chaînes surveillées**, clique sur **Importer mes suivis Twitch** et utilise l’identifiant et le mot de passe de ton profil Stremio. Si ce profil est lié à Twitch, tu peux choisir les chaînes à importer.
 
 **Retrouver ta liste sur tes appareils**
 

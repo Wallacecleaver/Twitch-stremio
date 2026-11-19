@@ -1080,6 +1080,7 @@ const account = {
 const pageCache = {};
 const rawPage = name => pageCache[name] ||= fs.readFileSync(path.join(__dirname, 'lib', 'pages', name), 'utf8');
 const alertsPageRevision = crypto.createHash('sha256').update(rawPage('alerte.html')).update(rawPage('alerte.js')).digest('hex').slice(0, 16);
+const alertsAccountRevision = crypto.createHash('sha256').update(rawPage('alerte-compte.html')).update(rawPage('alerte-compte.js')).digest('hex').slice(0, 16);
 const page = rawPage;
 const escH = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const accentCss = hex => { const rgb = [1, 3, 5].map(k => parseInt(hex.slice(k, k + 2), 16)), dark = rgb.map(x => Math.round(x * .72).toString(16).padStart(2, '0')).join(''); return ':root{--a:' + hex + ';--ah:#' + dark + ';--as:rgba(' + rgb.join(',') + ',.15)}'; };
@@ -1540,7 +1541,15 @@ async function handler(req, res) {
       const html = rawPage('alerte.html').replace(/\{\{(NAME|TITLE|INTRO|COLOR|REVISION)\}\}/g, (_, key) => escH(fields[key]));
       return send(res, 200, 'text/html; charset=utf-8', html, { 'Cache-Control': 'no-store', 'Content-Security-Policy': CONFIG_CSP });
     }
-    if (!base && seg.length === 1 && ['alerte.js', 'alerte-sw.js'].includes(seg[0])) {
+    if (!base && seg.length === 2 && seg[0] === 'alerte' && seg[1] === 'connexion') {
+      const fields = { NAME: SS.name, REVISION: alertsAccountRevision };
+      const html = rawPage('alerte-compte.html').replace(/\{\{(NAME|REVISION)\}\}/g, (_, key) => escH(fields[key]));
+      return send(res, 200, 'text/html; charset=utf-8', html, { 'Cache-Control': 'no-store', 'Content-Security-Policy': CONFIG_CSP });
+    }
+    if (!base && seg.length === 1 && seg[0] === 'alerte-compte.webp') {
+      return send(res, 200, 'image/webp', asset(seg[0]), { 'Cache-Control': 'public, max-age=86400' });
+    }
+    if (!base && seg.length === 1 && ['alerte.js', 'alerte-sw.js', 'alerte-compte.js'].includes(seg[0])) {
       return send(res, 200, 'text/javascript; charset=utf-8', rawPage(seg[0]), { 'Cache-Control': 'no-cache' });
     }
     if (!base && seg.length === 1 && seg[0] === 'alerte.webmanifest') {

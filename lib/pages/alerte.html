@@ -114,7 +114,7 @@ h1 {
 .clear:hover { color: var(--text); }
 
 /* Boutons */
-button {
+button, .connect {
   flex: none; cursor: pointer; border: 1px solid var(--line2); border-radius: 11px;
   padding: 9px 14px; background: var(--panel2); color: var(--text); font-weight: 650; font-size: .88rem;
   transition: transform .15s var(--ease), filter .2s, background .2s, border-color .2s;
@@ -125,6 +125,7 @@ button:disabled { opacity: .5; cursor: default; }
 .primary { border-color: #b494ff; background: linear-gradient(180deg, #8a5cf0, #6d41d1); color: #fff; box-shadow: 0 6px 20px #6d41d14d; }
 .ghost { background: transparent; }
 .connect { background: #2b1f44; border-color: #5c4585; }
+.connect:hover { filter: brightness(1.15); text-decoration: none; }
 
 /* Sections */
 .section-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 6px 0 14px; }
@@ -197,9 +198,10 @@ ul { margin: 0; list-style: none; padding: 0; }
 .empty { display: grid; justify-items: center; gap: 6px; padding: 26px 10px 14px; text-align: center; }
 .empty .ico { width: 52px; height: 52px; display: grid; place-items: center; border-radius: 16px; background: #2a2142; color: var(--violet); margin-bottom: 6px; }
 .empty strong { color: var(--text); }
-.list-tools { display: flex; justify-content: flex-end; margin-top: 10px; }
+.list-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 4px; margin-top: 10px; }
 .list-tools button { padding: 5px 10px; font-size: .78rem; color: var(--dim); background: transparent; border-color: transparent; }
 .list-tools button:hover { color: var(--red); }
+.list-tools #open-follows:hover { color: var(--text); }
 
 .alerts .primary { width: 100%; padding: 12px; font-size: .92rem; }
 .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
@@ -253,10 +255,6 @@ dialog::backdrop { background: #07050dc2; backdrop-filter: blur(3px); }
 .profile-note a { text-decoration: underline; }
 .profile-tools { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
 .profile-tools input { flex: 1 1 160px; }
-.account-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
-.account-tabs [aria-pressed="true"] { background: #38265b; border-color: var(--violet); }
-.account-recovery { border: 1px solid var(--line2); border-radius: 12px; padding: 12px; margin-top: 14px; }
-.account-recovery input { width: 100%; margin-top: 6px; font-family: monospace; }
 #connection details { border-top: 1px solid var(--line); margin-top: 18px; padding-top: 14px; }
 dialog input {
   min-width: 0; width: 100%; padding: 10px 12px; border: 1px solid var(--line2); border-radius: 11px;
@@ -403,7 +401,7 @@ dialog input:focus { border-color: var(--violet); outline: 0; box-shadow: 0 0 0 
       <a class="brand" href="/config"><img src="/logo.png" alt="" width="34" height="34">{{NAME}}</a>
       <nav class="top-actions" aria-label="Navigation">
         <a class="back" href="/config">Configuration Stremio</a>
-        <button type="button" class="connect" id="open-connection">Connexion</button>
+        <a class="connect" id="open-connection" href="/alerte/connexion">Connexion</a>
       </nav>
     </div>
   </header>
@@ -463,7 +461,7 @@ dialog input:focus { border-color: var(--violet); outline: 0; box-shadow: 0 0 0 
           <strong>Aucune chaîne pour l’instant</strong>
           <p>Ajoute une première chaîne pour recevoir ses alertes de live.</p>
         </div>
-        <div class="list-tools"><a class="back" id="agenda-jump" href="#watch-agenda" hidden>Voir l’agenda ↓</a><button type="button" id="clear-all" hidden>Tout retirer</button></div>
+        <div class="list-tools"><button type="button" id="open-follows">Importer mes suivis Twitch</button><a class="back" id="agenda-jump" href="#watch-agenda" hidden>Voir l’agenda ↓</a><button type="button" id="clear-all" hidden>Tout retirer</button></div>
       </section>
       <section class="panel alerts" aria-labelledby="push-title">
         <div class="head">
@@ -526,30 +524,12 @@ dialog input:focus { border-color: var(--violet); outline: 0; box-shadow: 0 0 0 
   <div class="toasts" id="toasts" aria-live="polite"></div>
   <dialog id="connection" aria-labelledby="connection-title">
     <div class="head"><h2 id="connection-title">Compte Alertes</h2><button type="button" id="close-connection" class="ghost">Fermer</button></div>
-    <div id="account-signin">
-      <div class="account-tabs" aria-label="Accès au compte">
-        <button type="button" data-account-mode="login" aria-pressed="true">Se connecter</button>
-        <button type="button" data-account-mode="register" aria-pressed="false">Créer un compte</button>
-        <button type="button" data-account-mode="recover" aria-pressed="false">Mot de passe oublié</button>
-      </div>
-      <form id="account-form" class="profile-form">
-        <label>Pseudo<input id="account-name" required minlength="3" maxlength="24" pattern="[A-Za-z0-9_\-]{3,24}" autocomplete="username" spellcheck="false"></label>
-        <label id="account-code-label" hidden>Code de récupération<input id="account-code" maxlength="24" autocomplete="off" spellcheck="false" disabled></label>
-        <label><span id="account-password-label">Mot de passe</span><input id="account-password" type="password" required maxlength="100" autocomplete="current-password"></label>
-        <p id="account-help" class="profile-note">Retrouve ta liste de chaînes sur tes appareils.</p>
-        <button id="account-submit" class="primary" type="submit">Se connecter</button>
-      </form>
-    </div>
     <div id="account-connected" hidden>
       <div class="head"><strong id="account-display"></strong><button type="button" id="account-logout" class="ghost">Se déconnecter</button></div>
       <p class="profile-note">Ta liste est synchronisée sur tes appareils et avec Telegram.</p>
-      <div id="account-recovery" class="account-recovery" hidden>
-        <label>Code de récupération<input id="account-recovery-value" readonly spellcheck="false"></label>
-        <p class="profile-note">Garde ce code en lieu sûr. Il permet de changer ton mot de passe une seule fois.</p>
-      </div>
     </div>
     <p id="account-status" class="search-status" role="status"></p>
-    <details><summary>Importer mes suivis Twitch</summary>
+    <details id="profile-details"><summary>Importer mes suivis Twitch</summary>
     <div id="profile-signin">
       <p class="profile-note">Connecte ton profil TwitchIO pour retrouver les chaînes du compte Twitch lié dans <a href="/config">ta configuration</a>.</p>
       <form id="profile-form" class="profile-form">

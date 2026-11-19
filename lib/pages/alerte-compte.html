@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#100e19">
+<title>Connexion · {{NAME}}</title>
+<link rel="icon" href="/logo.svg">
+<style>
+:root { color-scheme: dark; --bg:#100e19; --text:#f7f4ff; --muted:#b7afc9; --line:#39304d; --violet:#b38dff; }
+* { box-sizing:border-box; }
+body { margin:0; color:var(--text); background:var(--bg); font:16px/1.5 Inter,system-ui,"Segoe UI",sans-serif; -webkit-font-smoothing:antialiased; }
+a { color:inherit; text-decoration:none; }
+button,input { font:inherit; }
+h1,h2,p { margin:0; }
+[hidden] { display:none!important; }
+:focus-visible { outline:2px solid var(--violet); outline-offset:4px; }
+.shell { display:grid; grid-template-columns:minmax(0,1.08fr) minmax(0,1fr); min-height:100vh; min-height:100svh; }
+.scene { isolation:isolate; position:relative; display:flex; flex-direction:column; justify-content:space-between; gap:32px; padding:clamp(26px,4.2vw,76px); overflow:hidden; background:#251533; }
+.scene img.photo { position:absolute; z-index:-2; inset:0; width:100%; height:100%; object-fit:cover; object-position:50% 43%; }
+.scene::after { content:""; position:absolute; z-index:-1; inset:0; background:linear-gradient(180deg,#100b1a70 0%,transparent 30%,transparent 53%,#1109168c 78%,#100b18f7 100%); }
+.brand { align-self:flex-start; display:flex; align-items:center; gap:12px; font-size:1.12rem; font-weight:750; }
+.brand img { border-radius:12px; box-shadow:0 5px 24px #8a53fb55; }
+.scene h2 { max-width:11ch; font-size:clamp(2.65rem,5.15vw,5.2rem); letter-spacing:-.065em; line-height:.98; font-weight:780; }
+.scene p { max-width:34ch; margin-top:18px; font-size:clamp(.96rem,1.35vw,1.18rem); color:#dfd4eb; }
+.account { display:grid; grid-template-rows:auto 1fr; gap:26px; padding:clamp(24px,3.4vw,58px); background:radial-gradient(ellipse at 95% -10%,#28203c 0%,transparent 54%),var(--bg); }
+.back { justify-self:end; color:var(--muted); font-weight:650; font-size:.86rem; }
+.back:hover,.text-link:hover { color:#fff; text-decoration:underline; }
+.inner { align-self:center; justify-self:center; width:min(100%,425px); padding:18px 0 42px; }
+.inner h1 { font-size:clamp(2.2rem,4vw,3.28rem); letter-spacing:-.057em; line-height:1.06; font-weight:780; overflow-wrap:anywhere; }
+.intro { margin-top:13px; color:var(--muted); font-size:.94rem; }
+form { display:grid; gap:17px; margin-top:29px; }
+label { display:grid; gap:7px; color:#e3daef; font-size:.87rem; font-weight:650; }
+input { width:100%; min-width:0; padding:12px 13px; border:1px solid var(--line); color:var(--text); background:#171323; border-radius:10px; }
+input:focus { border-color:var(--violet); }
+.password { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:end; gap:9px; }
+.text-link { color:#d0b8ff; font-size:.87rem; font-weight:650; }
+.form-links { display:flex; justify-content:flex-end; margin-top:-4px; }
+.button { min-height:45px; padding:10px 15px; display:inline-flex; justify-content:center; align-items:center; text-align:center; border:1px solid var(--line); border-radius:10px; color:var(--text); background:#1b152a; font-weight:700; cursor:pointer; }
+.button:hover { background:#261d39; border-color:#6b5195; }
+.button.primary { color:white; background:#6e40d0; border-color:#aa83ff; box-shadow:0 6px 22px #703ed038; }
+.button.primary:hover { background:#7e4ee0; }
+.button:disabled { opacity:.65; cursor:wait; }
+.password-toggle { min-height:47px; color:var(--muted); background:transparent; border:0; cursor:pointer; font-size:.83rem; padding:8px 4px; }
+.password-toggle:hover { color:var(--text); }
+.next { display:grid; gap:12px; border-top:1px solid var(--line); margin-top:25px; padding-top:21px; }
+.status:not(:empty) { color:#ffb9c7; margin-top:13px; font-size:.88rem; }
+.result-actions { display:grid; gap:14px; margin-top:26px; }
+.recovery-field { padding:14px; background:#1b1429; border:1px solid var(--line); border-radius:12px; }
+.recovery-field input { font-family:ui-monospace,monospace; }
+.recovery-field .button { margin-top:9px; min-height:36px; font-size:.83rem; }
+.recovery-field p:not(:empty) { margin-top:8px; font-size:.83rem; color:#c6efdc; }
+@media(max-width:760px) {
+  .shell { grid-template-columns:1fr; grid-template-rows:auto 1fr; }
+  .scene { min-height:205px; padding:21px 24px; gap:29px; }
+  .scene img.photo { object-position:50% 46%; }
+  .scene h2 { max-width:none; font-size:2.15rem; }
+  .scene p { display:none; }
+  .account { gap:22px; padding:18px 24px 25px; }
+  .inner { align-self:start; padding:6px 0 26px; }
+  .inner h1 { font-size:2.42rem; }
+}
+@media(max-width:360px) {
+  .scene { min-height:155px; padding:16px 18px; gap:20px; }
+  .scene h2 { font-size:1.85rem; }
+  .account { padding-inline:18px; }
+  .inner h1 { font-size:2.08rem; }
+}
+</style>
+<script src="/alerte-compte.js?v={{REVISION}}" defer></script>
+</head>
+<body>
+<main class="shell">
+  <aside class="scene">
+    <img class="photo" src="/alerte-compte.webp" alt="" fetchpriority="high" width="1122" height="1402">
+    <a class="brand" href="/alerte"><img src="/logo.png" alt="" width="42" height="42">{{NAME}}</a>
+    <div><h2>Tes chaînes, partout.</h2><p>Retrouve ta liste sur tes appareils et reçois les alertes de live sur Telegram.</p></div>
+  </aside>
+  <section class="account" aria-label="Compte Alertes">
+    <a class="back" href="/alerte">← Retour aux alertes</a>
+    <div class="inner">
+      <div id="signin">
+        <h1 id="heading">Connexion</h1>
+        <p class="intro" id="description">Connecte-toi à ton compte Alertes.</p>
+        <form id="account-form" method="post">
+          <label>Pseudo<input id="account-name" name="username" required minlength="3" maxlength="24" pattern="[A-Za-z0-9_\-]{3,24}" autocomplete="username" autocapitalize="none" spellcheck="false"></label>
+          <label id="account-code-label" hidden>Code de récupération<input id="account-code" maxlength="24" autocomplete="off" autocapitalize="none" spellcheck="false" disabled></label>
+          <div class="password">
+            <label><span id="account-password-label">Mot de passe</span><input id="account-password" name="password" type="password" required maxlength="100" autocomplete="current-password"></label>
+            <button type="button" class="password-toggle" id="password-toggle" aria-controls="account-password" aria-pressed="false" aria-label="Afficher le mot de passe">Afficher</button>
+          </div>
+          <div class="form-links" id="forgot"><a class="text-link" href="/alerte/connexion?mode=recuperation">Mot de passe oublié ?</a></div>
+          <button class="button primary" id="account-submit" type="submit">Se connecter</button>
+        </form>
+        <p class="status" id="account-status" role="status"></p>
+        <div class="next" id="register-link">
+          <a class="button" href="/alerte/connexion?mode=inscription">Créer un compte</a>
+        </div>
+        <div class="next" id="login-link" hidden><a class="button" href="/alerte/connexion">Retour à la connexion</a></div>
+      </div>
+      <div id="connected" hidden>
+        <h1 id="connected-heading">Compte connecté</h1>
+        <p class="intro" id="connected-details"></p>
+        <div class="result-actions">
+          <div class="recovery-field" id="account-recovery" hidden>
+            <label>Code de récupération<input id="account-recovery-value" readonly spellcheck="false"></label>
+            <button type="button" class="button" id="copy-code">Copier le code</button>
+            <p id="copy-status" role="status"></p>
+          </div>
+          <a class="button primary" href="/alerte">Accéder à mes alertes</a>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+</body>
+</html>
