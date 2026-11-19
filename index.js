@@ -13,6 +13,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { Readable, pipeline } = require('stream');
 const zlib = require('zlib');
+const { currentArchive, replayPlaylist } = require('./lib/live-replay');
 
 // Configuration : fichier .env à côté de index.js. Il est créé au premier lancement (mot de passe du dashboard et clé de chiffrement générés).
 (function loadEnv() {
@@ -959,8 +960,10 @@ async function vodToken(id, cid = GQL_CLIENT_ID, playerType = 'site', oauth = nu
 }
 // Plusieurs variantes en parallèle (identifiant client, type de lecteur, adresse usher) : on garde la première qui répond.
 const VOD_TRIES = [{ cid: GQL_CLIENT_ID, pt: 'site', path: '/vod/' }, { cid: GQL_CLIENT_ID, pt: 'site', path: '/vod/v2/' }, { cid: GQL_CLIENT_ID, pt: 'embed', path: '/vod/' }, { cid: TV_ID, pt: 'site', path: '/vod/' }, { cid: ANDROID_ID, pt: 'site', path: '/vod/' }];
-async function vodMaster(id, oauth) { // avec le compte Twitch lié : les rediffs réservées aux abonnés s'ouvrent si le compte est abonné
-  const errs = [], tries = oauth ? [{ cid: GQL_CLIENT_ID, pt: 'site', path: '/vod/', auth: 1 }, { cid: GQL_CLIENT_ID, pt: 'site', path: '/vod/v2/', auth: 1 }, ...VOD_TRIES] : VOD_TRIES;
+async function vodMaster(id, oauth, { replay = false } = {}) { // le compte Twitch lié donne accès aux rediffs incluses dans son abonnement
+  const errs = [], direct = replay ? VOD_TRIES.slice(0, 1) : VOD_TRIES;
+  const authenticated = direct.slice(0, 2).map(v => ({ ...v, auth: 1 }));
+  const tries = oauth ? [...authenticated, ...direct] : direct;
   const one = async (t, i) => {
     try {
       const k = await vodToken(id, t.cid, t.pt, t.auth ? oauth : null);
@@ -971,9 +974,33 @@ async function vodMaster(id, oauth) { // avec le compte Twitch lié : les rediff
       return { url, text };
     } catch (e) { errs.push('essai ' + (i + 1) + (t.auth ? ' (compte)' : '') + ' ' + e.message); throw e; }
   };
-  try { return await Promise.any(tries.map(one)); } catch { /* usher refuse (403) : lecture directe depuis le CDN de Twitch */ }
+  try { return await Promise.any(tries.map(one)); } catch {
+    if (replay) return null;
+  }
   try { return await vodDirect(id); } catch (e) { errs.push('cdn ' + e.message); }
   throw new Error('Rediffusion indisponible — ' + errs.join(' ; '));
+}
+
+// L’archive doit correspondre au direct en cours et être accessible via le lecteur officiel.
+const liveReplayCache = new Map();
+function liveReplay(login, auth) {
+  const key = login + '|' + (auth ? crypto.createHash('sha256').update(auth).digest('hex') : '');
+  const cached = liveReplayCache.get(key);
+  if (cached && cached.expires > Date.now()) return cached.result;
+  if (liveReplayCache.size >= 100) liveReplayCache.delete(liveReplayCache.keys().next().value);
+  const result = (async () => {
+    const data = await gqlRaw('query { user(login: ' + JSON.stringify(login) + ') { stream { createdAt archiveVideo { id } } videos(first: 1, type: ARCHIVE, sort: TIME) { edges { node { id createdAt } } } } }');
+    const id = currentArchive(data.user);
+    if (!id) return null;
+    const master = await vodMaster(id, auth, { replay: true });
+    return master ? { id, variants: variantsOf(master.text) } : null;
+  })().catch(() => null);
+  liveReplayCache.set(key, { expires: Date.now() + 20000, result });
+  return result;
+}
+
+function replayVariant(replay, cfg) {
+  return replay?.variants.filter(v => !v.audio && v.url.startsWith('https://') && cfgLib.keepVariant(v, cfg)).sort(byQuality)[0];
 }
 // Lecture directe sur le CDN de Twitch (méthode « TwitchNoSub ») : les rediffs, même réservées aux abonnés, sont servies par CloudFront à une adresse
 // déduite de l'aperçu de la vidéo (…/<dossier>/storyboards/…). Utilisé quand usher refuse (403).
@@ -1439,7 +1466,7 @@ const plCache = new Map();
 function fetchPlaylist(u) {
   const c = plCache.get(u);
   if (c && Date.now() - c.t < 700) return c.p;
-  const p = fetch(u, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(8000) }).then(async r => ({ ok: r.ok, status: r.status, text: await r.text() }));
+  const p = fetch(u, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(8000) }).then(async r => ({ ok: r.ok, status: r.status, url: r.url || u, text: await r.text() }));
   if (plCache.size >= 100) plCache.delete(plCache.keys().next().value);
   plCache.set(u, { t: Date.now(), p });
   p.catch(() => plCache.delete(u));
@@ -1706,6 +1733,24 @@ async function handler(req, res) {
       return relaySegment(req, res, u, akChk.id);
     }
 
+    if (seg[0] === 'replay' && seg.length === 3 && F.vods) {
+      const [, login, file] = seg;
+      const id = /^(\d+)\.m3u8$/.exec(file)?.[1];
+      if (!LOGIN_RE.test(login) || !id) return send(res, 400, 'text/plain; charset=utf-8', 'Lien de retour arrière invalide.');
+      if (F.maint) return send(res, 503, 'text/plain; charset=utf-8', 'Addon en maintenance');
+      const replay = await liveReplay(login, auth);
+      const variant = replay?.id === id && replayVariant(replay, cfg);
+      const upstream = variant ? await fetchPlaylist(variant.url).catch(() => null) : null;
+      const playlist = upstream?.ok && replayPlaylist(absolutize(upstream.text, upstream.url));
+      if (!playlist) {
+        const code = variant && !upstream?.ok ? 502 : 404;
+        return send(res, code, 'text/plain; charset=utf-8', 'Retour arrière indisponible pour ce direct.', { 'Cache-Control': 'no-store' });
+      }
+      const sm = segMode(req, cfg);
+      const media = sm === 'direct' ? playlist : viaAddonSegments(playlist, originOf(req), base, sm);
+      return send(res, 200, 'application/vnd.apple.mpegurl', media, { 'Cache-Control': 'no-store' });
+    }
+
     if (seg[0] === 'p' && seg[1]) { // liste de lecture « sans pub » : récupérée côté serveur auprès d'un relais, puis servie au lecteur
       const login = strip(seg[1]).replace(/\.m3u8$/, '').toLowerCase();
       if (!LOGIN_RE.test(login)) return send(res, 400, 'text/plain; charset=utf-8', 'Nom de chaîne invalide');
@@ -1832,6 +1877,7 @@ async function handler(req, res) {
       const login = strip(seg[2]).replace(/^twitch:/, '').toLowerCase();
       if (!LOGIN_RE.test(login)) return json(res, { streams: [] });
       if (F.maint) return maint();
+      const replayTask = F.vods ? withTimeout(liveReplay(login, auth), 2500, null) : null;
       const [s, b, info] = await Promise.all([liveStream(login, cfg.hevc, auth), cfg.relay ? bestProxy(login, cfg.hevc) : null, Promise.race([channelInfo(login), new Promise(r => setTimeout(() => r(null), 1500))])]);
       store.incr('stream'); store.incr('d:' + store.day() + ':stream'); store.user(pseudo, { ch: login, dev: cfg.device });
       const who = { u: pseudo || undefined, appareil: cfg.device || undefined, dev };
@@ -1844,6 +1890,13 @@ async function handler(req, res) {
       const video = vars.filter(v => !v.audio && cfgLib.keepVariant(v, cfg)).sort(byQuality);
       // Affichage dans la liste des sources de Stremio : nom court à gauche, détails sur plusieurs lignes à droite.
       const sm0 = segMode(NOUA, cfg);
+      const replay = await replayTask;
+      const rewind = replayVariant(replay, cfg) ? [{
+        name: BR + '\nRetour arrière',
+        title: 'Revoir les dernières minutes\nUtilise la barre de lecture',
+        url: originOf(req) + base + '/replay/' + login + '/' + replay.id + '.m3u8',
+        ...(sm0 === 'direct' ? { behaviorHints: { notWebReady: true } } : {}),
+      }] : [];
       try {
       // Colonne de droite étroite dans Stremio : lignes courtes (≈ 24 caractères) pour ne rien couper.
       const cut = (t, n) => (t.length > n ? t.slice(0, n - 1).trimEnd() + '…' : t);
@@ -1854,11 +1907,11 @@ async function handler(req, res) {
       const fixed = video.slice(0, cfg.fixed).map(v => ({ ...fmtLib.render(cfg.fmt, { brand: BR, kind: 'fixed', ...dOf(v), noAd: !!relayUrls && relayUrls.has(v.url) }), url: pcOn(cfg) || sm0 !== 'direct' ? pcUrl(originOf(req), base, v.url, sm0) : v.url }));
       const auto = { ...fmtLib.render(cfg.fmt, { brand: BR, kind: 'auto', viewers: nb, game: gameTxt, cap: cfg.cap, noAd: !!b }), url: originOf(req) + base + '/p/' + login + '.m3u8' };
       const audio = cfg.audio ? vars.filter(v => v.audio).slice(0, 1).map(v => ({ ...fmtLib.render(cfg.fmt, { brand: BR, kind: 'audio', noAd: !!b }), url: v.url })) : [];
-      return json(res, { streams: [auto, ...fixed, ...audio] });
+      return json(res, { streams: [auto, ...rewind, ...fixed, ...audio] });
       } catch (e) { // mise en forme impossible : liste simple, pour ne jamais perdre les flux
         store.log({ k: 'erreur', u: pseudo || undefined, ou: 'mise en forme des sources', msg: e.message });
         const plain = video.slice(0, cfg.fixed).map(v => ({ name: BR + ' ' + v.name.replace(/ \(source\)/, ''), title: 'En direct · qualité fixe' + (b ? ' · sans pub' : ''), url: pcOn(cfg) || sm0 !== 'direct' ? pcUrl(originOf(req), base, v.url, sm0) : v.url }));
-        return json(res, { streams: [{ name: 'Twitch', title: 'En direct · qualité automatique' + (b ? ' · sans pub' : ''), url: originOf(req) + base + '/p/' + login + '.m3u8' }, ...plain] });
+        return json(res, { streams: [{ name: 'Twitch', title: 'En direct · qualité automatique' + (b ? ' · sans pub' : ''), url: originOf(req) + base + '/p/' + login + '.m3u8' }, ...rewind, ...plain] });
       }
     }
     send(res, 404, 'text/html; charset=utf-8', BLANK);
