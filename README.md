@@ -165,9 +165,9 @@ En complément de l'addon, la page **`/alerte`** te prévient quand un streamer 
 
 **Retrouver ta liste sur tes appareils**
 
-Dans **Connexion → Créer un compte**, choisis un pseudo et un mot de passe. La création récupère la liste, le lien Telegram et les notifications déjà configurés dans ce navigateur. Garde le code de récupération affiché à la création. **Mot de passe oublié** permet de l’utiliser une fois et d’en obtenir un nouveau.
+À l’ouverture de `/alerte`, connecte-toi ou clique sur **Créer un compte** pour choisir un pseudo et un mot de passe. La création récupère la liste, le lien Telegram et les notifications déjà configurés dans ce navigateur. Garde le code de récupération affiché à la création. **Mot de passe oublié** permet de l’utiliser une fois et d’en obtenir un nouveau.
 
-La liste et les préférences de ton compte se synchronisent entre appareils. Telegram est lié au compte. Les notifications du navigateur s’activent sur chaque appareil et s’arrêtent sur celui où tu te déconnectes. Le compte reste facultatif.
+La liste et les préférences de ton compte se synchronisent entre appareils. Telegram est lié au compte. Les notifications du navigateur s’activent sur chaque appareil et s’arrêtent sur celui où tu te déconnectes.
 
 **Affiner ce que tu reçois**
 

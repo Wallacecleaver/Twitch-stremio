@@ -1538,6 +1538,10 @@ async function handler(req, res) {
     }
     if (seg[0] === 'logo.svg') return send(res, 200, 'image/svg+xml', asset('logo.svg'), { 'Cache-Control': 'public, max-age=86400' });
     if (!base && seg.length === 1 && seg[0] === 'alerte') {
+      if (!alerts.isSignedIn(readSession(req))) {
+        const next = '/alerte' + new URL(req.url, 'http://x').search;
+        return send(res, 302, 'text/plain', '', { Location: '/alerte/connexion?retour=' + encodeURIComponent(next), 'Cache-Control': 'no-store' });
+      }
       const page = alerts.publicSettings();
       const fields = { NAME: SS.name, TITLE: page.title, INTRO: page.intro, COLOR: SS.color, REVISION: alertsPageRevision };
       const html = rawPage('alerte.html').replace(/\{\{(NAME|TITLE|INTRO|COLOR|REVISION)\}\}/g, (_, key) => escH(fields[key]));
@@ -1571,7 +1575,11 @@ async function handler(req, res) {
       if (tooMany(req)) return json(res, { error: 'Trop de demandes. Réessaie dans un instant.' });
       let body;
       try { body = JSON.parse(await readBody(req)); } catch { return json(res, { error: 'Requête invalide.' }); }
-      return json(res, await alerts.action(body, readSession(req)));
+      const session = readSession(req);
+      const result = await alerts.action(body, session);
+      // Les sessions créées avant la protection de /alerte avaient uniquement le cookie de l’API.
+      const promote = body?.action === 'read' && body.resume === true && result.account;
+      return json(res, result, promote ? { 'Set-Cookie': sessionCookie(req, session, '/alerte') } : undefined);
     }
     if (!base && seg.length === 3 && seg[0] === 'api' && seg[1] === 'alerts' && seg[2] === 'account') {
       if (req.method !== 'POST') return send(res, 405, 'text/plain; charset=utf-8', 'Méthode non autorisée', { Allow: 'POST' });
@@ -1580,8 +1588,8 @@ async function handler(req, res) {
       try { body = JSON.parse(await readBody(req)); } catch { return json(res, { error: 'Requête invalide.' }); }
       const { session, ...result } = await alerts.accountAction(body, readSession(req), store.ipOf(req));
       if (result.ok) result.alerts = await alerts.action({ action: 'read', token: body.token }, session);
-      const secure = req.socket.encrypted || String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim() === 'https';
-      return json(res, result, session === undefined ? undefined : { 'Set-Cookie': sessionCookie(session, secure) });
+      const cookies = session === undefined ? undefined : { 'Set-Cookie': ['/api/alerts', '/alerte'].map(path => sessionCookie(req, session, path)) };
+      return json(res, result, cookies);
     }
     if (!base && seg.length === 3 && seg[0] === 'api' && seg[1] === 'alerts' && seg[2] === 'discover' && req.method === 'GET') {
       if (tooMany(req)) return json(res, { error: 'Trop de demandes. Réessaie dans un instant.' });
