@@ -22,7 +22,8 @@ h1,h2,p { margin:0; }
 .scene h2 { max-width:11ch; font-size:clamp(2.65rem,5.15vw,5.2rem); letter-spacing:-.065em; line-height:.98; font-weight:780; }
 .scene p { max-width:34ch; margin-top:18px; font-size:clamp(.96rem,1.35vw,1.18rem); color:#dfd4eb; }
 .account { display:grid; grid-template-rows:auto 1fr; gap:26px; padding:clamp(24px,3.4vw,58px); background:radial-gradient(ellipse at 95% -10%,#28203c 0%,transparent 54%),var(--bg); }
-.back { justify-self:end; color:var(--muted); font-weight:650; font-size:.86rem; }
+.account-nav { justify-self:end; display:flex; flex-wrap:wrap; justify-content:flex-end; gap:5px 18px; }
+.back { color:var(--muted); font-weight:650; font-size:.86rem; }
 .back:hover,.text-link:hover { color:#fff; text-decoration:underline; }
 .inner { align-self:center; justify-self:center; width:min(100%,425px); padding:18px 0 42px; }
 .inner h1 { font-size:clamp(2.2rem,4vw,3.28rem); letter-spacing:-.057em; line-height:1.06; font-weight:780; overflow-wrap:anywhere; }
@@ -74,7 +75,10 @@ input:focus { border-color:var(--violet); }
     <div><h2>Tes chaînes, partout.</h2><p>Retrouve ta liste sur tes appareils et reçois les alertes de live sur Telegram.</p></div>
   </aside>
   <section class="account" aria-label="Compte Alertes">
-    <a class="back" href="/config">Configuration Stremio ↗</a>
+    <nav class="account-nav" aria-label="Liens TwitchIO">
+      <a class="back" href="/config">Configuration Stremio ↗</a>
+      {{DISCORD_LINK}}
+    </nav>
     <div class="inner">
       <div id="signin">
         <h1 id="heading">Connexion</h1>
