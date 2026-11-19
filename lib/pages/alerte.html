@@ -273,9 +273,16 @@ dialog::backdrop { background: #07050dc2; backdrop-filter: blur(3px); }
 }
 .account-initials {
   flex: none; display: grid; place-items: center; width: 60px; height: 60px; border-radius: 17px;
-  background: linear-gradient(140deg, #7954cb, #4b2d82); color: #fff;
-  border: 1px solid #ad89ee; font-size: 1.35rem; font-weight: 750;
+  color: #fff; font-size: 1.35rem; font-weight: 750;
 }
+.account-initials, .avatar-swatch {
+  background: linear-gradient(140deg, var(--avatar-light, #7954cb), var(--avatar-dark, #4b2d82));
+  border: 1px solid var(--avatar-edge, #ad89ee);
+}
+[data-avatar-theme="ocean"] { --avatar-light: #3c72bb; --avatar-dark: #243b80; --avatar-edge: #86adf3; }
+[data-avatar-theme="mint"] { --avatar-light: #268568; --avatar-dark: #174635; --avatar-edge: #78d0aa; }
+[data-avatar-theme="amber"] { --avatar-light: #a3652e; --avatar-dark: #6b3625; --avatar-edge: #e4ae78; }
+[data-avatar-theme="rose"] { --avatar-light: #a04b80; --avatar-dark: #5d2a64; --avatar-edge: #df8fbe; }
 .connect .account-initials { width: 30px; height: 30px; border-radius: 8px; font-size: .72rem; }
 .account-name { flex: 1 1 135px; min-width: 0; }
 .account-name strong { display: block; overflow-wrap: anywhere; font-size: clamp(1.22rem, 4vw, 1.65rem); line-height: 1.2; }
@@ -302,8 +309,45 @@ dialog::backdrop { background: #07050dc2; backdrop-filter: blur(3px); }
 }
 .account-footer .search-status { flex: 1 1 160px; margin: 0; }
 .account-footer button { color: #f5bbca; }
-#connection[data-view="import"] :is(#account-connected, .account-footer, #profile-details > summary) { display: none; }
+#connection[data-view="import"] :is(#account-connected, .account-tabs, .account-footer, #profile-details > summary) { display: none; }
 #watchlist, #notification-settings { scroll-margin-top: 90px; }
+
+.tabs.account-tabs { display: flex; }
+.account-tabs button { flex: 1 1 0; }
+.account-card {
+  min-width: 0; padding: 15px; border: 1px solid var(--line); border-radius: 14px; background: #151220;
+}
+.account-card + .account-card { margin-top: 12px; }
+.account-card h3 { margin: 0; font-size: .95rem; }
+.account-card .profile-note { margin: 4px 0 0; overflow-wrap: anywhere; }
+.account-appearance-preview {
+  display: flex; align-items: center; gap: 10px; padding: 8px 10px; min-height: 50px;
+  border: 1px solid var(--line); border-radius: 11px; background: var(--panel); overflow-wrap: anywhere;
+}
+.account-appearance-preview .account-initials { width: 32px; height: 32px; border-radius: 9px; font-size: .8rem; }
+.account-card .search-status { margin: 0; color: #c9b5fb; }
+.account-card .search-status[data-error] { color: #ffb2bd; }
+.account-themes { min-width: 0; padding: 0; border: 0; margin: 0; }
+.account-themes legend { padding: 0; margin-bottom: 9px; color: var(--muted); font-size: .87rem; }
+.avatar-choices { display: flex; flex-wrap: wrap; gap: 9px; }
+.avatar-choices .avatar-choice {
+  position: relative; place-items: center; gap: 4px; min-width: 49px; cursor: pointer; font-size: .73rem;
+}
+.avatar-choice input {
+  position: absolute; width: 1px; height: 1px; padding: 0; opacity: 0;
+}
+.avatar-swatch { display: block; width: 30px; height: 30px; border-radius: 9px; }
+.avatar-choice input:checked + .avatar-swatch { outline: 2px solid var(--violet); outline-offset: 2px; }
+.avatar-choice input:focus-visible + .avatar-swatch { outline: 2px solid #fff; outline-offset: 2px; }
+.account-card .account-visibility { display: flex; align-items: center; gap: 8px; }
+.account-visibility input { width: 16px; height: 16px; margin: 0; accent-color: var(--violet); }
+.account-recovery {
+  display: grid; gap: 8px; margin-top: 10px; padding: 12px; border: 1px solid #655184;
+  border-radius: 11px; background: #261e38;
+}
+.account-recovery p { font-size: .84rem; }
+.account-recovery-input { display: flex; flex-wrap: wrap; gap: 8px; }
+.account-recovery-input input { flex: 1 1 190px; min-width: 0; font-family: ui-monospace, monospace; }
 
 .profile-form { display: grid; gap: 12px; margin-top: 10px; }
 .profile-form label { display: grid; gap: 5px; color: var(--muted); font-size: .87rem; }
@@ -617,59 +661,124 @@ dialog input:focus { border-color: var(--violet); outline: 0; box-shadow: 0 0 0 
       <button type="button" id="close-connection" class="ghost account-close" aria-label="Fermer"><span aria-hidden="true">×</span></button>
     </div>
     <div class="account-body">
-      <div id="account-connected" hidden>
-        <div class="account-identity">
-          <span class="account-initials" id="account-avatar" aria-hidden="true"></span>
-          <div class="account-name">
-            <strong id="account-display"></strong>
-            <p id="account-sync" hidden>Synchronisation en attente</p>
+      <div class="tabs account-tabs" id="account-tabs" role="tablist" aria-label="Sections du profil" hidden>
+        <button id="account-tab-overview" type="button" role="tab" aria-selected="true" aria-controls="account-overview">Aperçu</button>
+        <button id="account-tab-settings" type="button" role="tab" aria-selected="false" aria-controls="account-settings" tabindex="-1">Paramètres</button>
+      </div>
+      <div id="account-overview" role="tabpanel" aria-labelledby="account-tab-overview" tabindex="0">
+        <div id="account-connected" hidden>
+          <div class="account-identity">
+            <span class="account-initials" id="account-avatar" aria-hidden="true"></span>
+            <div class="account-name">
+              <strong id="account-display"></strong>
+              <p id="account-login" hidden></p>
+              <p id="account-sync" hidden>Synchronisation en attente</p>
+            </div>
+            <a class="account-list-link" href="#watchlist" data-profile-jump>
+              <strong id="account-channel-count">0 / 12</strong><span>Chaînes surveillées ↗</span>
+            </a>
           </div>
-          <a class="account-list-link" href="#watchlist" data-profile-jump>
-            <strong id="account-channel-count">0 / 12</strong><span>Chaînes surveillées ↗</span>
-          </a>
+          <section class="account-notifications" aria-labelledby="account-notifications-title">
+            <div class="head">
+              <h3 id="account-notifications-title">Notifications</h3>
+              <a class="back" href="#notification-settings" data-profile-jump>Gérer les notifications ↗</a>
+            </div>
+            <dl class="account-delivery">
+              <div><dt>Navigateur</dt><dd><span class="pill" id="account-push-state">Désactivées</span></dd></div>
+              <div><dt>Telegram</dt><dd><span class="pill" id="account-telegram-state">Non connecté</span></dd></div>
+            </dl>
+          </section>
         </div>
-        <section class="account-notifications" aria-labelledby="account-notifications-title">
-          <div class="head">
-            <h3 id="account-notifications-title">Notifications</h3>
-            <a class="back" href="#notification-settings" data-profile-jump>Gérer les notifications ↗</a>
+        <details id="profile-details">
+          <summary>Importer mes suivis Twitch</summary>
+          <div class="profile-import-body">
+            <div id="profile-signin">
+              <p class="profile-note">Utilise <a href="/config">ta configuration Stremio</a> pour retrouver les chaînes de ton compte Twitch lié.</p>
+              <form id="profile-form" class="profile-form">
+                <label>Identifiant de config ou lien d’installation<input id="profile-id" required maxlength="260" autocomplete="username" spellcheck="false"></label>
+                <label>Mot de passe du profil<input id="profile-password" type="password" required maxlength="100" autocomplete="current-password"></label>
+                <button class="primary" type="submit">Charger mes suivis</button>
+              </form>
+            </div>
+            <div id="profile-connected" hidden>
+              <div class="head profile-linked">
+                <strong id="profile-name"></strong>
+                <button type="button" id="profile-logout" class="ghost">Déconnecter le profil TwitchIO</button>
+              </div>
+              <div class="profile-tools">
+                <input id="follow-filter" placeholder="Filtrer mes suivis" aria-label="Filtrer mes suivis">
+                <button type="button" id="profile-refresh">Actualiser</button>
+                <button type="button" id="follow-add">Ajouter à ma liste</button>
+              </div>
+              <ul id="follow-results" class="results"></ul>
+              <button type="button" id="follow-more" class="ghost" hidden>Voir plus</button>
+            </div>
+            <p id="profile-status" class="search-status" role="status"></p>
           </div>
-          <dl class="account-delivery">
-            <div><dt>Navigateur</dt><dd><span class="pill" id="account-push-state">Désactivées</span></dd></div>
-            <div><dt>Telegram</dt><dd><span class="pill" id="account-telegram-state">Non connecté</span></dd></div>
-          </dl>
+        </details>
+        <footer class="account-footer" id="account-footer" hidden>
+          <p id="account-status" class="search-status" role="status"></p>
+          <button type="button" id="account-logout" class="ghost">Se déconnecter</button>
+        </footer>
+      </div>
+      <div id="account-settings" role="tabpanel" aria-labelledby="account-tab-settings" tabindex="0" hidden>
+        <section class="account-card" aria-labelledby="account-appearance-title">
+          <h3 id="account-appearance-title">Apparence</h3>
+          <p class="profile-note">Identifiant de connexion <strong id="account-settings-login"></strong></p>
+          <form id="account-appearance-form" class="profile-form" method="post">
+            <label>Nom affiché <input id="account-display-input" name="displayName" maxlength="32" autocomplete="off"></label>
+            <fieldset class="account-themes">
+              <legend>Couleur de l’avatar</legend>
+              <div class="avatar-choices">
+                <label class="avatar-choice"><input type="radio" name="avatarTheme" value="violet" checked><span class="avatar-swatch" aria-hidden="true"></span>Violet</label>
+                <label class="avatar-choice"><input type="radio" name="avatarTheme" value="ocean"><span class="avatar-swatch" data-avatar-theme="ocean" aria-hidden="true"></span>Bleu</label>
+                <label class="avatar-choice"><input type="radio" name="avatarTheme" value="mint"><span class="avatar-swatch" data-avatar-theme="mint" aria-hidden="true"></span>Vert</label>
+                <label class="avatar-choice"><input type="radio" name="avatarTheme" value="amber"><span class="avatar-swatch" data-avatar-theme="amber" aria-hidden="true"></span>Ambre</label>
+                <label class="avatar-choice"><input type="radio" name="avatarTheme" value="rose"><span class="avatar-swatch" data-avatar-theme="rose" aria-hidden="true"></span>Rose</label>
+              </div>
+            </fieldset>
+            <div class="account-appearance-preview" role="group" aria-label="Aperçu de l’apparence">
+              <span class="account-initials" id="account-preview-avatar" aria-hidden="true"></span>
+              <strong id="account-preview-name"></strong>
+            </div>
+            <button class="primary" type="submit">Enregistrer l’apparence</button>
+            <p class="search-status" id="account-appearance-status" role="status"></p>
+          </form>
+        </section>
+        <section class="account-card" aria-labelledby="account-security-title">
+          <h3 id="account-security-title">Sécurité</h3>
+          <div id="account-recovery-result" class="account-recovery" hidden>
+            <strong>Nouveau code de récupération</strong>
+            <p>Garde-le en lieu sûr. Il remplace le précédent et permet de récupérer ton compte une seule fois.</p>
+            <div class="account-recovery-input">
+              <input id="account-new-recovery" readonly autocomplete="off" aria-label="Nouveau code de récupération">
+              <button type="button" id="account-copy-recovery">Copier</button>
+            </div>
+            <p class="search-status" id="account-copy-status" role="status"></p>
+          </div>
+          <details name="account-security">
+            <summary>Changer le mot de passe</summary>
+            <p>Tes autres sessions seront fermées et un nouveau code de récupération sera généré.</p>
+            <form id="account-password-form" class="profile-form" method="post">
+              <label>Mot de passe actuel <input type="password" name="currentPassword" autocomplete="current-password" maxlength="100" required></label>
+              <label>Nouveau mot de passe <input type="password" name="newPassword" autocomplete="new-password" minlength="10" maxlength="100" required></label>
+              <label>Confirmer le mot de passe <input type="password" name="confirmPassword" autocomplete="new-password" minlength="10" maxlength="100" required></label>
+              <label class="account-visibility"><input type="checkbox" id="account-show-passwords"> Afficher les mots de passe</label>
+              <button class="primary" type="submit">Changer mon mot de passe</button>
+              <p class="search-status" id="account-password-status" role="status"></p>
+            </form>
+          </details>
+          <details name="account-security">
+            <summary>Renouveler le code de récupération</summary>
+            <p>Le code précédent sera invalidé dès que tu en génères un nouveau.</p>
+            <form id="account-recovery-form" class="profile-form" method="post">
+              <label>Mot de passe actuel <input type="password" name="currentPassword" autocomplete="current-password" maxlength="100" required></label>
+              <button type="submit">Générer un nouveau code</button>
+              <p class="search-status" id="account-recovery-status" role="status"></p>
+            </form>
+          </details>
         </section>
       </div>
-      <details id="profile-details">
-        <summary>Importer mes suivis Twitch</summary>
-        <div class="profile-import-body">
-          <div id="profile-signin">
-            <p class="profile-note">Utilise <a href="/config">ta configuration Stremio</a> pour retrouver les chaînes de ton compte Twitch lié.</p>
-            <form id="profile-form" class="profile-form">
-              <label>Identifiant de config ou lien d’installation<input id="profile-id" required maxlength="260" autocomplete="username" spellcheck="false"></label>
-              <label>Mot de passe du profil<input id="profile-password" type="password" required maxlength="100" autocomplete="current-password"></label>
-              <button class="primary" type="submit">Charger mes suivis</button>
-            </form>
-          </div>
-          <div id="profile-connected" hidden>
-            <div class="head profile-linked">
-              <strong id="profile-name"></strong>
-              <button type="button" id="profile-logout" class="ghost">Déconnecter le profil TwitchIO</button>
-            </div>
-            <div class="profile-tools">
-              <input id="follow-filter" placeholder="Filtrer mes suivis" aria-label="Filtrer mes suivis">
-              <button type="button" id="profile-refresh">Actualiser</button>
-              <button type="button" id="follow-add">Ajouter à ma liste</button>
-            </div>
-            <ul id="follow-results" class="results"></ul>
-            <button type="button" id="follow-more" class="ghost" hidden>Voir plus</button>
-          </div>
-          <p id="profile-status" class="search-status" role="status"></p>
-        </div>
-      </details>
-      <footer class="account-footer" id="account-footer" hidden>
-        <p id="account-status" class="search-status" role="status"></p>
-        <button type="button" id="account-logout" class="ghost">Se déconnecter</button>
-      </footer>
     </div>
   </dialog>
   <dialog id="streamer" aria-labelledby="streamer-title">

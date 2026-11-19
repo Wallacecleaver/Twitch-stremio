@@ -1591,8 +1591,9 @@ async function handler(req, res) {
       if (!/^application\/json(?:;|$)/i.test(req.headers['content-type'] || '')) return send(res, 415, 'text/plain; charset=utf-8', 'JSON attendu');
       let body;
       try { body = JSON.parse(await readBody(req)); } catch { return json(res, { error: 'Requête invalide.' }); }
-      const { session, ...result } = await alerts.accountAction(body, readSession(req), store.ipOf(req));
-      if (result.ok) result.alerts = await alerts.action({ action: 'read', token: body.token }, session);
+      const currentSession = readSession(req);
+      const { session, ...result } = await alerts.accountAction(body, currentSession, store.ipOf(req));
+      if (result.ok) result.alerts = await alerts.action({ action: 'read', token: body.token }, session ?? currentSession);
       const cookies = session === undefined ? undefined : { 'Set-Cookie': ['/api/alerts', '/alerte'].map(path => sessionCookie(req, session, path)) };
       return json(res, result, cookies);
     }
