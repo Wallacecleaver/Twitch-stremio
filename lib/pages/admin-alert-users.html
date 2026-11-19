@@ -19,7 +19,12 @@
 .alert-users .alert-user-channels{max-width:24ch;overflow:hidden;text-overflow:ellipsis;display:block}
 .alert-users .alert-user-role{margin-top:3px;color:var(--t2);font-size:.75rem}
 .alert-users .alert-user-error{color:#fca5a5}
-.alert-users dialog{width:min(470px,calc(100% - 30px));padding:0;border-radius:14px;background:var(--bg3);border:1px solid var(--bd);color:var(--t);box-shadow:0 24px 70px #0009}
+.alert-users dialog{
+  position:fixed;inset:0;margin:auto;
+  width:min(470px,calc(100% - 30px));max-height:calc(100% - 30px);overflow:auto;
+  padding:0;border-radius:14px;background:var(--bg3);border:1px solid var(--bd);color:var(--t);
+  box-shadow:0 24px 70px #0009;
+}
 .alert-users dialog::backdrop{background:#09090bc0}
 .alert-users dialog .sh{padding:12px 18px}
 .alert-user-form{display:grid;gap:14px}
