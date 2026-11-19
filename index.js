@@ -1078,6 +1078,7 @@ const account = {
 };
 const pageCache = {};
 const rawPage = name => pageCache[name] ||= fs.readFileSync(path.join(__dirname, 'lib', 'pages', name), 'utf8');
+const alertsPageRevision = crypto.createHash('sha256').update(rawPage('alerte.html')).update(rawPage('alerte.js')).digest('hex').slice(0, 16);
 const page = rawPage;
 const escH = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const accentCss = hex => { const rgb = [1, 3, 5].map(k => parseInt(hex.slice(k, k + 2), 16)), dark = rgb.map(x => Math.round(x * .72).toString(16).padStart(2, '0')).join(''); return ':root{--a:' + hex + ';--ah:#' + dark + ';--as:rgba(' + rgb.join(',') + ',.15)}'; };
@@ -1534,9 +1535,9 @@ async function handler(req, res) {
     if (seg[0] === 'logo.svg') return send(res, 200, 'image/svg+xml', asset('logo.svg'), { 'Cache-Control': 'public, max-age=86400' });
     if (!base && seg.length === 1 && seg[0] === 'alerte') {
       const page = alerts.publicSettings();
-      const fields = { NAME: SS.name, TITLE: page.title, INTRO: page.intro, COLOR: SS.color };
-      const html = rawPage('alerte.html').replace(/\{\{(NAME|TITLE|INTRO|COLOR)\}\}/g, (_, key) => escH(fields[key]));
-      return send(res, 200, 'text/html; charset=utf-8', html, { 'Cache-Control': 'no-cache', 'Content-Security-Policy': CONFIG_CSP });
+      const fields = { NAME: SS.name, TITLE: page.title, INTRO: page.intro, COLOR: SS.color, REVISION: alertsPageRevision };
+      const html = rawPage('alerte.html').replace(/\{\{(NAME|TITLE|INTRO|COLOR|REVISION)\}\}/g, (_, key) => escH(fields[key]));
+      return send(res, 200, 'text/html; charset=utf-8', html, { 'Cache-Control': 'no-store', 'Content-Security-Policy': CONFIG_CSP });
     }
     if (!base && seg.length === 1 && ['alerte.js', 'alerte-sw.js'].includes(seg[0])) {
       return send(res, 200, 'text/javascript; charset=utf-8', rawPage(seg[0]), { 'Cache-Control': 'no-cache' });
@@ -1548,6 +1549,7 @@ async function handler(req, res) {
       }), { 'Cache-Control': 'no-cache' });
     }
     if (!base && seg.length === 2 && seg[0] === 'api' && seg[1] === 'alerts') {
+      res.setHeader('X-TwitchIO-Alerts-Revision', alertsPageRevision);
       if (req.method === 'GET') {
         const { paused, telegramAvailable } = alerts.publicSettings();
         return json(res, { publicKey: await alerts.publicKey(), paused, telegramAvailable });
