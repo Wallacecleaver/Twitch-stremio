@@ -1080,7 +1080,6 @@ const account = {
 const pageCache = {};
 const rawPage = name => pageCache[name] ||= fs.readFileSync(path.join(__dirname, 'lib', 'pages', name), 'utf8');
 const alertsPageRevision = crypto.createHash('sha256').update(rawPage('alerte.html')).update(rawPage('alerte.js')).digest('hex').slice(0, 16);
-const alertsAccountRevision = crypto.createHash('sha256').update(rawPage('alerte-compte.html')).update(rawPage('alerte-compte.js')).digest('hex').slice(0, 16);
 const page = rawPage;
 const escH = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const accentCss = hex => { const rgb = [1, 3, 5].map(k => parseInt(hex.slice(k, k + 2), 16)), dark = rgb.map(x => Math.round(x * .72).toString(16).padStart(2, '0')).join(''); return ':root{--a:' + hex + ';--ah:#' + dark + ';--as:rgba(' + rgb.join(',') + ',.15)}'; };
@@ -1092,6 +1091,9 @@ async function configPage() { // page /config : nom, logo, couleur et textes vie
   return rawPage('config.html').replace('/*{{ANNCSS}}*/', () => rawPage('ann.css')).replace('/*{{ANNJS}}*/', () => rawPage('ann.js')).replace(/\{\{NAME\}\}/g, () => escH(s.name)).replace(/\{\{COLOR\}\}/g, () => s.color).replace('{{ACCENT}}', () => accentCss(s.color)).replace('{{CREDIT}}', () => credit).replace('{{LEGAL}}', () => legal).replace('{{DISCORD}}', () => discordCard(s)).replace(/\{\{V\}\}/g, () => String(s.logoV)).replace('{{VERSION}}', () => require('./package.json').version).replace('{{SITE}}', () => JSON.stringify(pub).replace(/</g, '\\u003c'));
 }
 const asset = name => pageCache['a:' + name] ||= fs.readFileSync(path.join(__dirname, 'lib', 'assets', name));
+const alertsAccountRevision = crypto.createHash('sha256')
+  .update(rawPage('alerte-compte.html')).update(rawPage('alerte-compte.js')).update(asset('alerte-compte.webp'))
+  .digest('hex').slice(0, 16);
 const summary = c => [c.cap ? 'max ' + c.cap + 'p' : 'qualité max', c.fps60 ? '60 i/s' : '30 i/s', c.relay ? 'relais' : 'sans relais', c.fixed + ' fixes', c.hevc ? '1440p' : '', c.tok ? 'compte lié' : '', c.audio ? 'audio' : '', c.seg && c.seg !== 'auto' ? 'segments ' + c.seg : '', c.fmt && c.fmt !== fmtLib.DEFAULT ? 'affichage ' + c.fmt : ''].filter(Boolean).join(' · ');
 const readBody = req => new Promise(r => { let b = ''; req.on('data', c => { b += c; if (b.length > 8000) req.destroy(); }); req.on('end', () => r(b)); req.on('error', () => r(b)); });
 const text = (v, n) => String(v ?? '').replace(/[\u0000-\u001f]/g, ' ').slice(0, n);
