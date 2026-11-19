@@ -161,7 +161,13 @@ En complément de l'addon, la page **`/alerte`** te prévient quand un streamer 
 - Cherche un streamer par pseudo ou colle le lien de sa chaîne.
 - Parcours *Tendance en français* et *Populaires sur Twitch*.
 - Ouvre une fiche streamer pour voir son calendrier Twitch et l'ajouter.
-- Dans *Mes suivis*, connecte-toi avec l'identifiant (ou le lien d'installation) et le mot de passe de ton profil TwitchIO : si un compte Twitch y est lié, tu choisis les suivis à importer.
+- Dans **Connexion → Importer mes suivis Twitch**, utilise l’identifiant et le mot de passe de ton profil Stremio. Si ce profil est lié à Twitch, tu peux choisir les chaînes à importer.
+
+**Retrouver ta liste sur tes appareils**
+
+Dans **Connexion → Créer un compte**, choisis un pseudo et un mot de passe. La création récupère la liste, le lien Telegram et les notifications déjà configurés dans ce navigateur. Garde le code de récupération affiché à la création. **Mot de passe oublié** permet de l’utiliser une fois et d’en obtenir un nouveau.
+
+La liste et les préférences de ton compte se synchronisent entre appareils. Telegram est lié au compte. Les notifications du navigateur s’activent sur chaque appareil et s’arrêtent sur celui où tu te déconnectes. Le compte reste facultatif.
 
 **Affiner ce que tu reçois**
 

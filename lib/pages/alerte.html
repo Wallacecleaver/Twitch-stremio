@@ -253,6 +253,11 @@ dialog::backdrop { background: #07050dc2; backdrop-filter: blur(3px); }
 .profile-note a { text-decoration: underline; }
 .profile-tools { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
 .profile-tools input { flex: 1 1 160px; }
+.account-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.account-tabs [aria-pressed="true"] { background: #38265b; border-color: var(--violet); }
+.account-recovery { border: 1px solid var(--line2); border-radius: 12px; padding: 12px; margin-top: 14px; }
+.account-recovery input { width: 100%; margin-top: 6px; font-family: monospace; }
+#connection details { border-top: 1px solid var(--line); margin-top: 18px; padding-top: 14px; }
 dialog input {
   min-width: 0; width: 100%; padding: 10px 12px; border: 1px solid var(--line2); border-radius: 11px;
   background: #13101f; color: var(--text);
@@ -520,7 +525,31 @@ dialog input:focus { border-color: var(--violet); outline: 0; box-shadow: 0 0 0 
   </div>
   <div class="toasts" id="toasts" aria-live="polite"></div>
   <dialog id="connection" aria-labelledby="connection-title">
-    <div class="head"><h2 id="connection-title">Connexion TwitchIO</h2><button type="button" id="close-connection" class="ghost">Fermer</button></div>
+    <div class="head"><h2 id="connection-title">Compte Alertes</h2><button type="button" id="close-connection" class="ghost">Fermer</button></div>
+    <div id="account-signin">
+      <div class="account-tabs" aria-label="Accès au compte">
+        <button type="button" data-account-mode="login" aria-pressed="true">Se connecter</button>
+        <button type="button" data-account-mode="register" aria-pressed="false">Créer un compte</button>
+        <button type="button" data-account-mode="recover" aria-pressed="false">Mot de passe oublié</button>
+      </div>
+      <form id="account-form" class="profile-form">
+        <label>Pseudo<input id="account-name" required minlength="3" maxlength="24" pattern="[A-Za-z0-9_\-]{3,24}" autocomplete="username" spellcheck="false"></label>
+        <label id="account-code-label" hidden>Code de récupération<input id="account-code" maxlength="24" autocomplete="off" spellcheck="false" disabled></label>
+        <label><span id="account-password-label">Mot de passe</span><input id="account-password" type="password" required maxlength="100" autocomplete="current-password"></label>
+        <p id="account-help" class="profile-note">Retrouve ta liste de chaînes sur tes appareils.</p>
+        <button id="account-submit" class="primary" type="submit">Se connecter</button>
+      </form>
+    </div>
+    <div id="account-connected" hidden>
+      <div class="head"><strong id="account-display"></strong><button type="button" id="account-logout" class="ghost">Se déconnecter</button></div>
+      <p class="profile-note">Ta liste est synchronisée sur tes appareils et avec Telegram.</p>
+      <div id="account-recovery" class="account-recovery" hidden>
+        <label>Code de récupération<input id="account-recovery-value" readonly spellcheck="false"></label>
+        <p class="profile-note">Garde ce code en lieu sûr. Il permet de changer ton mot de passe une seule fois.</p>
+      </div>
+    </div>
+    <p id="account-status" class="search-status" role="status"></p>
+    <details><summary>Importer mes suivis Twitch</summary>
     <div id="profile-signin">
       <p class="profile-note">Connecte ton profil TwitchIO pour retrouver les chaînes du compte Twitch lié dans <a href="/config">ta configuration</a>.</p>
       <form id="profile-form" class="profile-form">
@@ -543,6 +572,7 @@ dialog input:focus { border-color: var(--violet); outline: 0; box-shadow: 0 0 0 
       <button type="button" id="follow-more" class="ghost" hidden>Voir plus</button>
     </div>
     <p id="profile-status" class="search-status" role="status"></p>
+    </details>
   </dialog>
   <dialog id="streamer" aria-labelledby="streamer-title">
     <div class="streamer-hero">

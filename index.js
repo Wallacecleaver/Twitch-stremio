@@ -63,6 +63,7 @@ const sealLib = require('./lib/seal');
 const akeys = require('./lib/akeys');
 const siteLib = require('./lib/site');
 const { createAlerts } = require('./lib/alerts');
+const { readSession, sessionCookie } = require('./lib/alert-accounts');
 
 const PORT = process.env.PORT || 7000;
 const HOST = process.env.HOST || '0.0.0.0';
@@ -1559,7 +1560,17 @@ async function handler(req, res) {
       if (tooMany(req)) return json(res, { error: 'Trop de demandes. Réessaie dans un instant.' });
       let body;
       try { body = JSON.parse(await readBody(req)); } catch { return json(res, { error: 'Requête invalide.' }); }
-      return json(res, await alerts.action(body));
+      return json(res, await alerts.action(body, readSession(req)));
+    }
+    if (!base && seg.length === 3 && seg[0] === 'api' && seg[1] === 'alerts' && seg[2] === 'account') {
+      if (req.method !== 'POST') return send(res, 405, 'text/plain; charset=utf-8', 'Méthode non autorisée', { Allow: 'POST' });
+      if (!/^application\/json(?:;|$)/i.test(req.headers['content-type'] || '')) return send(res, 415, 'text/plain; charset=utf-8', 'JSON attendu');
+      let body;
+      try { body = JSON.parse(await readBody(req)); } catch { return json(res, { error: 'Requête invalide.' }); }
+      const { session, ...result } = await alerts.accountAction(body, readSession(req), store.ipOf(req));
+      if (result.ok) result.alerts = await alerts.action({ action: 'read', token: body.token }, session);
+      const secure = req.socket.encrypted || String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim() === 'https';
+      return json(res, result, session === undefined ? undefined : { 'Set-Cookie': sessionCookie(session, secure) });
     }
     if (!base && seg.length === 3 && seg[0] === 'api' && seg[1] === 'alerts' && seg[2] === 'discover' && req.method === 'GET') {
       if (tooMany(req)) return json(res, { error: 'Trop de demandes. Réessaie dans un instant.' });
