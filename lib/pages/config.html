@@ -492,6 +492,22 @@ const annHash=a=>{let h=0;for(const c of (a.type+'|'+a.title+'|'+a.text))h=(h*31
 })();
 /* ===== Patch notes : ajoute une entrée EN HAUT de la liste à chaque mise à jour ===== */
 const PATCHNOTES=[
+ {id:'2026-11-21',date:'13 – 21 novembre 2026',title:'TwitchIO Alertes : comptes, Telegram et calendrier',groups:[
+  ['Nouveautés',[
+   '**Page Alertes refaite** : vignettes des lives, onglet des lives populaires (triés par spectateurs), fiche streamer avec son calendrier, partage, ajout à l\'agenda et filtre « en live ».',
+   '**Comptes Alertes** : page de connexion dédiée (avec le lien Discord) et liste de chaînes synchronisée sur tous tes appareils.',
+   '**Profil et sécurité** : nouveaux réglages pour ton compte Alertes, et gestion ou suppression des comptes depuis le dashboard.',
+   '**Catalogues Stremio personnels** : un lien d\'installation à toi pour ajouter tes Alertes dans Stremio.',
+   '**Sourdine par chaîne et heures calmes**, avec le jeu affiché dans les notifications Push et Telegram.',
+   '**Prochains lives** des chaînes surveillées regroupés dans un calendrier.']],
+  ['Telegram',[
+   '**Bot configurable depuis le dashboard** Alertes ; le guide se masque une fois le bot en place.',
+   'Chaînes surveillées **synchronisées automatiquement** avec Telegram, avec un guide de connexion quand la liste est vide.',
+   'Messages et commandes du bot améliorés.']],
+  ['Dashboard et performances',[
+   '**Suivi des alertes enrichi** : abonnés Push / Telegram, lives en cours, jeu et titre, 20 dernières alertes, actualisation automatique.',
+   'Les onglets Alertes se rafraîchissent après un déploiement.',
+   'Relais Cloudflare compatible avec les adresses HLS stables.']]]},
  {id:'2026-11-12',date:'12 novembre 2026',title:'Confort et sécurité',groups:[
   ['Améliorations',[
    '**Connexion du compte Twitch** : le lien twitch.tv/activate s\'ouvre avec ton code déjà pré-rempli.',
