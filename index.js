@@ -377,14 +377,17 @@ function viaAddonSegments(text, origin, base, mode) { // morceaux et segment d'i
   }).join('\n');
 }
 const pcUrl = (origin, base, u, mode) => (mode === 'worker' ? segOrigin() : origin + base) + '/m/' + sealLib.seal(u) + '.m3u8';
-function pcMaster(text, origin, base, mode) {
+// login : si donné, chaque qualité porte la marque « #live=<chaîne>~<hauteur>~<débit> » dans son adresse chiffrée : si une pub apparaît plus tard dans la liste de segments,
+// on sait quelle chaîne et quelle qualité remplacer par une version sans pub (Twitch ignore ce qui suit le « # »)
+function pcMaster(text, origin, base, mode, login) {
   const L = text.split(/\r?\n/), out = [];
   for (let i = 0; i < L.length; i++) {
     if (L[i].startsWith('#EXT-X-MEDIA')) continue;
     if (L[i].startsWith('#EXT-X-STREAM-INF')) {
       const u = L[i + 1] || '';
       if (/audio_only/i.test(L[i] + u) || !/RESOLUTION=/.test(L[i])) { i++; continue; }
-      out.push(L[i].replace(/,?AUDIO="[^"]*"/, '').replace(/,?VIDEO="[^"]*"/, ''), /^https?:/.test(u) ? pcUrl(origin, base, u, mode) : u); i++;
+      const mk = login ? '#live=' + login + '~' + ((L[i].match(/RESOLUTION=\d+x(\d+)/) || [])[1] || 0) + '~' + ((L[i].match(/(?:^|[:,])BANDWIDTH=(\d+)/) || [])[1] || 0) : '';
+      out.push(L[i].replace(/,?AUDIO="[^"]*"/, '').replace(/,?VIDEO="[^"]*"/, ''), /^https?:/.test(u) ? pcUrl(origin, base, u + mk, mode) : u); i++;
     } else out.push(L[i]);
   }
   return out.join('\n');
@@ -973,6 +976,41 @@ async function vodToken(id, cid = GQL_CLIENT_ID, playerType = 'site', oauth = nu
 }
 // Plusieurs variantes en parallèle (identifiant client, type de lecteur, adresse usher) : on garde la première qui répond.
 const VOD_TRIES = [{ cid: GQL_CLIENT_ID, pt: 'site', path: '/vod/' }, { cid: GQL_CLIENT_ID, pt: 'site', path: '/vod/v2/' }, { cid: GQL_CLIENT_ID, pt: 'embed', path: '/vod/' }, { cid: TV_ID, pt: 'site', path: '/vod/' }, { cid: ANDROID_ID, pt: 'site', path: '/vod/' }];
+// ---- Pub apparue EN COURS de live : la liste de segments d'une qualité contient une pub → on sert la même qualité venant d'un relais ou d'un lecteur de secours sans pub
+// (même idée que le script Twitch HLS Proxy / TTV LOL PRO : « repli si le flux servi contient une pub »). MIDAD=0 pour couper.
+const swapCache = new Map(); // chaîne|hauteur → { p: promesse de l'adresse sans pub, exp }
+const closestVariant = (text, base, live) => {
+  const vs = variantsOf(absolutize(text, base)).filter(v => !v.audio);
+  return vs.find(v => live.h && v.h === live.h) || vs.sort((a, b) => Math.abs(a.bw - live.bw) - Math.abs(b.bw - live.bw))[0];
+};
+async function cleanMediaFrom(src, live) { // une source (liste principale) → l'adresse de la liste de segments de cette qualité, si elle est sans pub
+  const v = src && isMaster(src.text) ? closestVariant(src.text, src.url, live) : null;
+  if (!v) throw new Error('qualité absente');
+  const r = await fetchPlaylist(v.url);
+  if (!r.ok || !r.text.startsWith('#EXTM3U') || AD_RE.test(r.text)) throw new Error('pub ou indisponible');
+  return v.url;
+}
+async function findAdFree(live) {
+  const login = live.login;
+  const tries = [
+    ...proxyList().filter(px => !isBanned(login, px.name)).map(px => () => askProxy(px, login, null, false).then(v => cleanMediaFrom(v, live))), // tous les relais en parallèle
+    () => backupSource(login).then(b => cleanMediaFrom(b, live)), // lecteurs de secours (embed, popout, autoplay)
+    () => liveOnce(login, 'site', null).then(o => cleanMediaFrom(o, live)), // le flux officiel, s'il est redevenu propre
+  ];
+  const url = await Promise.any(tries.map(f => f()));
+  store.incr('midad_swap');
+  return url;
+}
+async function adFreeMedia(live) { // la liste de segments sans pub pour cette chaîne et cette qualité (20 s en cache, un seul calcul partagé par tous les lecteurs)
+  const key = live.login + '|' + live.h, c = swapCache.get(key);
+  if (c && c.exp > Date.now()) { try { const u = await c.p, r = await fetchPlaylist(u); if (r.ok && !AD_RE.test(r.text)) return { url: u, r }; } catch { /* on recalcule */ } swapCache.delete(key); }
+  const p = findAdFree(live);
+  if (swapCache.size > 200) swapCache.clear();
+  swapCache.set(key, { p, exp: Date.now() + 20000 });
+  p.catch(() => swapCache.delete(key));
+  const url = await p;
+  return { url, r: await fetchPlaylist(url) };
+}
 // ---- « Sans aucune pub » : on lit la rediffusion (VOD) du live en cours, qui n'a jamais de pub, avec ~30 s de retard (même principe que le mode « Bloqueur de pub (Experimental) » du script Twitch HLS Proxy)
 const liveVodCache = new Map(); // chaîne → { id, exp }
 async function liveVodId(login) { // identifiant de la rediffusion du live EN COURS (null : pas de rediffusion, ou live pas encore enregistré)
@@ -1808,10 +1846,18 @@ async function handler(req, res) {
       }
       let vodLive = false;
       if (u && u.endsWith(VOD_MARK)) { vodLive = true; u = u.slice(0, -VOD_MARK.length); }
+      let live = null; // marque « #live=chaîne~hauteur~débit » posée par pcMaster
+      const lm = u && /#live=([a-z0-9_]{3,25})~(\d+)~(\d+)$/.exec(u);
+      if (lm) { live = { login: lm[1], h: Number(lm[2]), bw: Number(lm[3]) }; u = u.slice(0, lm.index); }
       if (!u || !/^https:\/\//.test(u)) return send(res, 400, 'text/plain; charset=utf-8', 'Lien invalide');
       const r = await fetchPlaylist(u), t = r.text;
       if (!r.ok || !t.startsWith('#EXTM3U')) return send(res, r.ok ? 502 : r.status, 'text/plain; charset=utf-8', 'Flux indisponible');
-      let body = cleanMedia(absolutize(t, r.url));
+      let src = r, adSwap = false;
+      if (live && process.env.MIDAD !== '0' && FEAT.relays !== false && AD_RE.test(t)) { // une pub est dans cette liste : on prend la même qualité sans pub (si on en trouve une)
+        try { const f = await adFreeMedia(live); src = f.r; adSwap = true; store.incr('midad'); } catch { store.incr('midad_echec'); }
+      }
+      let body = cleanMedia(absolutize(src.text, src.url));
+      if (adSwap) res._dbg = 'sans-pub';
       if (vodLive) body = vodLiveWindow(body);
       if (/cloudfront/.test(u)) body = body.replace(/-unmuted/g, '-muted'); // rediffs réservées aux abonnés : seuls les segments « muted » sont ouverts
       const sm = segMode(req, cfg); res._dbg = 'seg=' + sm;
@@ -1835,14 +1881,14 @@ async function handler(req, res) {
       if (!LOGIN_RE.test(login)) return send(res, 400, 'text/plain; charset=utf-8', 'Nom de chaîne invalide');
       if (alertCatalog && !alertCatalog.logins.includes(login)) return send(res, 404, 'text/plain', 'Chaîne non surveillée');
       if (F.maint) return send(res, 503, 'text/plain; charset=utf-8', 'Addon en maintenance');
-      const sm = segMode(req, cfg), fin = m => oneAudio(pcOn(cfg) || sm !== 'direct' ? pcMaster(m, originOf(req), base, sm) : m, req);
+      const sm = segMode(req, cfg), tagLive = cfg.relay && F.relays && process.env.MIDAD !== '0' && sm !== 'worker' ? login : undefined, fin = m => oneAudio(pcOn(cfg) || sm !== 'direct' || tagLive ? pcMaster(m, originOf(req), base, sm, tagLive) : m, req); // tagLive : la chaîne est notée dans chaque qualité pour rattraper une pub arrivée en plein live (pas en mode « serveur externe » : c'est Cloudflare qui sert alors les listes)
       if (cfg.vod && F.vods && sealLib.available()) { // « Sans aucune pub » : rediffusion du live en cours (~30 s de retard) ; au moindre souci, on retombe sur le direct habituel
         try {
           const vid = await liveVodId(login), vm = vid ? await vodMaster(vid, auth) : null;
           if (vm && !vm.direct) {
             store.incr('play'); store.incr('vodlive'); store.top(login); store.user(pseudo, { ch: login, dev: cfg.device });
             store.log({ k: 'play', u: pseudo || undefined, ch: login, seg: sm, relais: 'rediffusion sans pub', ms: Date.now() - t0, appareil: cfg.device || undefined, dev });
-            return send(res, 200, 'application/vnd.apple.mpegurl', oneAudio(pcMaster(markVodMaster(cfgLib.filterMaster(vm.text, cfg)), originOf(req), base, sm), req), { 'Cache-Control': 'no-store', 'X-Relais': 'vod' });
+            return send(res, 200, 'application/vnd.apple.mpegurl', oneAudio(pcMaster(markVodMaster(cfgLib.filterMaster(vm.text, cfg)), originOf(req), base, sm === 'worker' ? 'direct' : sm), req), { 'Cache-Control': 'no-store', 'X-Relais': 'vod' });
           }
         } catch (e) { store.incr('vodlive_repli'); }
       }
