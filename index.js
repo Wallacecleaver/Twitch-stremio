@@ -322,6 +322,12 @@ async function bestProxy(login, hevc) { // le relais valide le plus rapide (les 
   try { v = await Promise.any(proxyList().filter(px => !isBanned(login, px.name)).map(px => askProxy(px, login, all.signal, hevc))); } catch { v = null; }
   all.abort();
   if (!v && FEAT.relays !== false) v = await backupSource(login).catch(() => null); // aucun relais : flux « secours » sans pub si le flux officiel en contient
+  else if (v && FEAT.relays !== false && process.env.BACKUP_ADFREE !== '0' && await masterHasAds(v).catch(() => false)) {
+    // un relais répond mais sa liste de lecture contient elle-même une pub : on passe au flux « secours » (embed, popout, autoplay),
+    // ou au flux officiel (null) s'il n'y a pas mieux, plutôt que de servir la pub du relais
+    store.incr('r|' + v.name + '|ads');
+    v = await backupSource(login).catch(() => null);
+  }
   if (v) store.incr('r|' + v.name + '|win');
   if (proxyCache.size > 200) proxyCache.clear();
   proxyCache.set(key, { v, exp: Date.now() + (v ? 15000 : 5000) });
