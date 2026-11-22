@@ -57,6 +57,7 @@ const store = require('./lib/store');
 const conf = require('./lib/conf');
 conf.init(); // réglages saisis dans le dashboard (Paramètres → Configuration) : appliqués avant tout le reste, ils remplacent les variables du .env
 const makeAdmin = require('./lib/admin');
+const createAdwatch = require('./lib/adwatch');
 const cfgLib = require('./lib/settings');
 const fmtLib = require('./lib/format');
 const sealLib = require('./lib/seal');
@@ -1334,7 +1335,9 @@ async function segmentsInfo() { // onglet « Vidéo » du dashboard : le Worker 
   }
   return { origin, worker, mix: await akeys.mix(), addonAllowed: segAddonOk(), env: { proxy: process.env.TWITCH_SEGMENTS_PROXY ?? '', debug: process.env.DEBUG_HTTP === '1', sealed: sealLib.available() }, cf: await cfUsage() };
 }
-const adminRoute = makeAdmin({ pwHash: pw => pwHash(pw), send, json, relayReport, probe, segments: segmentsInfo, akeys, check: async (login, c, u) => { const n = cfgLib.normalize(c || {}); return checkStream(login, n, u || 'admin', 'admin', n.hevc ? await ownerToken() : null); }, account, alerts, config: () => ({
+// veille des pubs (onglet Pub du dashboard) : suit quelques chaînes comme un lecteur et alerte si le flux servi contient une pub
+const adwatch = createAdwatch({ pick: login => bestProxy(login, false), official: login => liveOnce(login, 'site', null), variantsOf, absolutize, UA });
+const adminRoute = makeAdmin({ adwatch, pwHash: pw => pwHash(pw), send, json, relayReport, probe, segments: segmentsInfo, akeys, check: async (login, c, u) => { const n = cfgLib.normalize(c || {}); return checkStream(login, n, u || 'admin', 'admin', n.hevc ? await ownerToken() : null); }, account, alerts, config: () => ({
   relais: allProxies(),
   rows: [
     ['Version', require('./package.json').version, null],
@@ -2017,6 +2020,7 @@ if (require.main === module) {
   srv.requestTimeout = 30000;
   srv.listen(PORT, HOST, () => {
     alerts.start();
+    adwatch.start();
     console.log('TwitchIO sur http://localhost:' + PORT + (process.env.PUBLIC_URL ? '  (adresse publique : ' + process.env.PUBLIC_URL + ')' : ''));
     console.log('Données : ' + store.file + '  ·  Dashboard : http://localhost:' + PORT + '/admin  ·  Configuration : http://localhost:' + PORT + '/config');
   });

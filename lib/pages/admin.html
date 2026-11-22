@@ -181,6 +181,20 @@ pre{background:var(--bg2);border:1px solid var(--bs);border-radius:var(--r);padd
  <div class="sec"><div class="sh"><div class="stt"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>Tester les relais maintenant</div><div class="ctl"><input id="rch" placeholder="chaîne en direct" size="22"><button class="btn pr" id="rgo">Tester</button></div></div><div class="sb np tw" id="relout"><div class="empty">Entre une chaîne en direct puis lance le test.</div></div></div>
 </div>
 
+<div class="page" id="p-pub">
+ <div class="hero"><div><h1>Pub</h1><p>Le serveur suit quelques chaînes en direct comme un lecteur, et t'alerte ici dès qu'une pub arrive dans le flux donné aux utilisateurs.</p></div></div>
+ <div class="sec" id="adBanner" hidden><div class="sb" style="border-left:3px solid var(--ko)"><b style="color:#fca5a5">Pub en cours dans le flux servi</b><div class="dim" id="adBannerT" style="margin-top:4px"></div></div></div>
+ <div class="sec"><div class="sh"><div class="stt"><svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58a.5.5 0 0 0 .12-.61l-1.92-3.32a.5.5 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.5.5 0 0 0-.48-.41h-3.84a.5.5 0 0 0-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.5.5 0 0 0-.59.22L2.74 8.87a.5.5 0 0 0 .12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.5.5 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.5.5 0 0 0-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z"/></svg>Veille<span class="pill" id="adState"></span></div></div>
+  <div class="sb">
+   <label class="opt"><span class="ot"><b>Veille active</b><small>Vérifie les chaînes ci-dessous à intervalle régulier, tant que le serveur tourne.</small></span><span class="tg"><input id="adOn" type="checkbox"><i></i></span></label>
+   <div class="ctl" style="margin-top:14px"><input id="adCh" placeholder="chaîne en direct (ex : kameto)" size="26" maxlength="25" autocomplete="off"><button class="btn" id="adAdd" type="button">Ajouter</button><span class="dim">Toutes les</span><select id="adEvery"></select></div>
+   <div class="ctl" id="adChips" style="margin-top:12px"></div>
+   <div class="ctl" style="margin-top:16px"><button class="btn pr" id="adSave" type="button">Enregistrer</button><button class="btn" id="adScan" type="button">Vérifier maintenant</button><span class="dim" id="adMsg" role="status"></span></div>
+  </div></div>
+ <div class="sec"><div class="sh"><div class="stt"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>Chaînes suivies</div></div><div class="sb np tw" id="adLive"><div class="empty">Ajoute une chaîne en direct puis active la veille.</div></div></div>
+ <div class="sec"><div class="sh"><div class="stt"><svg viewBox="0 0 24 24"><path d="M12 22a2 2 0 0 0 2-2h-4a2 2 0 0 0 2 2zm6-6v-5a6 6 0 0 0-5-5.92V4a1 1 0 0 0-2 0v1.08A6 6 0 0 0 6 11v5l-2 2v1h16v-1z"/></svg>Alertes<span class="cnt" id="adAN">0</span></div><div class="ctl"><button class="btn" id="adAck" type="button">Tout marquer comme lu</button><button class="btn" id="adClr" type="button">Vider</button></div></div><div class="sb np tw" id="adAl"><div class="empty">Aucune alerte.</div></div></div>
+</div>
+
 <div class="page" id="p-seg">
  <div class="hero"><div><h1>Vidéo · Cloudflare</h1><p id="segSub">Qui télécharge la vidéo : l'appareil de la personne, Cloudflare, ou ce serveur.</p></div><div class="ctl"><button class="btn" id="segRef" type="button">Actualiser</button></div></div>
  <div class="grid" id="segK"></div>
@@ -395,9 +409,9 @@ pre{background:var(--bg2);border:1px solid var(--bs);border-radius:var(--r);padd
 <script>
 /*{{ANNJS}}*/
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
-const IC={alerts:'M12 22a2 2 0 0 0 2-2h-4a2 2 0 0 0 2 2zm6-6v-5a6 6 0 0 0-5-5.92V4a1 1 0 0 0-2 0v1.08A6 6 0 0 0 6 11v5l-2 2v1h16v-1z',seg:'M19.35 10.04A7.49 7.49 0 0 0 12 4C9.11 4 6.6 5.64 5.35 8.04A5.994 5.994 0 0 0 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z',dash:'M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z',users:'M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5s-3 1.34-3 3 1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z',relays:'M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z',logs:'M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-6 10H6v-2h8v2zm4-4H6v-2h12v2z',acct:'M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z',diag:'M19.35 10.04A7.49 7.49 0 0 0 12 4C9.11 4 6.6 5.64 5.35 8.04A5.99 5.99 0 0 0 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM10 17l-3.5-3.5 1.41-1.41L10 14.17l4.59-4.59L16 11l-6 6z',site:'M3 5h18v14H3V5zm2 2v10h14V7H5zm2 2h6v2H7V9zm0 4h10v2H7v-2z',set:'M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58a.5.5 0 0 0 .12-.61l-1.92-3.32a.5.5 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.5.5 0 0 0-.48-.41h-3.84a.5.5 0 0 0-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.5.5 0 0 0-.59.22L2.74 8.87a.5.5 0 0 0 .12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.5.5 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.5.5 0 0 0-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z'};
-const TABS=[['dash','Dashboard'],['users','Utilisateurs'],['logs','Journal'],['relays','Relais'],['seg','Vidéo'],['diag','Diagnostic'],['alerts','Alertes'],['site','Page config'],['set','Paramètres']];
-$('#tabs').innerHTML=TABS.map(([k,l])=>'<button class="tab" data-k="'+k+'"><svg viewBox="0 0 24 24"><path d="'+IC[k]+'"/></svg>'+l+(k==='logs'?'<span class="c" id="errN" hidden></span>':'')+'</button>').join('');
+const IC={pub:'M18 11v2h4v-2h-4zm-2 6.61c.96.71 2.21 1.65 3.2 2.39.4-.53.8-1.07 1.2-1.6-.99-.74-2.24-1.68-3.2-2.4-.4.54-.8 1.08-1.2 1.61zM20.4 5.6c-.4-.53-.8-1.07-1.2-1.6-.99.74-2.24 1.68-3.2 2.4.4.53.8 1.07 1.2 1.6.96-.72 2.21-1.65 3.2-2.4zM4 9c-1.1 0-2 .9-2 2v2c0 1.1.9 2 2 2h1v4h2v-4h1l5 3V6L8 9H4zm11.5 3c0-1.33-.58-2.53-1.5-3.35v6.69c.92-.81 1.5-2.01 1.5-3.34z',alerts:'M12 22a2 2 0 0 0 2-2h-4a2 2 0 0 0 2 2zm6-6v-5a6 6 0 0 0-5-5.92V4a1 1 0 0 0-2 0v1.08A6 6 0 0 0 6 11v5l-2 2v1h16v-1z',seg:'M19.35 10.04A7.49 7.49 0 0 0 12 4C9.11 4 6.6 5.64 5.35 8.04A5.994 5.994 0 0 0 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z',dash:'M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z',users:'M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5s-3 1.34-3 3 1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z',relays:'M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z',logs:'M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-6 10H6v-2h8v2zm4-4H6v-2h12v2z',acct:'M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z',diag:'M19.35 10.04A7.49 7.49 0 0 0 12 4C9.11 4 6.6 5.64 5.35 8.04A5.99 5.99 0 0 0 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM10 17l-3.5-3.5 1.41-1.41L10 14.17l4.59-4.59L16 11l-6 6z',site:'M3 5h18v14H3V5zm2 2v10h14V7H5zm2 2h6v2H7V9zm0 4h10v2H7v-2z',set:'M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58a.5.5 0 0 0 .12-.61l-1.92-3.32a.5.5 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.5.5 0 0 0-.48-.41h-3.84a.5.5 0 0 0-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.5.5 0 0 0-.59.22L2.74 8.87a.5.5 0 0 0 .12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.5.5 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.5.5 0 0 0-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z'};
+const TABS=[['dash','Dashboard'],['users','Utilisateurs'],['logs','Journal'],['relays','Relais'],['pub','Pub'],['seg','Vidéo'],['diag','Diagnostic'],['alerts','Alertes'],['site','Page config'],['set','Paramètres']];
+$('#tabs').innerHTML=TABS.map(([k,l])=>'<button class="tab" data-k="'+k+'"><svg viewBox="0 0 24 24"><path d="'+IC[k]+'"/></svg>'+l+(k==='logs'?'<span class="c" id="errN" hidden></span>':k==='pub'?'<span class="c" id="adN" hidden></span>':'')+'</button>').join('');
 let S=null,paused=false,timer=null,cur='dash';try{cur=localStorage.admtab||'dash'}catch{}if(cur==='acct')cur='diag';if(!TABS.some(t=>t[0]===cur))cur='dash';
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const n=x=>Number(x||0).toLocaleString('fr-FR'),pct=(a,b)=>b?Math.round(100*a/b)+' %':'–';
@@ -406,7 +420,7 @@ const dur=s=>{s=Math.max(0,Math.floor(s));const d=Math.floor(s/86400),h=Math.flo
 let UP0=null,UPAT=0; // temps de fonctionnement : repris à chaque mise à jour du serveur, puis compté seconde par seconde ici
 setInterval(()=>{if(UP0!=null){const e=document.getElementById('upt');if(e)e.textContent=dur(UP0+(Date.now()-UPAT)/1000)}},1000);
 const toast=(m,e)=>{const d=document.createElement('div');d.className='tt'+(e?' e':'');d.textContent=m;$('#toast').append(d);setTimeout(()=>d.remove(),3200)};
-function go(k){cur=k;try{localStorage.admtab=k}catch{}if(k==='alerts')setTimeout(()=>{window.loadAlertUsers();loadAlerts();telegramRequest()},0);if(k==='seg'&&typeof loadSeg==='function')setTimeout(()=>{loadSeg();loadKeys()},0);$$('.page').forEach(p=>p.classList.toggle('on',p.id==='p-'+k));$$('.tab').forEach(t=>t.classList.toggle('on',t.dataset.k===k))}
+function go(k){cur=k;try{localStorage.admtab=k}catch{}if(k==='pub')setTimeout(()=>loadPub(true),0);if(k==='alerts')setTimeout(()=>{window.loadAlertUsers();loadAlerts();telegramRequest()},0);if(k==='seg'&&typeof loadSeg==='function')setTimeout(()=>{loadSeg();loadKeys()},0);$$('.page').forEach(p=>p.classList.toggle('on',p.id==='p-'+k));$$('.tab').forEach(t=>t.classList.toggle('on',t.dataset.k===k))}
 
 let SITE0=null,SITE_OK=false;const dirty=v=>{const e=$('#sSt');e.textContent=v?'Modifications non enregistrées':'';e.classList.toggle('dirty',!!v)};const SWC=['#9d5cff','#6366f1','#0ea5e9','#10b981','#f59e0b','#ef4444','#ec4899'];let sCol='#9d5cff';
 const DEFLEGAL='Addon gratuit et non officiel · n\'héberge aucun contenu';
@@ -659,6 +673,39 @@ $('#segKeys').onclick=async e=>{const c=e.target.closest('[data-akcopy]'),t=e.ta
  if(c)return akCopy(c.dataset.akcopy);
  if(t){const r=await akPost({op:'toggle',id:t.dataset.aktog});r.ok?akRender(r):toast(r.error||'Impossible',1);return}
  if(d){if(!confirm('Supprimer cette clé ? Les profils qui l\'utilisent ne pourront plus faire passer leur vidéo par ce serveur.'))return;const r=await akPost({op:'remove',id:d.dataset.akdel});r.ok?akRender(r):toast(r.error||'Impossible',1)}};
+
+/* ---- onglet Pub : veille des pubs ---- */
+let AD=null,adList=[],adSeen=null;
+const adLbl={clean:['Propre','ok'],blocked:['Pub bloquée chez nous','in'],served:['PUB SERVIE','ko'],offline:['Hors ligne',''],error:['Erreur','wa'],wait:['En attente','']};
+function adBadge(a){
+ if(!a)return;const n=a.unread||0,e=$('#adN');
+ if(e){e.hidden=!n;e.textContent=n}
+ if(adSeen!=null&&n>adSeen)toast('Pub servie aux utilisateurs'+(a.active&&a.active.length?' · '+a.active.join(', '):''),1);
+ adSeen=n;document.title=(a.active&&a.active.length?'(!) ':'')+document.title.replace(/^\(!\) /,'');
+}
+const adPost=b=>api('adwatch',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(b)});
+function adChips(){$('#adChips').innerHTML=adList.length?adList.map(c=>'<span class="pill pr">'+esc(c)+' <button type="button" data-rm="'+esc(c)+'" aria-label="Retirer '+esc(c)+'" style="background:none;border:0;color:inherit;cursor:pointer;font:inherit;padding:0 0 0 4px">×</button></span>').join(''):'<span class="dim">Aucune chaîne.</span>'}
+function renderPub(r,form){
+ if(!r||r.error)return;AD=r;
+ if(form){adList=[...r.cfg.channels];$('#adOn').checked=!!r.cfg.on;$('#adEvery').innerHTML=r.every.map(s=>'<option value="'+s+'">'+(s<60?s+' s':s/60+' min')+'</option>').join('');$('#adEvery').value=String(r.cfg.every);adChips()}
+ $('#adState').textContent=r.running?'Veille en cours':'À l\'arrêt';$('#adState').className='pill '+(r.running?'ok':'');
+ const act=r.channels.filter(c=>c.status==='served');
+ $('#adBanner').hidden=!act.length;$('#adBannerT').textContent=act.map(c=>c.login+' ('+c.source+(c.kind?' · '+c.kind:'')+') depuis '+dur((Date.now()-c.since)/1000)).join(' · ');
+ $('#adLive').innerHTML=r.channels.length?'<table><tr><th>Chaîne</th><th>État</th><th>Source servie</th><th>Marqueur</th><th>Vérifié</th></tr>'+r.channels.map(c=>{const l=adLbl[c.status]||['?',''];return'<tr><td><b>'+esc(c.login)+'</b></td><td><span class="pill '+l[1]+'">'+l[0]+'</span>'+(c.status==='error'?' <span class="dim">'+esc(c.error||'')+'</span>':'')+'</td><td>'+esc(c.source||'–')+'</td><td class="mono">'+esc(c.kind||'–')+'</td><td class="dim">'+(c.t?ago(c.t)+' · '+c.ms+' ms':'–')+'</td></tr>'}).join('')+'</table>':'<div class="empty">Ajoute une chaîne en direct puis active la veille.</div>';
+ $('#adAN').textContent=r.alerts.length;
+ $('#adAl').innerHTML=r.alerts.length?'<table><tr><th>Date</th><th>Chaîne</th><th>Source servie</th><th>Marqueur</th><th>Durée</th></tr>'+r.alerts.map(a=>'<tr'+(a.read?'':' style="font-weight:600"')+'><td>'+new Date(a.t).toLocaleString('fr-FR')+'</td><td>'+esc(a.login)+'</td><td>'+esc(a.source)+(a.official?' <span class="dim">· pub aussi chez Twitch</span>':'')+'</td><td class="mono">'+esc(a.kind||'–')+'</td><td>'+(a.end?dur(a.secs):'<span class="pill ko">en cours</span>')+'</td></tr>').join('')+'</table>':'<div class="empty">Aucune alerte.</div>';
+ adBadge({unread:r.unread,active:act.map(c=>c.login)});
+}
+async function loadPub(form){try{renderPub(await api('adwatch'),form)}catch{toast('Chargement impossible',1)}}
+async function adDo(b,ok){const m=$('#adMsg');m.textContent='…';try{const r=await adPost(b);if(r.ok===false){m.textContent=r.error||'Échec';toast(r.error||'Échec',1);return}renderPub(r,b.action==='save');m.textContent=ok||'';if(ok)toast(ok)}catch{m.textContent='Échec';toast('Échec',1)}}
+function adAdd(){const c=$('#adCh').value.toLowerCase().replace(/^@/,'').trim();if(!/^[a-z0-9_]{3,25}$/.test(c)){toast('Nom de chaîne invalide',1);return}if(AD&&adList.length>=AD.max){toast('Maximum '+AD.max+' chaînes',1);return}if(!adList.includes(c))adList.push(c);$('#adCh').value='';adChips()}
+$('#adAdd').onclick=adAdd;$('#adCh').onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();adAdd()}};
+$('#adChips').onclick=e=>{const b=e.target.closest('[data-rm]');if(b){adList=adList.filter(x=>x!==b.dataset.rm);adChips()}};
+$('#adSave').onclick=()=>adDo({action:'save',on:$('#adOn').checked,channels:adList,every:+$('#adEvery').value},'Enregistré');
+$('#adScan').onclick=()=>adDo({action:'scan'},'Vérification faite');
+$('#adAck').onclick=()=>adDo({action:'ack'},'');
+$('#adClr').onclick=()=>{if(confirm('Vider toutes les alertes ?'))adDo({action:'clear'},'')};
+setInterval(()=>{if(cur==='pub'&&!document.hidden)loadPub(false)},10000);
 async function api(p,o){const r=await fetch('/admin/api/'+p,o);if((r.headers.get('content-type')||'').includes('html')){location.reload();return{}}return r.json()}
 const card=(c,ic,l,v,s)=>'<div class="sc"><div class="si '+c+'"><svg viewBox="0 0 24 24"><path d="'+ic+'"/></svg></div><div class="sl">'+l+'</div><div class="sv">'+v+'</div><div class="ss">'+s+'</div></div>';
 const mc=(c,ic,l,v,sub)=>'<div class="mc"><div class="si '+c+'"><svg viewBox="0 0 24 24"><path d="'+ic+'"/></svg></div><div><b>'+v+'</b><span>'+l+' · '+sub+'</span></div></div>';
@@ -759,7 +806,7 @@ $('#pfRef').onclick=loadProf;
 $('#users').onclick=async e=>{const b=e.target.closest('[data-pf]');if(!b)return;const del=b.dataset.pf==='delete',t0=del?'Supprimer':'Réinitialiser le mdp';
  if(b.dataset.sure!=='1'){b.dataset.sure='1';b.textContent=del?'Confirmer la suppression':'Confirmer';setTimeout(()=>{if(b.isConnected){b.dataset.sure='';b.textContent=t0}},4000);return}
  b.disabled=true;const rr=await api('profiles',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ref:b.dataset.r,action:b.dataset.pf})});toast(del?'Profil supprimé':'Mot de passe réinitialisé');if(!del&&rr&&rr.code)prompt('Code de réinitialisation à usage unique pour '+(rr.pseudo||'ce profil')+' (valable 24 h, affiché une seule fois). Donne-le à la personne : elle le tape à la place du mot de passe, puis en choisit un nouveau.',rr.code);loadProf();load()};
-async function load(){try{S=await api('state?n=500');if(S.stats)render()}catch(e){}}
+async function load(){try{S=await api('state?n=500');if(S.stats){render();adBadge(S.ad)}}catch(e){}}
 function schedule(){clearInterval(timer);timer=setInterval(()=>{if(!paused&&!document.hidden)load()},+$('#rf').value)}
 $('#rf').onchange=schedule;
 $('#pause').onclick=()=>{paused=!paused;$('#pause').textContent=paused?'Reprendre':'Pause';$('#live').classList.toggle('off',paused);$('#live span').textContent=paused?'En pause':'En direct'};
