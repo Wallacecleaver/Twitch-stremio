@@ -37,7 +37,8 @@ const absolutize = (text, base) => { // adresses relatives → absolues
   const abs = u => { try { return new URL(u, base).href; } catch { return u; } };
   return text.split(/\r?\n/).map(l => !l || l.startsWith('#') ? l.replace(/URI="([^"]+)"/g, (_, u) => 'URI="' + abs(u) + '"') : abs(l)).join('\n');
 };
-const cleanMedia = text => text.split(/\r?\n/).filter(l => !/^#EXT-X-(TWITCH-PREFETCH|DATERANGE|TWITCH-INFO|TWITCH-ELAPSED-SECS|TWITCH-TOTAL-SECS|SCTE35)/.test(l) && !/^#EXT-X-PROGRAM-DATE-TIME/.test(l)).join('\n');
+const cleanMedia = text => text.split(/\r?\n/).filter(l => !/^#EXT-X-(TWITCH-PREFETCH|DATERANGE|TWITCH-INFO|TWITCH-ELAPSED-SECS|TWITCH-TOTAL-SECS|SCTE35|CUE-OUT|CUE-OUT-CONT|CUE-IN)/.test(l) && !/^#EXT-X-PROGRAM-DATE-TIME/.test(l) && !(l[0] === '#' && /X-TV-TWITCH-AD|X-TTV-MAF-AD/.test(l)))
+  .map(l => l.startsWith('#EXTINF:') && !l.endsWith(',live') ? l.replace(/,.*$/, '') + ',live' : l).join('\n');
 const text = (status, body) => new Response(body, { status, headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store', ...CORS } });
 
 async function playlist(target, origin, secret) { // liste de lecture d'une qualité : nettoyée, et ses morceaux repointés vers ce Worker

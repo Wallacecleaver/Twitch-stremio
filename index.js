@@ -288,13 +288,14 @@ async function relayReport(login) {
 }
 // Aucun relais ne répond : si le flux officiel contient des pubs, on redemande la chaîne à Twitch comme un autre lecteur (intégré, popout, autoplay), qui n'en a souvent pas.
 // Méthode inspirée du script Twitch HLS Proxy / TwitchAdSolutions. BACKUP_ADFREE=0 pour désactiver. Résultat de même forme qu'un relais : { name, url, text, ms }.
-const AD_RE = /stitched-ad|X-TV-TWITCH-AD|#EXTINF:[\d.]+,\s*Amazon|#EXT-X-SCTE35|CUE-OUT/i;
+const AD_RE = /stitched-ad|twitch-stitched|X-TV-TWITCH-AD|#EXTINF:[\d.]+,\s*Amazon|#EXT-X-SCTE35|CUE-OUT|^https?:\/\/\S*(?:\/adsquared\/|\/_404\/)/im; // marqueurs du script Twitch HLS Proxy 1.12.7 (pas twitch-maf-ad : pub latérale, sans effet sur la vidéo)
 async function masterHasAds(r) { // une qualité de la liste principale : sa liste de segments contient-elle une pub ?
   const v = variantsOf(absolutize(r.text, r.url)).filter(x => !x.audio).pop();
   if (!v) return false;
   const t = await fetch(v.url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(3000) }).then(x => x.text());
   return AD_RE.test(t);
 }
+const backupGood = new Map(); // chaîne → { type, exp } : type de lecteur de secours qui a donné un flux sans pub
 async function backupSource(login) {
   if (process.env.BACKUP_ADFREE === '0') return null;
   const t0 = Date.now();
@@ -302,12 +303,14 @@ async function backupSource(login) {
     const off = await liveOnce(login, 'site', null);
     if (off.offline || !(await masterHasAds(off))) return null; // pas de pub sur le flux officiel : on le garde
   } catch { return null; }
-  for (const type of ['embed', 'popout', 'autoplay']) {
+  const g0 = backupGood.get(login), good = g0 && g0.exp > Date.now() ? g0.type : null, types = ['autoplay', 'embed', 'popout'].sort((a, b) => (b === good) - (a === good)); // le dernier type sans pub pour cette chaîne d'abord
+  for (const type of types) {
     try {
       const tk = await accessToken(login, type, GQL_CLIENT_ID, type === 'autoplay' ? { persisted: true, platform: 'android' } : {});
       const r = await liveOnce(login, type, null, tk);
       if (r.offline || !isMaster(r.text) || await masterHasAds(r)) continue;
       store.incr('backup|' + type);
+      backupGood.set(login, { type, exp: Date.now() + 30 * 60000 }); if (backupGood.size > 200) backupGood.clear();
       return { name: 'Secours ' + type, url: r.url, text: r.text, ms: Date.now() - t0 };
     } catch { /* type suivant */ }
   }
@@ -406,7 +409,8 @@ function oneAudio(text, req) {
   return out.join('\n');
 }
 function cleanMedia(text) {
-  return text.split(/\r?\n/).filter(l => !/^#EXT-X-(TWITCH-PREFETCH|DATERANGE|TWITCH-INFO|TWITCH-ELAPSED-SECS|TWITCH-TOTAL-SECS|SCTE35)/.test(l) && !/^#EXT-X-PROGRAM-DATE-TIME/.test(l)).join('\n');
+  return text.split(/\r?\n/).filter(l => !/^#EXT-X-(TWITCH-PREFETCH|DATERANGE|TWITCH-INFO|TWITCH-ELAPSED-SECS|TWITCH-TOTAL-SECS|SCTE35|CUE-OUT|CUE-OUT-CONT|CUE-IN)/.test(l) && !/^#EXT-X-PROGRAM-DATE-TIME/.test(l) && !(l[0] === '#' && /X-TV-TWITCH-AD|X-TTV-MAF-AD/.test(l)))
+    .map(l => l.startsWith('#EXTINF:') && !l.endsWith(',live') ? l.replace(/,.*$/, '') + ',live' : l).join('\n'); // titre « Amazon… » des segments pub neutralisé
 }
 // Adresse publique de l'addon : PUBLIC_URL si définie, sinon déduite de la requête (http en local, https derrière un tunnel)
 const originOf = req => {
