@@ -973,6 +973,42 @@ async function vodToken(id, cid = GQL_CLIENT_ID, playerType = 'site', oauth = nu
 }
 // Plusieurs variantes en parallèle (identifiant client, type de lecteur, adresse usher) : on garde la première qui répond.
 const VOD_TRIES = [{ cid: GQL_CLIENT_ID, pt: 'site', path: '/vod/' }, { cid: GQL_CLIENT_ID, pt: 'site', path: '/vod/v2/' }, { cid: GQL_CLIENT_ID, pt: 'embed', path: '/vod/' }, { cid: TV_ID, pt: 'site', path: '/vod/' }, { cid: ANDROID_ID, pt: 'site', path: '/vod/' }];
+// ---- « Sans aucune pub » : on lit la rediffusion (VOD) du live en cours, qui n'a jamais de pub, avec ~30 s de retard (même principe que le mode « Bloqueur de pub (Experimental) » du script Twitch HLS Proxy)
+const liveVodCache = new Map(); // chaîne → { id, exp }
+async function liveVodId(login) { // identifiant de la rediffusion du live EN COURS (null : pas de rediffusion, ou live pas encore enregistré)
+  const c = liveVodCache.get(login);
+  if (c && c.exp > Date.now()) return c.id;
+  const d = await gqlRaw('query { user(login: "' + login + '") { stream { createdAt archiveVideo { id } } videos(first: 2, type: ARCHIVE, sort: TIME) { edges { node { id createdAt } } } } }');
+  const u = d.user, st = u && u.stream, first = u && u.videos && u.videos.edges && u.videos.edges[0] && u.videos.edges[0].node;
+  let id = null;
+  if (st) {
+    if (st.archiveVideo && st.archiveVideo.id) id = String(st.archiveVideo.id);
+    else if (first && first.id && Math.abs(Date.parse(first.createdAt) - Date.parse(st.createdAt)) < 600000) id = String(first.id); // la dernière rediffusion commence avec ce live
+  }
+  if (liveVodCache.size > 200) liveVodCache.clear();
+  liveVodCache.set(login, { id, exp: Date.now() + (id ? 120000 : 20000) });
+  return id;
+}
+const VOD_KEEP = Math.max(3, Math.min(8, Number(process.env.VOD_SEGMENTS) || 4)); // morceaux gardés (≈ 10 s chacun) : le lecteur démarre ~3 morceaux avant le bout
+const VOD_MARK = '#vodlive'; // marque ajoutée à l'adresse chiffrée d'une qualité : la liste de segments est alors servie comme un direct décalé
+function vodLiveWindow(text, keep = VOD_KEEP) { // rediffusion en cours → liste « direct » : on ne garde que les derniers morceaux, sans type VOD ni fin
+  const L = text.split(/\r?\n/);
+  if (L.some(l => l.startsWith('#EXT-X-ENDLIST'))) return text; // live terminé : la rediffusion entière, telle quelle
+  const head = [], groups = []; let cur = [], seq = 0;
+  for (const l of L) {
+    if (/^#EXT-X-MEDIA-SEQUENCE:/.test(l)) { seq = Number(l.split(':')[1]) || 0; continue; }
+    if (/^#EXT-X-PLAYLIST-TYPE:/.test(l)) continue;
+    if (!groups.length && !cur.length && l.startsWith('#') && !/^#EXT(INF|-X-BYTERANGE|-X-DISCONTINUITY)/.test(l)) { head.push(l); continue; }
+    if (!l && !cur.length) continue;
+    cur.push(l);
+    if (l && !l.startsWith('#')) { groups.push(cur); cur = []; }
+  }
+  if (groups.length <= keep) return text.split(/\r?\n/).filter(l => !/^#EXT-X-PLAYLIST-TYPE:/.test(l)).join('\n');
+  const drop = groups.length - keep;
+  return head.concat('#EXT-X-MEDIA-SEQUENCE:' + (seq + drop), ...groups.slice(drop).flat()).join('\n');
+}
+// liste principale d'une rediffusion → ses adresses de qualité portent la marque (puis pcMaster les chiffre)
+const markVodMaster = text => text.split(/\r?\n/).map(l => /^https?:\/\//.test(l) ? l + VOD_MARK : l).join('\n');
 async function vodMaster(id, oauth) { // avec le compte Twitch lié : les rediffs réservées aux abonnés s'ouvrent si le compte est abonné
   const errs = [], tries = oauth ? [{ cid: GQL_CLIENT_ID, pt: 'site', path: '/vod/', auth: 1 }, { cid: GQL_CLIENT_ID, pt: 'site', path: '/vod/v2/', auth: 1 }, ...VOD_TRIES] : VOD_TRIES;
   const one = async (t, i) => {
@@ -1109,7 +1145,7 @@ const asset = name => pageCache['a:' + name] ||= fs.readFileSync(path.join(__dir
 const alertsAccountRevision = crypto.createHash('sha256')
   .update(rawPage('alerte-compte.html')).update(rawPage('alerte-compte.js')).update(asset('alerte-compte.webp'))
   .digest('hex').slice(0, 16);
-const summary = c => [c.cap ? 'max ' + c.cap + 'p' : 'qualité max', c.fps60 ? '60 i/s' : '30 i/s', c.relay ? 'relais' : 'sans relais', c.fixed + ' fixes', c.hevc ? '1440p' : '', c.tok ? 'compte lié' : '', c.audio ? 'audio' : '', c.seg && c.seg !== 'auto' ? 'segments ' + c.seg : '', c.fmt && c.fmt !== fmtLib.DEFAULT ? 'affichage ' + c.fmt : ''].filter(Boolean).join(' · ');
+const summary = c => [c.cap ? 'max ' + c.cap + 'p' : 'qualité max', c.fps60 ? '60 i/s' : '30 i/s', c.relay ? 'relais' : 'sans relais', c.fixed + ' fixes', c.hevc ? '1440p' : '', c.tok ? 'compte lié' : '', c.audio ? 'audio' : '', c.vod ? 'sans pub (VOD)' : '', c.seg && c.seg !== 'auto' ? 'segments ' + c.seg : '', c.fmt && c.fmt !== fmtLib.DEFAULT ? 'affichage ' + c.fmt : ''].filter(Boolean).join(' · ');
 const readBody = req => new Promise(r => { let b = ''; req.on('data', c => { b += c; if (b.length > 8000) req.destroy(); }); req.on('end', () => r(b)); req.on('error', () => r(b)); });
 const text = (v, n) => String(v ?? '').replace(/[\u0000-\u001f]/g, ' ').slice(0, n);
 const hits = new Map(); // limite : 40 signalements / test par minute et par adresse
@@ -1770,10 +1806,13 @@ async function handler(req, res) {
         if (scope !== signedScope) return send(res, 403, 'text/plain; charset=utf-8', 'Lien réservé à ce profil');
         u = url;
       }
+      let vodLive = false;
+      if (u && u.endsWith(VOD_MARK)) { vodLive = true; u = u.slice(0, -VOD_MARK.length); }
       if (!u || !/^https:\/\//.test(u)) return send(res, 400, 'text/plain; charset=utf-8', 'Lien invalide');
       const r = await fetchPlaylist(u), t = r.text;
       if (!r.ok || !t.startsWith('#EXTM3U')) return send(res, r.ok ? 502 : r.status, 'text/plain; charset=utf-8', 'Flux indisponible');
       let body = cleanMedia(absolutize(t, r.url));
+      if (vodLive) body = vodLiveWindow(body);
       if (/cloudfront/.test(u)) body = body.replace(/-unmuted/g, '-muted'); // rediffs réservées aux abonnés : seuls les segments « muted » sont ouverts
       const sm = segMode(req, cfg); res._dbg = 'seg=' + sm;
       if (sm !== 'direct') body = viaAddonSegments(body, originOf(req), base, sm);
@@ -1797,6 +1836,16 @@ async function handler(req, res) {
       if (alertCatalog && !alertCatalog.logins.includes(login)) return send(res, 404, 'text/plain', 'Chaîne non surveillée');
       if (F.maint) return send(res, 503, 'text/plain; charset=utf-8', 'Addon en maintenance');
       const sm = segMode(req, cfg), fin = m => oneAudio(pcOn(cfg) || sm !== 'direct' ? pcMaster(m, originOf(req), base, sm) : m, req);
+      if (cfg.vod && F.vods && sealLib.available()) { // « Sans aucune pub » : rediffusion du live en cours (~30 s de retard) ; au moindre souci, on retombe sur le direct habituel
+        try {
+          const vid = await liveVodId(login), vm = vid ? await vodMaster(vid, auth) : null;
+          if (vm && !vm.direct) {
+            store.incr('play'); store.incr('vodlive'); store.top(login); store.user(pseudo, { ch: login, dev: cfg.device });
+            store.log({ k: 'play', u: pseudo || undefined, ch: login, seg: sm, relais: 'rediffusion sans pub', ms: Date.now() - t0, appareil: cfg.device || undefined, dev });
+            return send(res, 200, 'application/vnd.apple.mpegurl', oneAudio(pcMaster(markVodMaster(cfgLib.filterMaster(vm.text, cfg)), originOf(req), base, sm), req), { 'Cache-Control': 'no-store', 'X-Relais': 'vod' });
+          }
+        } catch (e) { store.incr('vodlive_repli'); }
+      }
       const [b, lv] = await Promise.all([cfg.relay ? bestProxy(login, cfg.hevc) : null, cfg.hevc && cfg.relay ? liveStream(login, true, auth).catch(() => null) : null]);
       store.incr('play'); store.top(login); store.user(pseudo, { ch: login, dev: cfg.device }); store.incr('seg_' + sm); store.incr('d:' + store.day() + ':seg_' + sm);
       store.log({ k: 'play', u: pseudo || undefined, ch: login, seg: sm, lecteur: String(req.headers['user-agent'] || '').slice(0, 40) || undefined, relais: b ? b.name : cfg.relay ? 'officiel (repli)' : 'officiel (relais coupés)', ms: Date.now() - t0, appareil: cfg.device || undefined, dev });
